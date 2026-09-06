@@ -28,25 +28,6 @@ class ComicInfoData(TypedDict, total=False):
     alternate_series: str
 
 
-_FIELD_MAP = {
-    'series': 'series',
-    'title': 'title',
-    'number': 'issue_number',
-    'publisher': 'publisher',
-    'format': 'format',
-    'web': 'web',
-    'gtin': 'gtin',
-    'alternateseries': 'alternate_series'
-}
-
-_INT_FIELD_MAP = {
-    'volume': 'volume',
-    'count': 'issue_count',
-    'year': 'year',
-    'month': 'month',
-    'day': 'day'
-}
-
 _ZIP_COMIC_EXTENSIONS = {'.cbz', '.zip'}
 
 
@@ -103,15 +84,42 @@ def _parse_comicinfo(xml_data: bytes) -> Union[ComicInfoData, None]:
 
     result: ComicInfoData = {}
 
-    for xml_name, result_name in _FIELD_MAP.items():
-        value = values.get(xml_name)
-        if value is not None:
-            result[result_name] = value  # type: ignore[literal-required]
+    if 'series' in values:
+        result['series'] = values['series']
+    if 'title' in values:
+        result['title'] = values['title']
+    if 'number' in values:
+        result['issue_number'] = values['number']
+    if 'publisher' in values:
+        result['publisher'] = values['publisher']
+    if 'format' in values:
+        result['format'] = values['format']
+    if 'web' in values:
+        result['web'] = values['web']
+    if 'gtin' in values:
+        result['gtin'] = values['gtin']
+    if 'alternateseries' in values:
+        result['alternate_series'] = values['alternateseries']
 
-    for xml_name, result_name in _INT_FIELD_MAP.items():
-        value = _to_int(values.get(xml_name))
-        if value is not None:
-            result[result_name] = value  # type: ignore[literal-required]
+    volume = _to_int(values.get('volume'))
+    if volume is not None:
+        result['volume'] = volume
+
+    issue_count = _to_int(values.get('count'))
+    if issue_count is not None:
+        result['issue_count'] = issue_count
+
+    year = _to_int(values.get('year'))
+    if year is not None:
+        result['year'] = year
+
+    month = _to_int(values.get('month'))
+    if month is not None:
+        result['month'] = month
+
+    day = _to_int(values.get('day'))
+    if day is not None:
+        result['day'] = day
 
     return result or None
 
