@@ -131,6 +131,19 @@ def _clean_description(description: str, short: bool = False) -> str:
     return result
 
 
+def _normalise_metadata_text(value: str) -> str:
+    """Normalise a short ComicVine metadata label, including whitespace.
+
+    ComicVine occasionally returns titles with repeated spaces (for example
+    ``Lady Death:  Extinction Express``). Those values are later used for
+    volume names and generated folder paths, where the extra whitespace can
+    make the database path differ from an otherwise-equivalent on-disk name.
+    Collapse every run of whitespace after the normal character normalisation
+    so titles, aliases, publishers and issue titles remain stable.
+    """
+    return ' '.join(normalise_string(value).split())
+
+
 class ComicVine:
     volume_field_list = ','.join((
         'aliases',
@@ -279,9 +292,15 @@ class ComicVine:
             description or ''
         ) is not None
 
+        publisher = (
+            volume_data.get('publisher') or {}
+        ).get('name')
+        if publisher:
+            publisher = _normalise_metadata_text(publisher)
+
         result: VolumeMetadata = {
             'comicvine_id': int(volume_data['id']),
-            'title': normalise_string(volume_data['name'] or ''),
+            'title': _normalise_metadata_text(volume_data['name'] or ''),
             'year': normalise_year(volume_data.get('start_year', '')),
             'volume_number': volume_number,
             'cover_link': volume_data['image']['small_url'],
@@ -290,14 +309,12 @@ class ComicVine:
             'site_url': volume_data['site_detail_url'],
 
             'aliases': [
-                a.strip()
+                _normalise_metadata_text(a)
                 for a in (volume_data.get('aliases') or '').split('\r\n')
-                if a
+                if a.strip()
             ],
 
-            'publisher': (
-                volume_data.get('publisher') or {}
-            ).get('name'),
+            'publisher': publisher,
 
             'issue_count': int(volume_data['count_of_issues']),
 
@@ -331,7 +348,7 @@ class ComicVine:
             'volume_id': int(issue_data['volume']['id']),
             'issue_number': issue_data['issue_number'].replace('/', '-').strip(),
             'calculated_issue_number': calculated_issue_number,
-            'title': normalise_string(issue_data['name'] or '') or None,
+            'title': _normalise_metadata_text(issue_data['name'] or '') or None,
             'date': issue_data[self.date_type] or None,
             'description': _clean_description(
                 issue_data['description'],
