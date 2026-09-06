@@ -2,7 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backend.features.library_import import _find_existing_volume_match
+from backend.features.library_import import (_find_existing_volume_match,
+                                             _source_folder_is_shared)
 
 
 class ExistingLibraryImportMatch(unittest.TestCase):
@@ -121,3 +122,33 @@ class ExistingLibraryImportMatch(unittest.TestCase):
             result = _find_existing_volume_match(files, metadata, [1])
 
         self.assertIsNone(result)
+
+
+class ImportSourceFolderHandling(unittest.TestCase):
+    def test_flat_staging_folder_with_multiple_volumes_is_shared(self):
+        imports = {
+            1001: [
+                "/comics/New folder/Brian Pulido's Lady Death_ Blacklands (2006) Issue 001.cbr",
+                "/comics/New folder/Brian Pulido's Lady Death_ Blacklands (2006) Issue 002.cbr"
+            ],
+            2002: [
+                '/comics/New folder/Lady Death (2012) Issue 021.cbr'
+            ]
+        }
+
+        self.assertTrue(_source_folder_is_shared(1001, imports[1001], imports))
+        self.assertTrue(_source_folder_is_shared(2002, imports[2002], imports))
+
+    def test_dedicated_series_folders_are_not_shared(self):
+        imports = {
+            1001: [
+                '/comics/Blacklands/Issue 001.cbr',
+                '/comics/Blacklands/Issue 002.cbr'
+            ],
+            2002: [
+                '/comics/Lady Death/Issue 021.cbr'
+            ]
+        }
+
+        self.assertFalse(_source_folder_is_shared(1001, imports[1001], imports))
+        self.assertFalse(_source_folder_is_shared(2002, imports[2002], imports))
