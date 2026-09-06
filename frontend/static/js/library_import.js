@@ -33,6 +33,16 @@ function describeMatch(result) {
 	if (!result.cv.id)
 		return ['No automatic match', 'Choose a match manually.'];
 
+	if (result.cv.match_source === 'comicinfo-id' || result.cv.direct_id) {
+		const confidence = result.cv.confidence === undefined
+			? ''
+			: ` (${result.cv.confidence}%)`;
+		return [
+			`ComicInfo ID${confidence}`,
+			result.cv.match_reason || 'Matched using a ComicVine ID embedded in ComicInfo.xml.'
+		];
+	}
+
 	if (result.cv.match_source === 'existing-library') {
 		const confidence = result.cv.confidence === undefined
 			? ''
@@ -97,6 +107,10 @@ function loadProposal(api_key) {
 						details.push(`Publisher: ${result.comicinfo.publisher}`);
 					if (result.comicinfo.format)
 						details.push(`Format: ${result.comicinfo.format}`);
+					if (result.comicinfo.comicvine_volume_id)
+						details.push(`ComicVine volume ID: ${result.comicinfo.comicvine_volume_id}`);
+					if (result.comicinfo.comicvine_issue_id)
+						details.push(`ComicVine issue ID: ${result.comicinfo.comicvine_issue_id}`);
 					metadata_source.title = details.join('\n');
 				}
 			} else {
