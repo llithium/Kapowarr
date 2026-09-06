@@ -29,6 +29,26 @@ const LIEls = {
 
 const rowid_to_filepath = {};
 
+function describeMatch(result) {
+	if (!result.cv.id)
+		return ['No automatic match', 'Choose a match manually.'];
+
+	if (result.cv.match_source === 'existing-library') {
+		const confidence = result.cv.confidence === undefined
+			? ''
+			: ` (${result.cv.confidence}%)`;
+		return [
+			`Existing library${confidence}`,
+			result.cv.match_reason || 'Matched to a volume already in Kapowarr.'
+		];
+	}
+
+	if (result.cv.match_source === 'comicvine')
+		return ['ComicVine', 'Matched by ComicVine search.'];
+
+	return ['Automatic', 'Automatically matched.'];
+};
+
 function loadProposal(api_key) {
 	const params = {
 		limit: parseInt(document.querySelector('#limit-input').value),
@@ -62,11 +82,39 @@ function loadProposal(api_key) {
 			title.innerText = result.file_title;
 			title.title = result.filepath;
 
+			const metadata_source = entry.querySelector('.metadata-source');
+			if (result.metadata_source === 'comicinfo') {
+				metadata_source.innerText = 'ComicInfo.xml';
+				if (result.comicinfo) {
+					const details = [];
+					if (result.comicinfo.series)
+						details.push(`Series: ${result.comicinfo.series}`);
+					if (result.comicinfo.issue_number)
+						details.push(`Issue: ${result.comicinfo.issue_number}`);
+					if (result.comicinfo.year)
+						details.push(`Issue year: ${result.comicinfo.year}`);
+					if (result.comicinfo.publisher)
+						details.push(`Publisher: ${result.comicinfo.publisher}`);
+					if (result.comicinfo.format)
+						details.push(`Format: ${result.comicinfo.format}`);
+					metadata_source.title = details.join('\n');
+				}
+			} else {
+				metadata_source.innerText = 'Filename';
+				metadata_source.title = 'No usable embedded ComicInfo.xml found.';
+			}
+
 			const CV_link = entry.querySelector('a');
 			CV_link.href = result.cv.link || '';
-			CV_link.innerText = result.cv.title || '';
+			CV_link.innerText = result.cv.title || 'No match';
 
-			entry.querySelector('.issue-count').innerText = result.cv.issue_count;
+			entry.querySelector('.issue-count').innerText =
+				result.cv.issue_count ?? '';
+
+			const [match_text, match_reason] = describeMatch(result);
+			const match_details = entry.querySelector('.match-details');
+			match_details.innerText = match_text;
+			match_details.title = match_reason;
 
 			entry.querySelector('button').onclick = e => openEditCVMatch(rowid);
 
@@ -130,6 +178,9 @@ function editCVMatch(
 		link.href = site_url;
 		link.innerText = `${title} (${year})`;
 		tr.querySelector('.issue-count').innerText = issue_count;
+		const match_details = tr.querySelector('.match-details');
+		match_details.innerText = 'Manual';
+		match_details.title = 'Match selected manually.';
 	});
 };
 

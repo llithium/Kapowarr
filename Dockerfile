@@ -47,6 +47,11 @@ RUN groupadd -g 1000 kapowarr && \
 
 COPY --chmod=755 . .
 
+# Windows checkouts may convert shell scripts to CRLF. Normalize the Linux
+# entrypoint inside the image as a defensive measure so /usr/bin/env sees
+# "bash" rather than "bash\r".
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
 ENV PUID=0 \
     PGID=0 \
     TZ=UTC

@@ -1,0 +1,25 @@
+services:
+  kapowarr-test:
+    container_name: kapowarr-comicinfo-test
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=America/New_York
+    volumes:
+      # `docker compose -f docker-compose.test.yml down -v` resets these test
+      # volumes without deleting the bind-mounted comics in ./test-data/comics.
+      - kapowarr-test-db:/app/db
+      - kapowarr-test-logs:/app/logs
+      - kapowarr-test-downloads:/app/temp_downloads
+      - ./test-data/comics:/comics-1
+    ports:
+      - "9001:5656"
+    restart: unless-stopped
+
+volumes:
+  kapowarr-test-db:
+  kapowarr-test-logs:
+  kapowarr-test-downloads:
