@@ -16,10 +16,12 @@
 		<input type="checkbox" checked>
 	</td>
 	<td class="file-column" title=""></td>
+	<td class="metadata-source"></td>
 	<td>
 		<a href="" target="_blank"></a>
 	</td>
 	<td class="issue-count"></td>
+	<td class="match-details"></td>
 	<td>
 		<button title="Change match">
 			<img src="{{ url_for('static', filename='img/edit.svg') }}" alt="">
@@ -50,6 +52,7 @@
 					<th>Search Result</th>
 					<th>Issue Count</th>
 					<th>Action</th>
+					<th>Group Action</th>
 				</thead>
 				<tbody class="search-results"></tbody>
 			</table>
@@ -65,8 +68,10 @@
 		<h2>Import an existing organized library to add volumes to Kapowarr</h2>
 		<p>A few notes:</p>
 		<ul>
+			<li>Tagged CBZ/ZIP files are matched from embedded ComicInfo.xml metadata before Kapowarr falls back to the filename.</li>
+			<li>Volumes already in your Kapowarr library are checked before a new ComicVine search, which makes adding more issues to an existing series more reliable.</li>
 			<li>Check if Kapowarr matched correctly! Comicvine has separate releases for normal volumes, TPB's, one shots, hard covers, etc. So even though the name and year match, it could still be a wrong match.</li>
-			<li>Importing a lot of volumes in one go will quickly make Kapowarr reach the rate limit of ComicVine. Import volumes in batches to avoid this. It's advised to not go above 50 volumes at a time.</li>
+			<li>Importing a lot of new volumes in one go will quickly make Kapowarr reach the rate limit of ComicVine. Import volumes in batches to avoid this. It's advised to not go above 50 volumes at a time.</li>
 			<li>Files are not allowed to be directly in the root folder. They have to be in a sub-folder.</li>
 			<li>If each issue has a separate sub-folder, enable 'Apply limit to parent folder' so that the limit is correctly applied.</li>
 		</ul>
@@ -152,8 +157,10 @@
 						<input type="checkbox" id="selectall-input" aria-label="Select all entries for importing" checked>
 					</th>
 					<th>File</th>
+					<th>Metadata</th>
 					<th>Match</th>
 					<th>Issues in match</th>
+					<th>Match info</th>
 					<th>Action</th>
 				</thead>
 				<tbody class="proposal-list"></tbody>
