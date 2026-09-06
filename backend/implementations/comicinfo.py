@@ -3,6 +3,7 @@
 """Read and normalise ComicInfo.xml metadata from comic archives."""
 
 from os.path import splitext
+from re import compile
 from typing import Dict, List, TypedDict, Union
 from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
@@ -29,10 +30,14 @@ class ComicInfoData(TypedDict, total=False):
     web: str
     gtin: str
     alternate_series: str
+    comicvine_issue_id: int
+    comicvine_volume_id: int
 
 
 _ZIP_COMIC_EXTENSIONS = {'.cbz', '.zip'}
 _RAR_COMIC_EXTENSIONS = {'.cbr', '.rar'}
+_COMICVINE_ISSUE_ID_RE = compile(r'\b4000-(\d+)\b')
+_COMICVINE_VOLUME_ID_RE = compile(r'\b4050-(\d+)\b')
 
 
 def _local_name(tag: str) -> str:
@@ -113,6 +118,27 @@ def _parse_comicinfo(xml_data: bytes) -> Union[ComicInfoData, None]:
         result['gtin'] = values['gtin']
     if 'alternateseries' in values:
         result['alternate_series'] = values['alternateseries']
+
+    # ComicTagger normally writes the ComicVine issue URL into <Web>. Some
+    # ComicInfo producers also write explicit extension fields, so support both.
+    comicvine_issue_id = _to_int(values.get('comicvineissueid'))
+    comicvine_volume_id = _to_int(values.get('comicvinevolumeid'))
+    web = values.get('web')
+    if web:
+        if comicvine_issue_id is None:
+            issue_match = _COMICVINE_ISSUE_ID_RE.search(web)
+            if issue_match:
+                comicvine_issue_id = int(issue_match.group(1))
+
+        if comicvine_volume_id is None:
+            volume_match = _COMICVINE_VOLUME_ID_RE.search(web)
+            if volume_match:
+                comicvine_volume_id = int(volume_match.group(1))
+
+    if comicvine_issue_id is not None:
+        result['comicvine_issue_id'] = comicvine_issue_id
+    if comicvine_volume_id is not None:
+        result['comicvine_volume_id'] = comicvine_volume_id
 
     volume = _to_int(values.get('volume'))
     if volume is not None:

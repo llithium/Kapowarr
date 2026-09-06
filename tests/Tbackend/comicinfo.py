@@ -64,7 +64,45 @@ class ComicInfoReader(unittest.TestCase):
                 'format': 'Comic',
                 'web': 'https://comicvine.gamespot.com/batman-125/4000-934000/',
                 'gtin': '76194134182812511',
-                'alternate_series': 'Batman (2016)'
+                'alternate_series': 'Batman (2016)',
+                'comicvine_issue_id': 934000
+            }
+        )
+
+    def test_extracts_comicvine_volume_id_from_web(self):
+        filepath = self._make_cbz(
+            'Batman Volume.cbz',
+            '''<ComicInfo>
+    <Series>Batman</Series>
+    <Web>https://comicvine.gamespot.com/batman/4050-796/</Web>
+</ComicInfo>'''
+        )
+
+        self.assertEqual(
+            read_comicinfo(filepath),
+            {
+                'series': 'Batman',
+                'web': 'https://comicvine.gamespot.com/batman/4050-796/',
+                'comicvine_volume_id': 796
+            }
+        )
+
+    def test_reads_explicit_comicvine_extension_ids(self):
+        filepath = self._make_cbz(
+            'explicit-ids.cbz',
+            '''<ComicInfo>
+    <Series>Batman</Series>
+    <ComicVineIssueId>934000</ComicVineIssueId>
+    <ComicVineVolumeId>796</ComicVineVolumeId>
+</ComicInfo>'''
+        )
+
+        self.assertEqual(
+            read_comicinfo(filepath),
+            {
+                'series': 'Batman',
+                'comicvine_issue_id': 934000,
+                'comicvine_volume_id': 796
             }
         )
 
