@@ -28,7 +28,7 @@ MANIFEST
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+#  before PyInstaller builds the exe, so as to inject date/other infos.
 *.manifest
 *.spec
 
@@ -138,6 +138,9 @@ dmypy.json
 
 # Downloads
 temp_downloads/*
+
+# Local ComicInfo importer test media
+test-data/
 
 # Project management files
 release*.sh
