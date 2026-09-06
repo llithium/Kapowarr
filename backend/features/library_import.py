@@ -19,6 +19,9 @@ from backend.base.files import (change_basefolder, common_folder,
                                 list_files, rename_file)
 from backend.base.helpers import force_suffix
 from backend.base.logging import LOGGER
+from backend.implementations.comicinfo import (ComicInfoData,
+                                               comicinfo_to_filename_data,
+                                               read_comicinfo)
 from backend.implementations.comicvine import ComicVine
 from backend.implementations.file_matching import scan_files
 from backend.implementations.naming import mass_rename
@@ -69,8 +72,11 @@ def propose_library_import(
     limit_parent_folder: bool = False,
     only_english: bool = True
 ) -> List[Dict[str, Any]]:
-    """Get list of unimported files and their suggestion for a matching volume
-    on CV.
+    """Get unimported files and suggest a matching ComicVine volume.
+
+    Embedded ComicInfo.xml metadata is preferred over filename-derived data for
+    ZIP/CBZ comics. Filename parsing remains the fallback for untagged files and
+    unsupported archive types.
 
     Args:
         folder_filter (Union[str, None], optional): Only scan the folders that
@@ -134,6 +140,9 @@ def propose_library_import(
     folders = set()
     image_folders = set()
     unimported_files: Dict[str, FilenameData] = {}
+    metadata_sources: Dict[str, str] = {}
+    comicinfo_metadata: Dict[str, ComicInfoData] = {}
+
     for f in all_files:
         if f in imported_files:
             continue
@@ -144,6 +153,17 @@ def propose_library_import(
             continue
 
         file_data = extract_filename_data(f, prefer_folder_year=True)
+        metadata = read_comicinfo(f)
+        if metadata is not None:
+            file_data = comicinfo_to_filename_data(
+                metadata,
+                file_data,
+                for_library_import=True
+            )
+            metadata_sources[f] = 'comicinfo'
+            comicinfo_metadata[f] = metadata
+        else:
+            metadata_sources[f] = 'filename'
 
         if (
             f.endswith(FileConstants.IMAGE_EXTENSIONS)
@@ -191,7 +211,9 @@ def propose_library_import(
                 basename(file)
             ),
             'cv': group_to_cv[group_number],
-            'group_number': group_number
+            'group_number': group_number,
+            'metadata_source': metadata_sources.get(file, 'filename'),
+            'comicinfo': comicinfo_metadata.get(file)
         }
         for group_number, files in group_to_files.items()
         for file in files
