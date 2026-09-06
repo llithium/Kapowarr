@@ -14,7 +14,8 @@ class ExistingLibraryImportMatch(unittest.TestCase):
         year,
         volume_number,
         issue_year,
-        publisher='DC Comics'
+        publisher='DC Comics',
+        issue_comicvine_id=9001
     ):
         volume_data = SimpleNamespace(
             comicvine_id=comicvine_id,
@@ -26,6 +27,7 @@ class ExistingLibraryImportMatch(unittest.TestCase):
             site_url=f'https://comicvine.example/volume/{comicvine_id}'
         )
         issue = SimpleNamespace(
+            comicvine_id=issue_comicvine_id,
             calculated_issue_number=85.0,
             date=f'{issue_year}-01-01'
         )
@@ -33,6 +35,85 @@ class ExistingLibraryImportMatch(unittest.TestCase):
             vd=volume_data,
             get_issues=lambda _skip_files=False: [issue]
         )
+
+    def test_direct_volume_id_overrides_fuzzy_title(self):
+        filepath = '/imports/Wrong Series Issue 085.cbz'
+        files = {
+            filepath: {
+                'series': 'Wrong Series',
+                'year': None,
+                'volume_number': None,
+                'special_version': None,
+                'issue_number': 85.0,
+                'annual': False
+            }
+        }
+        metadata = {
+            filepath: {
+                'series': 'Wrong Series',
+                'issue_number': '85',
+                'comicvine_volume_id': 1002
+            }
+        }
+        volumes = {
+            1: self._volume(1001, 'Wrong Series', 2016, 1, 2020),
+            2: self._volume(1002, 'Batman', 2016, 3, 2020)
+        }
+
+        with patch(
+            'backend.features.library_import.Library.get_volume',
+            side_effect=lambda volume_id: volumes[volume_id]
+        ):
+            result = _find_existing_volume_match(files, metadata, [1, 2])
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['id'], 1002)
+        self.assertEqual(result['already_added'], 2)
+        self.assertEqual(result['match_source'], 'comicinfo-id')
+        self.assertEqual(result['confidence'], 100)
+        self.assertTrue(result['direct_id'])
+
+    def test_direct_issue_id_finds_existing_parent_volume(self):
+        filepath = '/imports/Wrong Series Issue 085.cbz'
+        files = {
+            filepath: {
+                'series': 'Wrong Series',
+                'year': None,
+                'volume_number': None,
+                'special_version': None,
+                'issue_number': 85.0,
+                'annual': False
+            }
+        }
+        metadata = {
+            filepath: {
+                'series': 'Wrong Series',
+                'issue_number': '85',
+                'comicvine_issue_id': 934000
+            }
+        }
+        volumes = {
+            1: self._volume(
+                1001, 'Wrong Series', 2016, 1, 2020,
+                issue_comicvine_id=100000
+            ),
+            2: self._volume(
+                1002, 'Batman', 2016, 3, 2020,
+                issue_comicvine_id=934000
+            )
+        }
+
+        with patch(
+            'backend.features.library_import.Library.get_volume',
+            side_effect=lambda volume_id: volumes[volume_id]
+        ):
+            result = _find_existing_volume_match(files, metadata, [1, 2])
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['id'], 1002)
+        self.assertEqual(result['already_added'], 2)
+        self.assertEqual(result['match_source'], 'comicinfo-id')
+        self.assertEqual(result['confidence'], 100)
 
     def test_issue_year_disambiguates_existing_runs(self):
         files = {
