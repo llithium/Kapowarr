@@ -23,6 +23,7 @@ from backend.base.logging import LOGGER
 from backend.implementations.comicinfo import (ComicInfoData,
                                                comicinfo_to_filename_data,
                                                read_comicinfo)
+from backend.implementations.comicinfo_cv import match_comicinfo_ids
 from backend.implementations.comicvine import ComicVine
 from backend.implementations.file_matching import (scan_files,
                                                    set_file_matching)
@@ -288,7 +289,8 @@ def _match_unmatched_comicinfo_files(
 
     A normal automatic scan is always attempted first. Only tagged files that
     remain unmatched are force-linked, so existing filename behavior remains
-    unchanged for files that Kapowarr already understands.
+    unchanged for files that Kapowarr already understands. A direct ComicVine
+    issue ID is preferred over the issue number when both are available.
     """
     volume = Library.get_volume(volume_id)
     issues = volume.get_issues()
@@ -304,7 +306,26 @@ def _match_unmatched_comicinfo_files(
             continue
 
         metadata = read_comicinfo(filepath)
-        if metadata is None or not metadata.get('issue_number'):
+        if metadata is None:
+            continue
+
+        direct_issue_id = metadata.get('comicvine_issue_id')
+        if direct_issue_id is not None:
+            matching_issue_ids = [
+                issue.id
+                for issue in issues
+                if issue.comicvine_id == direct_issue_id
+            ]
+            if matching_issue_ids:
+                forced_matches.append({
+                    'filepath': filepath,
+                    'issue_ids': matching_issue_ids,
+                    'general_file': False,
+                    'forced_match': True
+                })
+                continue
+
+        if not metadata.get('issue_number'):
             continue
 
         file_data = comicinfo_to_filename_data(
@@ -496,14 +517,31 @@ def propose_library_import(
             groups_needing_cv[group_number] = files
 
     if groups_needing_cv:
-        cv_matches = run(ComicVine().filenames_to_cvs(
+        comicvine = ComicVine()
+
+        # Resolve exact IDs before doing any title search. ComicTagger commonly
+        # stores a 4000-* issue URL in <Web>; the resolver maps those issue IDs
+        # to their parent 4050-* volume and then fetches that exact volume.
+        direct_matches = run(match_comicinfo_ids(
+            comicvine,
             groups_needing_cv,
-            only_english=only_english,
-            comicinfo_metadata=comicinfo_metadata
+            comicinfo_metadata
         ))
-        for group_number, match in cv_matches.items():
-            match.setdefault('match_source', 'comicvine')
-            group_to_cv[group_number] = match
+        group_to_cv.update(direct_matches)
+
+        groups_needing_search = {
+            group_number: files
+            for group_number, files in groups_needing_cv.items()
+            if group_number not in direct_matches
+        }
+        if groups_needing_search:
+            cv_matches = run(comicvine.filenames_to_cvs(
+                groups_needing_search,
+                only_english=only_english
+            ))
+            for group_number, match in cv_matches.items():
+                match['match_source'] = 'comicvine'
+                group_to_cv[group_number] = match
 
     # Build result
     result = [
