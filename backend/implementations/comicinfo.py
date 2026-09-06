@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 
-"""Read and normalise ComicInfo.xml metadata from ZIP/CBZ comic archives."""
+"""Read and normalise ComicInfo.xml metadata from comic archives."""
 
-from os.path import basename, splitext
+from os.path import splitext
 from typing import Dict, List, TypedDict, Union
 from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
 from backend.base.definitions import FilenameData, SpecialVersion
 from backend.base.file_extraction import extract_issue_number
-from backend.base.helpers import normalise_string
+from backend.base.helpers import normalise_string, run_rar
 from backend.base.logging import LOGGER
 
 
@@ -32,6 +32,7 @@ class ComicInfoData(TypedDict, total=False):
 
 
 _ZIP_COMIC_EXTENSIONS = {'.cbz', '.zip'}
+_RAR_COMIC_EXTENSIONS = {'.cbr', '.rar'}
 
 
 def _local_name(tag: str) -> str:
@@ -58,14 +59,23 @@ def _to_int(value: Union[str, None]) -> Union[int, None]:
         return None
 
 
+def _archive_basename(filename: str) -> str:
+    """Return the final component of an archive path on any host OS."""
+    return filename.replace('\\', '/').rsplit('/', 1)[-1]
+
+
+def _archive_depth(filename: str) -> int:
+    return filename.replace('\\', '/').count('/')
+
+
 def _find_comicinfo_files(filenames: List[str]) -> List[str]:
     """Find ComicInfo.xml entries, preferring files closest to archive root."""
     matches = [
         filename
         for filename in filenames
-        if basename(filename).lower() == 'comicinfo.xml'
+        if _archive_basename(filename).lower() == 'comicinfo.xml'
     ]
-    matches.sort(key=lambda f: (f.count('/'), len(f), f.lower()))
+    matches.sort(key=lambda f: (_archive_depth(f), len(f), f.lower()))
     return matches
 
 
@@ -127,12 +137,45 @@ def _parse_comicinfo(xml_data: bytes) -> Union[ComicInfoData, None]:
     return result or None
 
 
-def read_comicinfo(filepath: str) -> Union[ComicInfoData, None]:
-    """Read embedded ComicInfo.xml metadata from a ZIP-compatible comic.
+def _read_zip_comicinfo(filepath: str) -> Union[bytes, None]:
+    with ZipFile(filepath, 'r') as archive:
+        comicinfo_files = _find_comicinfo_files(archive.namelist())
+        if not comicinfo_files:
+            return None
 
-    The reader is intentionally non-destructive. It only supports CBZ/ZIP in
-    this first implementation; unsupported archives, missing metadata and
-    malformed metadata all return ``None`` so callers can fall back to filename
+        return archive.read(comicinfo_files[0])
+
+
+def _read_rar_comicinfo(filepath: str) -> Union[bytes, None]:
+    """Read ComicInfo.xml from a RAR/CBR using Kapowarr's bundled RAR tool."""
+    listing = run_rar([
+        'lb',
+        filepath
+    ])
+    if listing.returncode != 0:
+        return None
+
+    comicinfo_files = _find_comicinfo_files(listing.stdout.splitlines())
+    if not comicinfo_files:
+        return None
+
+    extracted = run_rar([
+        'p',
+        '-inul',
+        filepath,
+        comicinfo_files[0]
+    ])
+    if extracted.returncode != 0 or not extracted.stdout:
+        return None
+
+    return extracted.stdout.encode('utf-8')
+
+
+def read_comicinfo(filepath: str) -> Union[ComicInfoData, None]:
+    """Read embedded ComicInfo.xml metadata from CBZ/ZIP or CBR/RAR.
+
+    The reader is intentionally non-destructive. Missing, malformed or
+    unsupported metadata returns ``None`` so callers can fall back to filename
     parsing.
 
     Args:
@@ -142,22 +185,23 @@ def read_comicinfo(filepath: str) -> Union[ComicInfoData, None]:
         Union[ComicInfoData, None]: Parsed metadata, or ``None`` when no usable
             ComicInfo.xml can be read.
     """
-    if splitext(filepath)[1].lower() not in _ZIP_COMIC_EXTENSIONS:
-        return None
+    extension = splitext(filepath)[1].lower()
 
     try:
-        with ZipFile(filepath, 'r') as archive:
-            comicinfo_files = _find_comicinfo_files(archive.namelist())
-            if not comicinfo_files:
-                return None
+        if extension in _ZIP_COMIC_EXTENSIONS:
+            xml_data = _read_zip_comicinfo(filepath)
 
-            # If an archive contains multiple metadata files, use the one
-            # closest to the archive root. This is the least surprising choice
-            # for normal CBZ files while still supporting nested metadata.
-            xml_data = archive.read(comicinfo_files[0])
+        elif extension in _RAR_COMIC_EXTENSIONS:
+            xml_data = _read_rar_comicinfo(filepath)
+
+        else:
+            return None
 
     except (BadZipFile, KeyError, OSError):
         LOGGER.debug('Unable to read ComicInfo.xml from %s', filepath)
+        return None
+
+    if xml_data is None:
         return None
 
     return _parse_comicinfo(xml_data)
