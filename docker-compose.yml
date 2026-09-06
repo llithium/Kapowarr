@@ -1,7 +1,7 @@
 services:
   kapowarr:
     container_name: kapowarr
-    image: mrcas/kapowarr:latest
+    image: ghcr.io/llithium/kapowarr:latest
     environment:
       - PUID=0
       - PGID=0
