@@ -9,6 +9,8 @@ services:
       - PGID=0
       - TZ=America/New_York
     volumes:
+      # `docker compose -f docker-compose.test.yml down -v` resets these test
+      # volumes without deleting the bind-mounted comics in ./test-data/comics.
       - kapowarr-test-db:/app/db
       - kapowarr-test-logs:/app/logs
       - kapowarr-test-downloads:/app/temp_downloads
