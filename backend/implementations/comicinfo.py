@@ -4,13 +4,14 @@
 
 from os.path import splitext
 from re import compile
+from subprocess import run as subprocess_run
 from typing import Dict, List, TypedDict, Union
 from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
-from backend.base.definitions import FilenameData, SpecialVersion
+from backend.base.definitions import FilenameData, OSType, SpecialVersion
 from backend.base.file_extraction import extract_issue_number
-from backend.base.helpers import normalise_string, run_rar
+from backend.base.helpers import get_os_type, normalise_string, run_rar
 from backend.base.logging import LOGGER
 
 
@@ -172,12 +173,15 @@ def _read_zip_comicinfo(filepath: str) -> Union[bytes, None]:
         return archive.read(comicinfo_files[0])
 
 
-def _read_rar_comicinfo(filepath: str) -> Union[bytes, None]:
-    """Read ComicInfo.xml from a RAR/CBR using Kapowarr's bundled RAR tool."""
-    listing = run_rar([
-        'lb',
-        filepath
-    ])
+def _read_bsdtar_comicinfo(filepath: str) -> Union[bytes, None]:
+    """Read ComicInfo.xml from RAR/CBR using macOS' native bsdtar."""
+    listing = subprocess_run(
+        ['/usr/bin/bsdtar', '-tf', filepath],
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace'
+    )
     if listing.returncode != 0:
         return None
 
@@ -185,12 +189,60 @@ def _read_rar_comicinfo(filepath: str) -> Union[bytes, None]:
     if not comicinfo_files:
         return None
 
-    extracted = run_rar([
-        'p',
-        '-inul',
-        filepath,
-        comicinfo_files[0]
-    ])
+    extracted = subprocess_run(
+        ['/usr/bin/bsdtar', '-xOf', filepath, comicinfo_files[0]],
+        capture_output=True
+    )
+    if extracted.returncode != 0 or not extracted.stdout:
+        return None
+
+    return extracted.stdout
+
+
+def _read_rar_comicinfo(filepath: str) -> Union[bytes, None]:
+    """Read ComicInfo.xml from a RAR/CBR archive.
+
+    macOS ships ``bsdtar`` with libarchive and it works natively on both Intel
+    and Apple Silicon. Prefer it there because Kapowarr's bundled historical
+    RAR binary can be built for a different CPU architecture and fail with an
+    ``Exec format error``. Other platforms keep using Kapowarr's bundled RAR
+    helper. If bsdtar cannot read a particular archive, fall back to that helper
+    as well.
+    """
+    if get_os_type() == OSType.MACOS:
+        try:
+            xml_data = _read_bsdtar_comicinfo(filepath)
+            if xml_data is not None:
+                return xml_data
+        except OSError:
+            # Fall through to the bundled RAR helper below.
+            pass
+
+    try:
+        listing = run_rar([
+            'lb',
+            filepath
+        ])
+    except OSError:
+        return None
+
+    if listing.returncode != 0:
+        return None
+
+    comicinfo_files = _find_comicinfo_files(listing.stdout.splitlines())
+    if not comicinfo_files:
+        return None
+
+    try:
+        extracted = run_rar([
+            'p',
+            '-inul',
+            filepath,
+            comicinfo_files[0]
+        ])
+    except OSError:
+        return None
+
     if extracted.returncode != 0 or not extracted.stdout:
         return None
 
