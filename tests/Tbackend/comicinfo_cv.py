@@ -1,6 +1,6 @@
 import unittest
 from asyncio import run
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from backend.implementations.comicinfo_cv import match_comicinfo_ids
 
@@ -45,7 +45,7 @@ class ComicInfoComicVineMatching(unittest.TestCase):
                 'comicvine_volume_id': 796
             }
         }
-        comicvine = unittest.mock.Mock()
+        comicvine = Mock()
         comicvine.search_volumes = AsyncMock(
             return_value=[self._volume_result()]
         )
@@ -74,7 +74,7 @@ class ComicInfoComicVineMatching(unittest.TestCase):
             first: {'series': 'Batman', 'comicvine_issue_id': 934000},
             second: {'series': 'Batman', 'comicvine_issue_id': 934001}
         }
-        comicvine = unittest.mock.Mock()
+        comicvine = Mock()
         comicvine.search_volumes = AsyncMock(
             return_value=[self._volume_result()]
         )
@@ -104,7 +104,7 @@ class ComicInfoComicVineMatching(unittest.TestCase):
             first: {'series': 'Batman', 'comicvine_issue_id': 934000},
             second: {'series': 'Batman', 'comicvine_issue_id': 934001}
         }
-        comicvine = unittest.mock.Mock()
+        comicvine = Mock()
         comicvine.search_volumes = AsyncMock()
 
         with patch(
@@ -122,7 +122,7 @@ class ComicInfoComicVineMatching(unittest.TestCase):
         metadata = {
             filepath: {'series': 'Batman', 'comicvine_issue_id': 934000}
         }
-        comicvine = unittest.mock.Mock()
+        comicvine = Mock()
         comicvine.search_volumes = AsyncMock()
 
         with patch(
