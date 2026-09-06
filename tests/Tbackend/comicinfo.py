@@ -3,7 +3,8 @@ from os.path import join
 from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 
-from backend.implementations.comicinfo import read_comicinfo
+from backend.implementations.comicinfo import (comicinfo_to_filename_data,
+                                               read_comicinfo)
 
 
 class ComicInfoReader(unittest.TestCase):
@@ -13,7 +14,12 @@ class ComicInfoReader(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def _make_cbz(self, filename: str, xml: str, xml_path: str = 'ComicInfo.xml'):
+    def _make_cbz(
+        self,
+        filename: str,
+        xml: str,
+        xml_path: str = 'ComicInfo.xml'
+    ):
         filepath = join(self.temp_dir.name, filename)
         with ZipFile(filepath, 'w') as archive:
             archive.writestr(xml_path, xml)
@@ -72,14 +78,67 @@ class ComicInfoReader(unittest.TestCase):
 </ComicInfo>'''
         )
 
+        metadata = read_comicinfo(filepath)
         self.assertEqual(
-            read_comicinfo(filepath),
+            metadata,
             {
                 'series': 'Batman: The Killing Joke',
                 'issue_number': '1',
                 'year': 1988,
                 'publisher': 'DC Comics',
                 'format': 'One-Shot'
+            }
+        )
+
+        fallback = {
+            'series': 'Wrong Filename Title',
+            'year': 1988,
+            'volume_number': 1,
+            'special_version': None,
+            'issue_number': 1.0,
+            'annual': False
+        }
+        self.assertEqual(
+            comicinfo_to_filename_data(metadata or {}, fallback),
+            {
+                'series': 'Batman: The Killing Joke',
+                'year': 1988,
+                'volume_number': 1,
+                'special_version': 'one-shot',
+                'issue_number': 1.0,
+                'annual': False
+            }
+        )
+
+    def test_library_import_does_not_treat_issue_year_as_series_year(self):
+        metadata = {
+            'series': 'Batman',
+            'issue_number': '85',
+            'year': 2020,
+            'format': 'Comic'
+        }
+        fallback = {
+            'series': 'Batman',
+            'year': 2020,
+            'volume_number': 1,
+            'special_version': None,
+            'issue_number': 85.0,
+            'annual': False
+        }
+
+        self.assertEqual(
+            comicinfo_to_filename_data(
+                metadata,
+                fallback,
+                for_library_import=True
+            ),
+            {
+                'series': 'Batman',
+                'year': None,
+                'volume_number': None,
+                'special_version': None,
+                'issue_number': 85.0,
+                'annual': False
             }
         )
 
