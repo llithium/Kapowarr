@@ -1,6 +1,8 @@
 import unittest
 from os.path import join
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+from unittest.mock import call, patch
 from zipfile import ZipFile
 
 from backend.implementations.comicinfo import (comicinfo_to_filename_data,
@@ -182,9 +184,57 @@ class ComicInfoReader(unittest.TestCase):
         self.assertIsNone(read_comicinfo(no_metadata))
         self.assertIsNone(read_comicinfo(malformed))
 
-    def test_returns_none_for_non_zip_comic(self):
-        filepath = join(self.temp_dir.name, 'example.cbr')
-        with open(filepath, 'wb') as f:
-            f.write(b'not-a-rar')
+    def test_reads_comicinfo_from_cbr(self):
+        filepath = join(self.temp_dir.name, 'Hellwitch Issue 001.cbr')
+        xml = '''<ComicInfo>
+    <Series>Hellwitch vs Lady Death: Wargasm</Series>
+    <Number>1</Number>
+    <Year>2022</Year>
+    <Publisher>Coffin Comics</Publisher>
+    <Format>TPB</Format>
+</ComicInfo>'''
 
+        with patch(
+            'backend.implementations.comicinfo.run_rar',
+            side_effect=(
+                SimpleNamespace(
+                    returncode=0,
+                    stdout='Pages\\001.jpg\nMetadata\\COMICINFO.XML\n'
+                ),
+                SimpleNamespace(returncode=0, stdout=xml)
+            )
+        ) as mocked_rar:
+            self.assertEqual(
+                read_comicinfo(filepath),
+                {
+                    'series': 'Hellwitch vs Lady Death: Wargasm',
+                    'issue_number': '1',
+                    'year': 2022,
+                    'publisher': 'Coffin Comics',
+                    'format': 'TPB'
+                }
+            )
+
+        self.assertEqual(
+            mocked_rar.call_args_list,
+            [
+                call(['lb', filepath]),
+                call([
+                    'p', '-inul', filepath,
+                    'Metadata\\COMICINFO.XML'
+                ])
+            ]
+        )
+
+    def test_returns_none_when_rar_reader_fails(self):
+        filepath = join(self.temp_dir.name, 'broken.cbr')
+
+        with patch(
+            'backend.implementations.comicinfo.run_rar',
+            return_value=SimpleNamespace(returncode=2, stdout='')
+        ):
+            self.assertIsNone(read_comicinfo(filepath))
+
+    def test_returns_none_for_unsupported_archive(self):
+        filepath = join(self.temp_dir.name, 'example.pdf')
         self.assertIsNone(read_comicinfo(filepath))
