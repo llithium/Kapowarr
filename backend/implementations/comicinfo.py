@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 
-"""Read ComicInfo.xml metadata embedded in ZIP/CBZ comic archives."""
+"""Read and normalise ComicInfo.xml metadata from ZIP/CBZ comic archives."""
 
 from os.path import basename, splitext
 from typing import Dict, List, TypedDict, Union
 from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
+from backend.base.definitions import FilenameData, SpecialVersion
+from backend.base.file_extraction import extract_issue_number
+from backend.base.helpers import normalise_string
 from backend.base.logging import LOGGER
 
 
@@ -158,3 +161,84 @@ def read_comicinfo(filepath: str) -> Union[ComicInfoData, None]:
         return None
 
     return _parse_comicinfo(xml_data)
+
+
+def _comicinfo_special_version(
+    format_value: str
+) -> Union[str, None, bool]:
+    """Map a ComicInfo Format value to a Kapowarr special-version value.
+
+    ``False`` means that the format is unknown and the filename-derived value
+    should be kept. ``None`` means that the metadata explicitly describes a
+    normal issue.
+    """
+    compact = ''.join(c for c in format_value.lower() if c.isalnum())
+
+    if compact in ('oneshot', 'oneshotcomic'):
+        return SpecialVersion.ONE_SHOT.value
+    if compact in ('tpb', 'tradepaperback'):
+        return SpecialVersion.TPB.value
+    if compact in ('hc', 'hardcover'):
+        return SpecialVersion.HARD_COVER.value
+    if 'omnibus' in compact:
+        return SpecialVersion.OMNIBUS.value
+    if compact in ('comic', 'issue', 'annual'):
+        return None
+
+    return False
+
+
+def comicinfo_to_filename_data(
+    metadata: ComicInfoData,
+    fallback: FilenameData,
+    for_library_import: bool = False
+) -> FilenameData:
+    """Overlay ComicInfo metadata on filename-derived comic data.
+
+    ComicInfo ``Year`` describes the individual issue's publication year. The
+    library importer is trying to identify a ComicVine volume, whose ``year``
+    describes the start of the overall series/volume. For that reason, the
+    issue year is deliberately not used as a volume year during library import.
+
+    Args:
+        metadata (ComicInfoData): Parsed ComicInfo.xml metadata.
+        fallback (FilenameData): Existing filename-derived values.
+        for_library_import (bool, optional): Treat metadata year as an issue
+            year rather than a volume year. Defaults to False.
+
+    Returns:
+        FilenameData: Values suitable for Kapowarr's existing matching code.
+    """
+    result = fallback.copy()
+
+    series = metadata.get('series')
+    if series:
+        result['series'] = normalise_string(series)
+
+    issue_number = metadata.get('issue_number')
+    if issue_number:
+        parsed_issue_number = extract_issue_number(issue_number)
+        if parsed_issue_number is not None:
+            result['issue_number'] = parsed_issue_number
+
+    if 'volume' in metadata:
+        result['volume_number'] = metadata['volume']
+    elif for_library_import:
+        # Filename extraction assumes Volume 1 when none is present. Tagged
+        # libraries often omit the ComicVine volume number entirely, so that
+        # assumption can make a good metadata match look worse than it is.
+        result['volume_number'] = None
+
+    if 'year' in metadata:
+        result['year'] = None if for_library_import else metadata['year']
+
+    format_value = metadata.get('format')
+    if format_value:
+        mapped_special_version = _comicinfo_special_version(format_value)
+        if mapped_special_version is not False:
+            result['special_version'] = mapped_special_version
+
+        if 'annual' in format_value.lower():
+            result['annual'] = True
+
+    return result
