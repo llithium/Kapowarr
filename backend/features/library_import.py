@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Tuple, Union
 from backend.base.custom_exceptions import (CVRateLimitReached,
                                             InvalidKeyValue,
                                             VolumeAlreadyAdded)
-from backend.base.definitions import (CVFileMapping, FileConstants,
+from backend.base.definitions import (CVFileMapping, FileConstants, FileMatch,
                                       FilenameData, MonitorScheme,
                                       SpecialVersion)
 from backend.base.file_extraction import extract_filename_data
@@ -24,7 +24,8 @@ from backend.implementations.comicinfo import (ComicInfoData,
                                                comicinfo_to_filename_data,
                                                read_comicinfo)
 from backend.implementations.comicvine import ComicVine
-from backend.implementations.file_matching import scan_files
+from backend.implementations.file_matching import (scan_files,
+                                                   set_file_matching)
 from backend.implementations.matching import match_title
 from backend.implementations.naming import mass_rename
 from backend.implementations.root_folders import RootFolders
@@ -217,6 +218,72 @@ def _find_existing_volume_match(
         return best_match
 
     return None
+
+
+def _match_unmatched_comicinfo_files(
+    volume_id: int,
+    files: List[str]
+) -> None:
+    """Use embedded issue metadata when the normal file scan could not match.
+
+    A normal automatic scan is always attempted first. Only tagged files that
+    remain unmatched are force-linked, so existing filename behavior remains
+    unchanged for files that Kapowarr already understands.
+    """
+    volume = Library.get_volume(volume_id)
+    issues = volume.get_issues()
+    matched_filepaths = {
+        file['filepath']
+        for issue in issues
+        for file in issue.files
+    }
+
+    forced_matches: List[FileMatch] = []
+    for filepath in files:
+        if filepath in matched_filepaths:
+            continue
+
+        metadata = read_comicinfo(filepath)
+        if metadata is None or not metadata.get('issue_number'):
+            continue
+
+        file_data = comicinfo_to_filename_data(
+            metadata,
+            extract_filename_data(filepath)
+        )
+        issue_number = file_data['issue_number']
+        if issue_number is None:
+            continue
+
+        if isinstance(issue_number, tuple):
+            matching_issue_ids = [
+                issue.id
+                for issue in issues
+                if issue_number[0] <= issue.calculated_issue_number <= issue_number[1]
+            ]
+        else:
+            matching_issue_ids = [
+                issue.id
+                for issue in issues
+                if issue.calculated_issue_number == issue_number
+            ]
+
+        if matching_issue_ids:
+            forced_matches.append({
+                'filepath': filepath,
+                'issue_ids': matching_issue_ids,
+                'general_file': False,
+                'forced_match': True
+            })
+
+    if forced_matches:
+        LOGGER.info(
+            'Using ComicInfo.xml to match %d files in volume %d',
+            len(forced_matches), volume_id
+        )
+        set_file_matching(volume_id, forced_matches)
+
+    return
 
 
 def propose_library_import(
@@ -493,6 +560,7 @@ def import_library(
             files = list(file_changes.values())
 
         scan_files(volume_id, filepath_filter=files)
+        _match_unmatched_comicinfo_files(volume_id, files)
 
         if rename_files:
             # Rename the filenames themselves
