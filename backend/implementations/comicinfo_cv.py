@@ -10,21 +10,34 @@ from backend.base.helpers import AsyncSession, batched
 from backend.base.logging import LOGGER
 from backend.implementations.comicinfo import ComicInfoData
 from backend.implementations.comicvine import ComicVine
+from backend.implementations.library_import_cache import (
+    get_cached_cv_volumes, get_cached_issue_volume_ids,
+    store_cached_cv_volumes, store_issue_volume_ids)
 
 
 async def _fetch_issue_volume_ids(
     comicvine: ComicVine,
     issue_ids: Set[int]
 ) -> Dict[int, int]:
-    """Resolve ComicVine issue IDs to their parent volume IDs in batches."""
+    """Resolve ComicVine issue IDs to their parent volume IDs in batches.
+
+    The mapping is stable, so previously resolved issue IDs are reused from the
+    persistent Library Import cache. If a long scan is restarted, only IDs that
+    were not reached on the previous run need another ComicVine request.
+    """
     if not issue_ids:
         return {}
 
-    result: Dict[int, int] = {}
+    result = get_cached_issue_volume_ids(issue_ids)
+    missing_issue_ids = set(issue_ids) - set(result)
+    if not missing_issue_ids:
+        return result
+
+    fetched: Dict[int, int] = {}
     call_api = getattr(comicvine, '_ComicVine__call_api')
 
     async with AsyncSession() as session:
-        for issue_batch in batched(sorted(issue_ids), 100):
+        for issue_batch in batched(sorted(missing_issue_ids), 100):
             response = await call_api(
                 session,
                 '/issues',
@@ -43,7 +56,11 @@ async def _fetch_issue_volume_ids(
                 except (KeyError, TypeError, ValueError):
                     continue
 
-                result[issue_id] = volume_id
+                fetched[issue_id] = volume_id
+
+    if fetched:
+        store_issue_volume_ids(fetched)
+        result.update(fetched)
 
     return result
 
@@ -60,6 +77,10 @@ async def match_comicinfo_ids(
     first resolved to their parent ComicVine volume. A group is only accepted
     when all direct references resolve consistently to one volume; otherwise the
     caller can fall back to Kapowarr's normal title-based matching.
+
+    Exact ComicVine volume metadata is cached for 24 hours so an interrupted or
+    repeated Library Import scan can resume without repeating already-completed
+    direct-ID lookups.
     """
     direct_groups: Dict[int, Tuple[object, Set[int]]] = {}
     issue_ids_to_resolve: Set[int] = set()
@@ -140,21 +161,44 @@ async def match_comicinfo_ids(
         volume_id
         for volume_id, _ in resolved_groups.values()
     })
-    search_results = await gather(*(
-        comicvine.search_volumes(
-            f'4050-{volume_id}',
-            allow_rate_limit_reached=True
-        )
+
+    volume_results = get_cached_cv_volumes(unique_volume_ids)
+    missing_volume_ids = [
+        volume_id
         for volume_id in unique_volume_ids
-    ))
-    volume_results = {
-        volume_id: next((
-            result
-            for result in results
-            if result['comicvine_id'] == volume_id
-        ), None)
-        for volume_id, results in zip(unique_volume_ids, search_results)
-    }
+        if volume_id not in volume_results
+    ]
+
+    if missing_volume_ids:
+        search_results = await gather(*(
+            comicvine.search_volumes(
+                f'4050-{volume_id}',
+                allow_rate_limit_reached=True
+            )
+            for volume_id in missing_volume_ids
+        ))
+        fetched_volume_results = {
+            volume_id: next((
+                result
+                for result in results
+                if result['comicvine_id'] == volume_id
+            ), None)
+            for volume_id, results in zip(missing_volume_ids, search_results)
+        }
+
+        fetched_volumes = [
+            volume
+            for volume in fetched_volume_results.values()
+            if volume is not None
+        ]
+        if fetched_volumes:
+            store_cached_cv_volumes(fetched_volumes)
+
+        volume_results.update({
+            volume_id: volume
+            for volume_id, volume in fetched_volume_results.items()
+            if volume is not None
+        })
 
     matches: Dict[int, Dict[str, Any]] = {}
     for group_number, (volume_id, reason) in resolved_groups.items():
