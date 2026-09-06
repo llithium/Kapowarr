@@ -4,7 +4,7 @@ from asyncio import run
 from glob import glob
 from itertools import chain
 from os.path import abspath, basename, dirname, isfile, join, splitext
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from backend.base.custom_exceptions import (CVRateLimitReached,
                                             InvalidKeyValue,
@@ -17,13 +17,15 @@ from backend.base.files import (change_basefolder, common_folder,
                                 delete_empty_parent_folders,
                                 folder_is_inside_folder,
                                 list_files, rename_file)
-from backend.base.helpers import force_suffix
+from backend.base.helpers import (extract_year_from_date, force_suffix,
+                                  normalise_string)
 from backend.base.logging import LOGGER
 from backend.implementations.comicinfo import (ComicInfoData,
                                                comicinfo_to_filename_data,
                                                read_comicinfo)
 from backend.implementations.comicvine import ComicVine
 from backend.implementations.file_matching import scan_files
+from backend.implementations.matching import match_title
 from backend.implementations.naming import mass_rename
 from backend.implementations.root_folders import RootFolders
 from backend.implementations.volumes import Library
@@ -66,6 +68,157 @@ def create_groups(
     return groups
 
 
+def _normalised_publisher(value: str) -> str:
+    return normalise_string(value).casefold().replace(' ', '')
+
+
+def _find_existing_volume_match(
+    files: Dict[str, FilenameData],
+    comicinfo_metadata: Dict[str, ComicInfoData],
+    existing_volume_ids: List[int]
+) -> Union[Dict[str, Any], None]:
+    """Find a high-confidence match in the existing Kapowarr library.
+
+    Existing volumes are preferred over a new ComicVine search. This is
+    intentionally conservative: ambiguous runs with the same title remain for
+    ComicVine/manual matching rather than being silently assigned.
+    """
+    if not files:
+        return None
+
+    first_file = next(iter(files.values()))
+    series = first_file['series']
+    candidate_scores: List[Tuple[int, Dict[str, Any]]] = []
+
+    metadata_publishers = {
+        _normalised_publisher(metadata['publisher'])
+        for filepath, metadata in comicinfo_metadata.items()
+        if filepath in files and metadata.get('publisher')
+    }
+
+    for volume_id in existing_volume_ids:
+        volume = Library.get_volume(volume_id)
+        volume_data = volume.vd
+
+        reasons = []
+        if match_title(series, volume_data.title):
+            score = 50
+            reasons.append('series title matches')
+        elif (
+            volume_data.alt_title
+            and match_title(series, volume_data.alt_title)
+        ):
+            score = 45
+            reasons.append('alternate series title matches')
+        else:
+            continue
+
+        issues = volume.get_issues(_skip_files=True)
+        calculated_numbers = {
+            issue.calculated_issue_number
+            for issue in issues
+        }
+
+        issue_checks = []
+        for file_data in files.values():
+            issue_number = file_data['issue_number']
+            if issue_number is None:
+                continue
+
+            if isinstance(issue_number, tuple):
+                issue_checks.append(any(
+                    issue_number[0] <= number <= issue_number[1]
+                    for number in calculated_numbers
+                ))
+            else:
+                issue_checks.append(issue_number in calculated_numbers)
+
+        if issue_checks:
+            if all(issue_checks):
+                score += 30
+                reasons.append('issue numbers exist in volume')
+            elif any(issue_checks):
+                score += 5
+                reasons.append('some issue numbers exist in volume')
+            else:
+                score -= 50
+                reasons.append('issue numbers do not exist in volume')
+
+        volume_number = first_file['volume_number']
+        if isinstance(volume_number, int):
+            if volume_number == volume_data.volume_number:
+                score += 10
+                reasons.append('volume number matches')
+            else:
+                score -= 10
+
+        if metadata_publishers and volume_data.publisher:
+            publisher = _normalised_publisher(volume_data.publisher)
+            if publisher in metadata_publishers:
+                score += 10
+                reasons.append('publisher matches')
+            else:
+                score -= 10
+
+        issue_years = {
+            issue.calculated_issue_number: extract_year_from_date(issue.date)
+            for issue in issues
+        }
+        year_score = 0
+        for filepath, file_data in files.items():
+            metadata = comicinfo_metadata.get(filepath)
+            if metadata is None or 'year' not in metadata:
+                continue
+
+            issue_number = file_data['issue_number']
+            if not isinstance(issue_number, float):
+                continue
+
+            database_year = issue_years.get(issue_number)
+            if database_year is None:
+                continue
+
+            if database_year == metadata['year']:
+                year_score += 5
+            else:
+                year_score -= 5
+
+        year_score = max(-15, min(15, year_score))
+        if year_score:
+            score += year_score
+            reasons.append(
+                'issue publication year matches'
+                if year_score > 0 else
+                'issue publication year conflicts'
+            )
+
+        candidate_scores.append((
+            score,
+            {
+                'id': volume_data.comicvine_id,
+                'title': f"{volume_data.title} ({volume_data.year})",
+                'issue_count': len(issues),
+                'link': volume_data.site_url,
+                'already_added': volume_id,
+                'match_source': 'existing-library',
+                'confidence': max(0, min(100, score)),
+                'match_reason': ', '.join(reasons)
+            }
+        ))
+
+    if not candidate_scores:
+        return None
+
+    candidate_scores.sort(key=lambda candidate: candidate[0], reverse=True)
+    best_score, best_match = candidate_scores[0]
+    next_score = candidate_scores[1][0] if len(candidate_scores) > 1 else -100
+
+    if best_score >= 70 and best_score - next_score >= 10:
+        return best_match
+
+    return None
+
+
 def propose_library_import(
     folder_filter: Union[str, None] = None,
     limit: int = 20,
@@ -75,8 +228,9 @@ def propose_library_import(
     """Get unimported files and suggest a matching ComicVine volume.
 
     Embedded ComicInfo.xml metadata is preferred over filename-derived data for
-    ZIP/CBZ comics. Filename parsing remains the fallback for untagged files and
-    unsupported archive types.
+    ZIP/CBZ comics. Existing Kapowarr volumes are checked before ComicVine, and
+    filename parsing remains the fallback for untagged files and unsupported
+    archive types.
 
     Args:
         folder_filter (Union[str, None], optional): Only scan the folders that
@@ -194,12 +348,33 @@ def propose_library_import(
         )
     }
 
-    # Find a match for the groups on CV
     group_to_files = create_groups(unimported_files)
-    group_to_cv = run(ComicVine().filenames_to_cvs(
-        group_to_files,
-        only_english=only_english
-    ))
+
+    # Prefer matching against volumes already in Kapowarr. This avoids a
+    # needless ComicVine search when the user is simply adding more issues to a
+    # series that is already managed.
+    existing_volume_ids = Library.get_volumes()
+    group_to_cv: Dict[int, Dict[str, Any]] = {}
+    groups_needing_cv: Dict[int, Dict[str, FilenameData]] = {}
+    for group_number, files in group_to_files.items():
+        existing_match = _find_existing_volume_match(
+            files,
+            comicinfo_metadata,
+            existing_volume_ids
+        )
+        if existing_match is not None:
+            group_to_cv[group_number] = existing_match
+        else:
+            groups_needing_cv[group_number] = files
+
+    if groups_needing_cv:
+        cv_matches = run(ComicVine().filenames_to_cvs(
+            groups_needing_cv,
+            only_english=only_english
+        ))
+        for group_number, match in cv_matches.items():
+            match['match_source'] = 'comicvine'
+            group_to_cv[group_number] = match
 
     # Build result
     result = [
