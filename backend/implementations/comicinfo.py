@@ -13,6 +13,8 @@ from backend.base.definitions import FilenameData, OSType, SpecialVersion
 from backend.base.file_extraction import extract_issue_number
 from backend.base.helpers import get_os_type, normalise_string, run_rar
 from backend.base.logging import LOGGER
+from backend.implementations.library_import_cache import (get_cached_comicinfo,
+                                                          store_cached_comicinfo)
 
 
 class ComicInfoData(TypedDict, total=False):
@@ -252,9 +254,15 @@ def _read_rar_comicinfo(filepath: str) -> Union[bytes, None]:
 def read_comicinfo(filepath: str) -> Union[ComicInfoData, None]:
     """Read embedded ComicInfo.xml metadata from CBZ/ZIP or CBR/RAR.
 
-    The reader is intentionally non-destructive. Missing, malformed or
+    Successful parses are checkpointed in Kapowarr's database using the file's
+    size and modification time. Library Import can therefore resume a long
+    iCloud-backed scan without reopening unchanged archives that were already
+    inspected on an earlier run.
+
+    The reader remains intentionally non-destructive. Missing, malformed or
     unsupported metadata returns ``None`` so callers can fall back to filename
-    parsing.
+    parsing. Only positive parses are cached, so a transient iCloud/open error
+    can never become a persistent negative cache entry.
 
     Args:
         filepath (str): Path to a comic archive.
@@ -264,16 +272,18 @@ def read_comicinfo(filepath: str) -> Union[ComicInfoData, None]:
             ComicInfo.xml can be read.
     """
     extension = splitext(filepath)[1].lower()
+    if extension not in _ZIP_COMIC_EXTENSIONS | _RAR_COMIC_EXTENSIONS:
+        return None
+
+    cached_metadata = get_cached_comicinfo(filepath)
+    if cached_metadata is not None:
+        return cached_metadata
 
     try:
         if extension in _ZIP_COMIC_EXTENSIONS:
             xml_data = _read_zip_comicinfo(filepath)
-
-        elif extension in _RAR_COMIC_EXTENSIONS:
-            xml_data = _read_rar_comicinfo(filepath)
-
         else:
-            return None
+            xml_data = _read_rar_comicinfo(filepath)
 
     except (BadZipFile, KeyError, OSError):
         LOGGER.debug('Unable to read ComicInfo.xml from %s', filepath)
@@ -282,7 +292,11 @@ def read_comicinfo(filepath: str) -> Union[ComicInfoData, None]:
     if xml_data is None:
         return None
 
-    return _parse_comicinfo(xml_data)
+    metadata = _parse_comicinfo(xml_data)
+    if metadata is not None:
+        store_cached_comicinfo(filepath, metadata)
+
+    return metadata
 
 
 def _comicinfo_special_version(
