@@ -37,15 +37,12 @@ class LibraryImportCheckpointing(unittest.TestCase):
             'comicvine_issue_id': 684877
         }
 
-        with (
-            patch(
-                'backend.implementations.comicinfo.get_cached_comicinfo',
-                return_value=metadata
-            ),
-            patch(
-                'backend.implementations.comicinfo._read_zip_comicinfo'
-            ) as archive_reader
-        ):
+        with patch(
+            'backend.implementations.comicinfo.get_cached_comicinfo',
+            return_value=metadata
+        ), patch(
+            'backend.implementations.comicinfo._read_zip_comicinfo'
+        ) as archive_reader:
             result = read_comicinfo('/library/Batman Issue 001.cbz')
 
         self.assertEqual(result, metadata)
@@ -58,19 +55,15 @@ class LibraryImportCheckpointing(unittest.TestCase):
     <Web>https://comicvine.gamespot.com/example/4000-684877/</Web>
 </ComicInfo>'''
 
-        with (
-            patch(
-                'backend.implementations.comicinfo.get_cached_comicinfo',
-                return_value=None
-            ),
-            patch(
-                'backend.implementations.comicinfo._read_zip_comicinfo',
-                return_value=xml
-            ),
-            patch(
-                'backend.implementations.comicinfo.store_cached_comicinfo'
-            ) as store
-        ):
+        with patch(
+            'backend.implementations.comicinfo.get_cached_comicinfo',
+            return_value=None
+        ), patch(
+            'backend.implementations.comicinfo._read_zip_comicinfo',
+            return_value=xml
+        ), patch(
+            'backend.implementations.comicinfo.store_cached_comicinfo'
+        ) as store:
             result = read_comicinfo('/library/Batman Issue 001.cbz')
 
         self.assertEqual(result['comicvine_issue_id'], 684877)
