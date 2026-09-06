@@ -464,6 +464,32 @@ def propose_library_import(
     return result
 
 
+def _source_folder_is_shared(
+    cv_id: int,
+    files: List[str],
+    cvid_to_filepath: Dict[int, List[str]]
+) -> bool:
+    """Return whether this import source also contains another matched volume.
+
+    Library Import normally keeps an existing folder as the new volume folder
+    when the user chooses plain Import. That is correct for a dedicated series
+    folder, but not for an inbox/staging folder containing multiple series. If
+    two selected ComicVine volumes share the same source tree, each volume must
+    get its own generated Kapowarr folder and only its own files may be moved
+    there.
+    """
+    source_folder = common_folder(files)
+
+    return any(
+        other_cv_id != cv_id
+        and any(
+            folder_is_inside_folder(source_folder, other_file)
+            for other_file in other_files
+        )
+        for other_cv_id, other_files in cvid_to_filepath.items()
+    )
+
+
 def import_library(
     matches: List[CVFileMapping],
     rename_files: bool = False
@@ -493,6 +519,11 @@ def import_library(
             continue
 
         lcf = common_folder(files)
+        shared_source_folder = _source_folder_is_shared(
+            cv_id,
+            files,
+            cvid_to_filepath
+        )
         if not rename_files and force_suffix(lcf) == root_folder.folder:
             # Back out. Volume folder will be equal to root folder.
             continue
@@ -506,7 +537,11 @@ def import_library(
                 monitored=True,
                 monitor_scheme=MonitorScheme.ALL,
                 monitor_new_issues=True,
-                volume_folder=lcf if not rename_files else None
+                volume_folder=(
+                    lcf
+                    if not rename_files and not shared_source_folder else
+                    None
+                )
             )
             commit()
 
@@ -533,7 +568,15 @@ def import_library(
             # Hit rate limit so can't add any volumes anymore
             break
 
-        if rename_files or volume_already_added:
+        if shared_source_folder:
+            LOGGER.info(
+                'Import source %s contains files for multiple volumes; '
+                'using a dedicated folder for ComicVine volume %s',
+                lcf,
+                cv_id
+            )
+
+        if rename_files or volume_already_added or shared_source_folder:
             # Move files not already in the volume folder into the volume folder
             vf = Library.get_volume(volume_id).vd.folder
 
