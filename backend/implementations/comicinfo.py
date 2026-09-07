@@ -365,8 +365,8 @@ def comicinfo_to_filename_data(
         # assumption can make a good metadata match look worse than it is.
         result['volume_number'] = None
 
-    if 'year' in metadata:
-        result['year'] = None if for_library_import else metadata['year']
+    if 'year' in metadata and not for_library_import:
+        result['year'] = metadata['year']
 
     format_value = metadata.get('format')
     if format_value:
