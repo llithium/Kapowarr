@@ -269,7 +269,6 @@ jobs:
           import unittest
           from asyncio import run
           from types import SimpleNamespace
-          from unittest.mock import patch
 
           from backend.base.definitions import (
               EnqueuingDownloadFailureReason,
@@ -295,24 +294,15 @@ jobs:
                   self.assertFalse(parameters['auto_search'].default)
 
               def test_disabled_downloads_are_not_enqueued(self):
-                  handler = DownloadHandler()
-                  current = handler.settings.sv
-                  disabled = SimpleNamespace(
-                      **{
-                          **current.__dict__,
-                          'downloads_enabled': False,
-                      }
+                  handler = object.__new__(DownloadHandler)
+                  handler.settings = SimpleNamespace(
+                      sv=SimpleNamespace(downloads_enabled=False)
                   )
 
-                  with patch.object(
-                      handler.settings,
-                      'get_settings',
-                      return_value=disabled,
-                  ):
-                      downloads, reason = run(handler.add(
-                          'https://getcomics.org/example',
-                          1,
-                      ))
+                  downloads, reason = run(handler.add(
+                      'https://getcomics.org/example',
+                      1,
+                  ))
 
                   self.assertEqual(downloads, [])
                   self.assertEqual(
