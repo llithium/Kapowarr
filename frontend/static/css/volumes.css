@@ -184,7 +184,7 @@ main:has(#massedit-toggle:checked) #library-container {
 
 	text-align: center;
 	font-size: clamp(.65rem, .8vw, .75rem);
-	font-family: 'IBM Plex Mono', monospace;
+	font-family: var(--mono-font);
 }
 
 .list-prog-bar,

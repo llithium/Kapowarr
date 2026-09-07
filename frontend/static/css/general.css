@@ -63,6 +63,8 @@ noscript {
 	--header-height: 65px;
 	--tool-bar-height: 3.5rem;
 	--nav-width: clamp(190px, 19vw, 228px);
+	--ui-font: 'Manrope', 'Helvetica Neue', Arial, sans-serif;
+	--mono-font: 'DM Mono', 'SFMono-Regular', Consolas, monospace;
 
 	--light-color: #ffffff;
 	--off-light-color: #f4f4f1;
@@ -196,7 +198,7 @@ body {
 	overflow-y: auto;
 	background-color: var(--background-color);
 	color: var(--text-color);
-	font-family: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+	font-family: var(--ui-font);
 	font-size: 1rem;
 	line-height: 1.45;
 	-webkit-font-smoothing: antialiased;

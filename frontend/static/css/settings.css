@@ -70,7 +70,7 @@
 	color: var(--text-color);
 
 	font-size: 1rem;
-	font-family: 'IBM Plex Mono', Menlo, Monaco, Consolas, monospace;
+	font-family: var(--ui-font);
 }
 
 .settings-container table input[type="checkbox"] {
