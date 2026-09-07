@@ -47,16 +47,13 @@ function login() {
 };
 
 function registerLogin(api_key) {
-	const data = JSON.parse(localStorage.getItem('kapowarr'));
-	data.api_key = api_key;
-	data.last_login = Date.now();
-	localStorage.setItem('kapowarr', JSON.stringify(data));
+	setLocalStorage({api_key: api_key, last_login: Date.now() / 1000});
 	redirect();
 };
 
 function redirect() {
-	parameters = new URLSearchParams(window.location.search);
-	redirect_value = parameters.get('redirect') || `${url_base}/`;
+	const parameters = new URLSearchParams(window.location.search);
+	const redirect_value = parameters.get('redirect') || `${url_base}/`;
 	window.location.href = redirect_value;
 };
 
@@ -72,7 +69,7 @@ usingApiKey(false)
 		loadFields();
 })
 
-if (JSON.parse(localStorage.getItem('kapowarr') || {'theme': 'light'})['theme'] === 'dark')
+if (getLocalStorage('theme').theme === 'dark')
 	document.querySelector(':root').classList.add('dark-mode');
 
 document.querySelector('#login-form').action = 'javascript:login();';

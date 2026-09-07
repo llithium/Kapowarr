@@ -14,6 +14,13 @@ from backend.base.definitions import Constants, StartType
 from backend.base.helpers import get_python_exe
 
 
+class InvalidCLIArgument(ValueError):
+    """An invalid setting supplied through a specific command-line option."""
+
+    def __init__(self, option: str) -> None:
+        super().__init__(f'The value for {option} is not valid')
+
+
 def _main(
     start_type: StartType,
     db_folder: Union[str, None] = None,
@@ -74,13 +81,21 @@ def _main(
     from backend.internals.settings import Settings
 
     set_start_method('spawn')
-    setup_logging(log_folder, log_file)
+    try:
+        setup_logging(log_folder, log_file)
+    except NotADirectoryError as exc:
+        raise InvalidCLIArgument('-l/--LogFolder') from exc
+    except IsADirectoryError as exc:
+        raise InvalidCLIArgument('-f/--LogFile') from exc
     LOGGER.info('Starting up Kapowarr')
 
     if not check_min_python_version(*Constants.MIN_PYTHON_VERSION):
         exit(1)
 
-    set_db_location(db_folder)
+    try:
+        set_db_location(db_folder)
+    except NotADirectoryError as exc:
+        raise InvalidCLIArgument('-d/--DatabaseFolder') from exc
 
     SERVER = Server()
     with SERVER.app.app_context():
@@ -89,29 +104,29 @@ def _main(
 
         s = Settings()
 
-        if host:
+        if host is not None:
             try:
                 s.update({"host": host})
-            except InvalidKeyValue:
-                raise ValueError("Invalid host value")
+            except InvalidKeyValue as exc:
+                raise InvalidCLIArgument("-o/--Host") from exc
 
-        if port:
+        if port is not None:
             try:
                 s.update({"port": port})
-            except InvalidKeyValue:
-                raise ValueError("Invalid port value")
+            except InvalidKeyValue as exc:
+                raise InvalidCLIArgument("-p/--Port") from exc
 
         if url_base is not None:
             try:
                 s.update({"url_base": url_base})
-            except InvalidKeyValue:
-                raise ValueError("Invalid url base value")
+            except InvalidKeyValue as exc:
+                raise InvalidCLIArgument("-u/--UrlBase") from exc
 
         if td_folder is not None:
             try:
                 s.update({"download_folder": td_folder})
-            except InvalidKeyValue:
-                raise ValueError("Invalid temp downloads folder value")
+            except InvalidKeyValue as exc:
+                raise InvalidCLIArgument("-t/--TempDownloadFolder") from exc
 
         settings = s.get_settings()
 
@@ -254,10 +269,10 @@ if __name__ == "__main__":
             help="The folder in which the logs from Kapowarr will be stored"
         )
         fs.add_argument(
-            '-f', '--LogFile',
+            '-f',
+            '--LogFile',
             type=str,
-            help="The filename of the file in which the logs from Kapowarr will be stored"
-        )
+            help="The filename of the file in which the logs from Kapowarr will be stored")
 
         hs = parser.add_argument_group(title="Hosting settings")
         hs.add_argument(
@@ -307,42 +322,8 @@ if __name__ == "__main__":
                 url_base=url_base
             )
 
-        except ValueError as e:
-            if not e.args:
-                raise e
-
-            elif e.args[0] == 'Database location is not a folder':
-                parser.error(
-                    'The value for -d/--DatabaseFolder is not a folder'
-                )
-
-            elif e.args[0] == 'Logging folder is not a folder':
-                parser.error(
-                    'The value for -l/--LogFolder is not a folder'
-                )
-
-            elif e.args[0] == 'Logging file is not a file':
-                parser.error(
-                    'The value for -f/--LogFile is not a file'
-                )
-
-            elif e.args[0] == 'Invalid host value':
-                parser.error(
-                    'The value for -h/--Host is not valid'
-                )
-
-            elif e.args[0] == 'Invalid port value':
-                parser.error(
-                    'The value for -p/--Port is not valid'
-                )
-
-            elif e.args[0] == 'Invalid url prefix value':
-                parser.error(
-                    'The value for -u/--UrlPrefix is not valid'
-                )
-
-            else:
-                raise e
+        except InvalidCLIArgument as exc:
+            parser.error(str(exc))
 
     else:
         rc = Kapowarr()

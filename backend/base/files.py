@@ -71,7 +71,10 @@ def list_folders(base_folder: str) -> List[str]:
     return folders
 
 
-def list_files(folder: str, ext: Iterable[str] = []) -> List[str]:
+def list_files(
+    folder: str,
+    ext: Union[Iterable[str], None] = None
+) -> List[str]:
     """List all files in a folder recursively with absolute paths. Hidden files
     (files starting with `.`) are ignored.
 
@@ -80,14 +83,14 @@ def list_files(folder: str, ext: Iterable[str] = []) -> List[str]:
 
         ext (Iterable[str], optional): File extensions to only include.
             Dot-prefix optional. Keep empty to allow all extensions.
-            Defaults to [].
+            Defaults to None.
 
     Returns:
         List[str]: The absolute paths of the files in the folder.
     """
     files: List[str] = []
     to_dos = deque((folder,))
-    ext = {force_prefix(e.lower(), '.') for e in ext}
+    ext = {force_prefix(e.lower(), '.') for e in (ext or ())}
 
     while to_dos:
         to_do = to_dos.popleft()
@@ -522,6 +525,7 @@ def create_zip_archive(
 
 # region Altering
 def __set_windows_times(filepath: str, timestamp: float) -> None:
+    handle = None
     try:
         FILE_WRITE_ATTRIBUTES = 0x0100
         OPEN_EXISTING = 3
@@ -553,6 +557,8 @@ def __set_windows_times(filepath: str, timestamp: float) -> None:
         SetFileTime.restype = wintypes.BOOL
 
         CloseHandle = kernel32.CloseHandle
+        CloseHandle.argtypes = [wintypes.HANDLE]
+        CloseHandle.restype = wintypes.BOOL
 
         handle = CreateFileW(
             filepath,
@@ -565,6 +571,7 @@ def __set_windows_times(filepath: str, timestamp: float) -> None:
         )
 
         if handle == wintypes.HANDLE(-1).value:
+            LOGGER.warning("Unable to open %s to set file date", filepath)
             return
 
         # Windows FILETIME: 100 ns intervals since 1601-01-01
@@ -577,11 +584,15 @@ def __set_windows_times(filepath: str, timestamp: float) -> None:
         )
 
         # creation time + modification time
-        SetFileTime(handle, ctypes.byref(ft), None, ctypes.byref(ft))
-        CloseHandle(handle)
+        if not SetFileTime(handle, ctypes.byref(ft), None, ctypes.byref(ft)):
+            LOGGER.warning("Unable to set file date for %s", filepath)
 
-    except Exception:
-        pass
+    except (OSError, ctypes.ArgumentError) as error:
+        LOGGER.warning("Unable to set file date for %s: %s", filepath, error)
+
+    finally:
+        if handle not in (None, wintypes.HANDLE(-1).value):
+            CloseHandle(handle)
 
     return
 
@@ -622,7 +633,7 @@ def __set_macos_times(filepath: str, timestamp: float) -> None:
             tv_nsec=int((timestamp % 1) * 1_000_000_000),
         )
 
-        libc.setattrlist(
+        result = libc.setattrlist(
             filepath.encode("utf-8"),
             ctypes.byref(attrlist),
             ctypes.byref(ts),
@@ -630,8 +641,13 @@ def __set_macos_times(filepath: str, timestamp: float) -> None:
             0,
         )
 
-    except Exception:
-        pass
+        if result != 0:
+            LOGGER.warning(
+                "Unable to set creation date for %s (errno %d)",
+                filepath, ctypes.get_errno()
+            )
+    except (OSError, ctypes.ArgumentError) as error:
+        LOGGER.warning("Unable to set file date for %s: %s", filepath, error)
     return
 
 
@@ -655,6 +671,13 @@ def set_file_date(filepath: str, file_date: str) -> None:
         __set_windows_times(filepath, timestamp)
 
     elif os_type == OSType.MACOS:
+        try:
+            utime(filepath, times=(timestamp, timestamp))
+        except OSError as error:
+            LOGGER.warning(
+                "Unable to set file date for %s: %s",
+                filepath,
+                error)
         __set_macos_times(filepath, timestamp)
 
     return

@@ -57,6 +57,37 @@ CREATE TABLE IF NOT EXISTS library_import_cv_volume_cache(
 
 _schema_ready_for: Set[str] = set()
 
+_COMICINFO_FIELD_TYPES = {
+    'series': str,
+    'title': str,
+    'issue_number': str,
+    'volume': int,
+    'issue_count': int,
+    'year': int,
+    'month': int,
+    'day': int,
+    'publisher': str,
+    'format': str,
+    'web': str,
+    'gtin': str,
+    'alternate_series': str,
+    'comicvine_issue_id': int,
+    'comicvine_volume_id': int,
+}
+
+
+def _valid_comicinfo_cache_value(value: Any) -> bool:
+    """Reject stale or malformed JSON before it reaches import matching."""
+    if not isinstance(value, dict) or not value:
+        return False
+
+    return all(
+        key in _COMICINFO_FIELD_TYPES
+        and isinstance(field_value, _COMICINFO_FIELD_TYPES[key])
+        and not isinstance(field_value, bool)
+        for key, field_value in value.items()
+    )
+
 
 def _ensure_schema() -> bool:
     """Create cache tables lazily when running inside the Kapowarr web app."""
@@ -133,7 +164,7 @@ def get_cached_comicinfo(
     except (TypeError, ValueError):
         return None
 
-    return value if isinstance(value, dict) and value else None
+    return value if _valid_comicinfo_cache_value(value) else None
 
 
 def store_cached_comicinfo(
@@ -217,16 +248,14 @@ def store_issue_volume_ids(mapping: Dict[int, int]) -> None:
 
     now = int(time())
     try:
-        get_db().executemany(
-            """
+        get_db().executemany("""
             INSERT INTO library_import_cv_issue_cache(issue_id, volume_id, cached_at)
             VALUES (?, ?, ?)
             ON CONFLICT(issue_id) DO UPDATE SET
                 volume_id = excluded.volume_id,
                 cached_at = excluded.cached_at;
-            """,
-            ((issue_id, volume_id, now) for issue_id, volume_id in mapping.items())
-        )
+            """, ((issue_id, volume_id, now)
+               for issue_id, volume_id in mapping.items()))
         commit()
     except (DatabaseError, RuntimeError):
         return

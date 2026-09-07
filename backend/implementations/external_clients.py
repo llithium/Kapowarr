@@ -401,8 +401,8 @@ class ExternalClients:
         cursor = get_db()
         lu_id = cursor.execute("""
             SELECT clients.id
-            FROM download_queue queue
-            INNER JOIN external_download_clients clients
+            FROM external_download_clients clients
+            LEFT JOIN download_queue queue
                 ON queue.external_client_id = clients.id
             WHERE clients.download_type = ?
             GROUP BY clients.id
@@ -414,17 +414,5 @@ class ExternalClients:
 
         if lu_id:
             return ExternalClients.get_client(lu_id[0])
-
-        first_id = cursor.execute("""
-            SELECT id
-            FROM external_download_clients
-            WHERE download_type = ?
-            LIMIT 1;
-            """,
-            (download_type.value,)
-        ).fetchone()
-
-        if first_id:
-            return ExternalClients.get_client(first_id[0])
 
         raise ExternalClientNotFound(-1)

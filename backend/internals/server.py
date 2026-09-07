@@ -234,7 +234,7 @@ class Server(metaclass=Singleton):
         target: Callable,
         name: str,
         args: Iterable[Any] = (),
-        kwargs: Mapping[str, Any] = {}
+        kwargs: Union[Mapping[str, Any], None] = None
     ) -> Thread:
         """Create a thread that runs under Flask app context.
 
@@ -248,7 +248,7 @@ class Server(metaclass=Singleton):
 
             kwargs (Mapping[str, Any], optional): The keyword arguments to pass
                 to the function.
-                Defaults to {}.
+                Defaults to None.
 
         Returns:
             Thread: The Thread instance.
@@ -262,7 +262,7 @@ class Server(metaclass=Singleton):
             target=db_thread,
             name=name,
             args=args,
-            kwargs=kwargs
+            kwargs=kwargs or {}
         )
         return t
 
@@ -272,7 +272,7 @@ class Server(metaclass=Singleton):
         target: Callable,
         name: Union[str, None] = None,
         args: Iterable[Any] = (),
-        kwargs: Mapping[str, Any] = {}
+        kwargs: Union[Mapping[str, Any], None] = None
     ) -> Timer:
         """Create a timer thread that runs under Flask app context.
 
@@ -289,7 +289,7 @@ class Server(metaclass=Singleton):
 
             kwargs (Mapping[str, Any], optional): The keyword arguments to pass
                 to the function.
-                Defaults to {}.
+                Defaults to None.
 
         Returns:
             Timer: The timer thread instance.
@@ -303,7 +303,7 @@ class Server(metaclass=Singleton):
             interval=interval,
             function=db_thread,
             args=args,
-            kwargs=kwargs
+            kwargs=kwargs or {}
         )
         if name:
             t.name = name
@@ -559,8 +559,8 @@ class DownloadedStatusEvent(WebSocketEvent):
     def __init__(
         self,
         volume_id: int,
-        not_downloaded_issues: List[int] = [],
-        downloaded_issues: List[int] = []
+        not_downloaded_issues: Union[List[int], None] = None,
+        downloaded_issues: Union[List[int], None] = None
     ) -> None:
         """Create the event.
 
@@ -569,15 +569,15 @@ class DownloadedStatusEvent(WebSocketEvent):
 
             not_downloaded_issues (List[int], optional): The issue IDs that were
                 previously downloaded, but aren't anymore.
-                Defaults to [].
+                Defaults to None.
 
             downloaded_issues (List[int], optional): The issue IDs that were
                 previously not downloaded, but now are.
-                Defaults to [].
+                Defaults to None.
         """
         self.volume_id = volume_id
-        self.not_downloaded_issues = not_downloaded_issues
-        self.downloaded_issues = downloaded_issues
+        self.not_downloaded_issues = not_downloaded_issues or []
+        self.downloaded_issues = downloaded_issues or []
         return
 
     def get_type(self) -> WebSocketEventType:

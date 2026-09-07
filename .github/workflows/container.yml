@@ -17,7 +17,11 @@ env:
   IMAGE_NAME: llithium/kapowarr
 
 jobs:
+  validate:
+    uses: ./.github/workflows/tests.yml
+
   publish:
+    needs: validate
     name: Publish container
     runs-on: ubuntu-latest
 

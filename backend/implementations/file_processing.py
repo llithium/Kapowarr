@@ -38,11 +38,23 @@ def mass_set_file_date(
 
     issue_filter = ""
     filepath_sql_filter = ""
+    query_params = {
+        "volume_id": volume_id,
+        "issue_id": issue_id or -1
+    }
     if issue_id:
         issue_filter = "AND i.id = :issue_id"
     if filepath_filter:
-        filepath_list = "'" + "','".join(filepath_filter) + "'"
-        filepath_sql_filter = f"AND f.filepath IN ({filepath_list})"
+        filepath_placeholders = ','.join(
+            f':filepath_{index}' for index in range(len(filepath_filter))
+        )
+        filepath_sql_filter = (
+            f"AND f.filepath IN ({filepath_placeholders})"
+        )
+        query_params.update({
+            f'filepath_{index}': filepath
+            for index, filepath in enumerate(filepath_filter)
+        })
 
     cursor = get_db()
     cursor.execute(f"""
@@ -57,10 +69,7 @@ def mass_set_file_date(
             {filepath_sql_filter}
             AND i.date IS NOT NULL
         """,
-        {
-            "volume_id": volume_id,
-            "issue_id": issue_id or -1
-        }
+        query_params
     )
 
     for filepath, date in cursor:

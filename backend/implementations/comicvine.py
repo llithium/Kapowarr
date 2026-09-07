@@ -95,7 +95,9 @@ class _ComicVineRequestGate:
     def release(self) -> None:
         self._lock.release()
 
-    def mark_rate_limited(self, retry_after: Union[float, None] = None) -> float:
+    def mark_rate_limited(self,
+    retry_after: Union[float,
+     None] = None) -> float:
         cooldown = retry_after if retry_after is not None else self.cooldown
         cooldown = max(1.0, cooldown)
         self._blocked_until = max(
@@ -270,7 +272,7 @@ class ComicVine:
         self,
         session: AsyncSession,
         url_path: str,
-        params: Dict[str, Any] = {},
+        params: Union[Dict[str, Any], None] = None,
         default: Union[T, None] = None
     ) -> Union[Dict[str, Any], T]:
         """Make an API call asynchronously (with error handling).
@@ -315,7 +317,7 @@ class ComicVine:
 
             response = await session.get(
                 Constants.CV_API_URL + url_path,
-                params={**self._params, **params}
+                params={**self._params, **(params or {})}
             )
 
             if response.status == 420:

@@ -158,10 +158,9 @@ async function testEditTorrent(api_key) {
 	return await sendAPI('POST', '/externalclients/test', api_key, {}, data)
 	.then(response => response.json())
 	.then(json => {
-		if (json.result.success)
-			// Test successful
+		if (json.result.success) {
 			test_button.classList.add('show-success');
-		else {
+		} else {
 			// Test failed
 			test_button.classList.add('show-fail');
 			error.innerText = json.result.description;
@@ -288,14 +287,14 @@ async function testAddTorrent(api_key) {
 	return await sendAPI('POST', '/externalclients/test', api_key, {}, data)
 	.then(response => response.json())
 	.then(json => {
-		if (json.result.success)
-			// Test successful
+		if (json.result.success) {
 			test_button.classList.add('show-success');
-		else
+		} else {
 			// Test failed
 			test_button.classList.add('show-fail');
 			error.innerText = json.result.description;
 			hide([], [error]);
+		}
 		return json.result.success;
 	});
 };
@@ -490,9 +489,16 @@ async function editRemoteMapping() {
 }
 
 async function deleteRemoteMapping(id) {
+	const error = document.querySelector('#remote-mapping-error');
+	hide([error]);
 	const api_key = await usingApiKey()
-	sendAPI("DELETE", `/remotemapping/${id}`, api_key)
-	document.querySelector(`#remote-mapping-list > tr[data-id="${id}"]`).remove()
+	try {
+		await sendAPI("DELETE", `/remotemapping/${id}`, api_key)
+		document.querySelector(`#remote-mapping-list > tr[data-id="${id}"]`).remove()
+	} catch (e) {
+		error.innerText = 'Failed to delete remote path mapping';
+		hide([], [error]);
+	}
 }
 
 

@@ -18,6 +18,21 @@ ignore_missing_imports = true
 disable_error_code = ["abstract", "annotation-unchecked", "arg-type", "assert-type", "assignment", "attr-defined", "await-not-async", "call-arg", "call-overload", "dict-item", "empty-body", "exit-return", "func-returns-value", "has-type", "import", "import-not-found", "import-untyped", "index", "list-item", "literal-required", "method-assign", "misc", "name-defined", "name-match", "no-overload-impl", "no-redef", "operator", "override", "return", "return-value", "safe-super", "str-bytes-safe", "str-format", "syntax", "top-level-await", "truthy-function", "type-abstract", "type-var", "typeddict-item", "typeddict-unknown-key", "union-attr", "unused-coroutine", "used-before-def", "valid-newtype", "valid-type", "var-annotated"]
 enable_error_code = ["method-assign", "func-returns-value", "name-match", "no-overload-impl", "unused-coroutine", "top-level-await", "await-not-async", "str-format", "redundant-expr", "unused-awaitable"]
 
+# Restore correctness checks in maintained modules while the legacy code is
+# migrated incrementally. Keep exceptions scoped to the module that needs them.
+[[tool.mypy.overrides]]
+module = [
+    "backend.features.tasks",
+    "backend.features.library_import",
+    "backend.implementations.library_import_cache",
+]
+enable_error_code = [
+    "arg-type", "assignment", "attr-defined", "return", "return-value",
+    "name-defined", "index", "union-attr", "typeddict-item",
+    "typeddict-unknown-key", "call-arg", "operator",
+]
+check_untyped_defs = true
+
 [tool.isort]
 balanced_wrapping = true
 combine_as_imports = true
@@ -27,6 +42,8 @@ remove_redundant_aliases = true
 
 [tool.autopep8]
 aggressive = 3
-experimental = true
+# Automatic long-line wrapping can emit Python 3.12-only f-strings.
+# Keep those lines intact; wrap them manually with adjacent strings.
+experimental = false
 max_line_length = 80
-ignore = ["E124", "E125", "E126", "E128", "E261"]
+ignore = ["E501", "E124", "E125", "E126", "E128", "E261"]

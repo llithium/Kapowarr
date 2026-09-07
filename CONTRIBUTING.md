@@ -16,6 +16,29 @@ Contributing to Kapowarr consists of 5 steps, listed hereunder.
 
 Once your contribution request has been accepted, you can start your local development. 
 
+### Development environment
+
+Create and activate a virtual environment, then install the shared development
+requirements. This also installs the runtime requirements used by CI and Docker.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+pre-commit install
+```
+
+Use `.venv\Scripts\Activate.ps1` to activate it in PowerShell. Keep the environment
+active when committing: the test and type-check hooks use its `python` executable.
+Frontend tests require Node.js 22 or newer and no additional packages:
+
+```bash
+node --test tests/frontend/frontend.test.cjs
+```
+
+Container publication runs the reusable test workflow first, including Python
+3.8 through 3.13, type checking, and frontend tests.
+
 ### IDE
 
 It's up to you how you make the changes, but we use Visual Studio Code as the IDE. A workspace settings file is included that takes care of some styling, testing and formatting of the backend code.
@@ -65,5 +88,5 @@ Following the styling guide for the backend code is not a strict rule, but effor
 
 ## A few miscellaneous notes
 
-1. Kapowarr does not have many tests. They're not really required if you checked your changes for bugs already. But you are free to add tests for your changes anyway.
+1. Add focused tests for changed behavior and concrete failure cases. Prefer public workflows and real temporary files/databases where practical; do not add tests that only assert removed code stays absent.
 2. The function [`backend.base.file_extraction.extract_filename_data`](https://github.com/Casvt/Kapowarr/blob/eadc04d10b32c04d4bbc51d289d10cfa93bc44f6/backend/base/file_extraction.py#L186) and [the regexes defined at the top](https://github.com/Casvt/Kapowarr/blob/development/backend/base/file_extraction.py#L24-L55) that it uses have become a bit of a box of black magic. If the function does not work as expected, it might be best to just inform @Casvt in the contribution request issue and he'll try to fix it.

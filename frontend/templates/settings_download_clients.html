@@ -34,10 +34,10 @@
 	<td class="mapping-local"></td>
 	<td class="action-column">
 		<button type="button" class="edit-mapping" title="Edit remote path mapping">
-			<img src="{{base_url}}/static/img/edit.svg" alt="">
+			<img src="{{url_base}}/static/img/edit.svg" alt="">
 		</button>
 		<button type="button" class="delete-mapping" title="Delete remote path mapping">
-			<img src="{{base_url}}/static/img/delete.svg" alt="">
+			<img src="{{url_base}}/static/img/delete.svg" alt="">
 		</button>
 	</td>
 </tr>
@@ -113,7 +113,7 @@
 					<tbody id="mega-creds" class="icon-text-color">
 					</tbody>
 					<tbody id="add-mega" class="icon-text-color">
-						<tr id="add-mega">
+						<tr>
 							<td class="mega-email">
 								<input type="email" required>
 							</td>
@@ -136,7 +136,7 @@
 					<tbody id="pixeldrain-creds" class="icon-text-color">
 					</tbody>
 					<tbody id="add-pixeldrain" class="icon-text-color">
-						<tr id="add-pixeldrain">
+						<tr>
 							<td class="pixeldrain-key">
 								<input type="text" required>
 							</td>
@@ -309,6 +309,7 @@
 			</button>
 		</div>
 		<h2>Remote Path Mappings</h2>
+		<p id="remote-mapping-error" class="error hidden" role="alert"></p>
 		<button id="add-remote-mapping" class="icon-dark-color" title="Add remote path mapping">
 			<img src="{{url_base}}/static/img/cancel.svg" alt="">
 		</button>

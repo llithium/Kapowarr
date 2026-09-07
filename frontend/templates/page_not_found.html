@@ -9,9 +9,10 @@
 
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/general.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/page_not_found.css') }}">
+	<script src="{{ url_for('static', filename='js/storage.js') }}"></script>
 
 	<script>
-		if (JSON.parse(localStorage.getItem('kapowarr') || {'theme': 'light'})['theme'] === 'dark')
+		if (getLocalStorage('theme').theme === 'dark')
 			document.querySelector(':root').classList.add('dark-mode');
 	</script>
 

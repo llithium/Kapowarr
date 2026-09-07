@@ -130,8 +130,7 @@ def move_to_dest(download: Download) -> None:
 
     if exists(file_dest):
         LOGGER.warning(
-            f'The file/folder {file_dest} already exists; replacing with downloaded file'
-        )
+            f'The file/folder {file_dest} already exists; replacing with downloaded file')
         delete_file_folder(file_dest)
 
     rename_file(download.files[0], file_dest)
@@ -149,35 +148,13 @@ def move_torrent_to_dest(download: TorrentDownload) -> None:
 
     move_to_dest(download)
 
-    download.files = extract_files_from_folder(
-        download.files[0],
-        download.volume_id
-    )
-
-    if not download.files:
-        return
-
-    scan_files(
-        download.volume_id,
-        filepath_filter=download.files,
-        update_websocket=True
-    )
-
-    rename_files = Settings().sv.rename_downloaded_files
-    if rename_files:
-        download.files = mass_rename(
-            download.volume_id,
-            filepath_filter=download.files,
-            process_individual_files=False
-        )
-
-    return
+    _process_torrent_folder(download, download.files[0])
 
 
 def copy_file_torrent(download: TorrentDownload) -> None:
     """
-    Copy downloaded files to dest. Change download.file to copy.
-    Change back using `PPA.reset_file_link()`.
+    Copy downloaded files to dest. Change download.files to the copies.
+    Change back using `reset_file_link()`.
     """
     download._original_files = download.files
     if not exists(download.files[0]):
@@ -195,14 +172,18 @@ def copy_file_torrent(download: TorrentDownload) -> None:
 
     if exists(file_dest):
         LOGGER.warning(
-            f'The file/folder {file_dest} already exists; replacing with downloaded file'
-        )
+            f'The file/folder {file_dest} already exists; replacing with downloaded file')
         delete_file_folder(file_dest)
 
     copy_directory(download.files[0], file_dest)
 
+    _process_torrent_folder(download, file_dest)
+
+
+def _process_torrent_folder(download: TorrentDownload, folder: str) -> None:
+    """Extract, scan, and optionally rename comics after a torrent transfer."""
     download.files = extract_files_from_folder(
-        file_dest,
+        folder,
         download.volume_id
     )
 

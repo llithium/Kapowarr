@@ -9,24 +9,23 @@ from typing import Any, Dict, List, Tuple, Union
 from backend.base.custom_exceptions import (CVRateLimitReached,
                                             InvalidKeyValue,
                                             VolumeAlreadyAdded)
-from backend.base.definitions import (CVFileMapping, FileConstants, FileMatch,
-                                      FilenameData, MonitorScheme,
+from backend.base.definitions import (CVFileMapping, FileConstants,
+                                      FileMatch, FilenameData, MonitorScheme,
                                       SpecialVersion)
 from backend.base.file_extraction import extract_filename_data
 from backend.base.files import (change_basefolder, common_folder,
                                 delete_empty_parent_folders,
                                 folder_is_inside_folder,
                                 list_files, rename_file)
-from backend.base.helpers import (extract_year_from_date, force_suffix,
-                                  normalise_string)
+from backend.base.helpers import (extract_year_from_date,
+                                  force_suffix, normalise_string)
 from backend.base.logging import LOGGER
 from backend.implementations.comicinfo import (ComicInfoData,
                                                comicinfo_to_filename_data,
                                                read_comicinfo)
 from backend.implementations.comicinfo_cv import match_comicinfo_ids
 from backend.implementations.comicvine import ComicVine
-from backend.implementations.file_matching import (scan_files,
-                                                   set_file_matching)
+from backend.implementations.file_matching import scan_files, set_file_matching
 from backend.implementations.matching import match_title
 from backend.implementations.naming import mass_rename
 from backend.implementations.root_folders import RootFolders
@@ -50,21 +49,25 @@ def create_groups(
             to the files that are in the group, where the files are in the form
             of a mapping from the filename to their filename data.
     """
-    group_mapping: Dict[int, FilenameData] = {}
+    # Keep an immutable representation for fast equality checks. Sorting the
+    # items retains dictionary equality semantics even when callers construct
+    # equivalent FilenameData mappings in a different insertion order.
+    group_mapping: Dict[Tuple[Tuple[str, Any], ...], int] = {}
     groups: Dict[int, Dict[str, FilenameData]] = {}
 
     for file, file_data in files.items():
-        match_data = file_data.copy()
-        del match_data['issue_number'] # type: ignore
-
-        for group_idx, group_data in group_mapping.items():
-            if match_data == group_data:
-                groups[group_idx][file] = file_data
-                break
+        match_key = tuple(sorted(
+            (key, value)
+            for key, value in file_data.items()
+            if key != 'issue_number'
+        ))
+        group_idx = group_mapping.get(match_key)
+        if group_idx is None:
+            new_group_number = len(groups) + 1
+            groups[new_group_number] = {file: file_data}
+            group_mapping[match_key] = new_group_number
         else:
-            new_group_number = max(groups or (0,)) + 1
-            groups.setdefault(new_group_number, {})[file] = file_data
-            group_mapping[new_group_number] = match_data
+            groups[group_idx][file] = file_data
 
     LOGGER.debug('File groupings: %s', groups)
     return groups
@@ -423,14 +426,10 @@ def propose_library_import(
     else:
         scan_folders = root_folders.copy()
 
-    try:
-        all_files = chain.from_iterable(
-            list_files(f, FileConstants.CONTENT_EXTENSIONS)
-            for f in scan_folders
-        )
-
-    except NotADirectoryError:
-        raise InvalidKeyValue('folder_filter', folder_filter)
+    all_files = chain.from_iterable(
+        list_files(f, FileConstants.CONTENT_EXTENSIONS)
+        for f in scan_folders
+    )
 
     # Get imported files
     imported_files = {
@@ -445,47 +444,50 @@ def propose_library_import(
     metadata_sources: Dict[str, str] = {}
     comicinfo_metadata: Dict[str, ComicInfoData] = {}
 
-    for f in all_files:
-        if f in imported_files:
-            continue
-
-        d = abspath(dirname(f))
-        if d in root_folders:
-            # File directly in root folder is not allowed
-            continue
-
-        file_data = extract_filename_data(f, prefer_folder_year=True)
-        metadata = read_comicinfo(f)
-        if metadata is not None:
-            file_data = comicinfo_to_filename_data(
-                metadata,
-                file_data,
-                for_library_import=True
-            )
-            metadata_sources[f] = 'comicinfo'
-            comicinfo_metadata[f] = metadata
-        else:
-            metadata_sources[f] = 'filename'
-
-        if (
-            f.endswith(FileConstants.IMAGE_EXTENSIONS)
-            and file_data["special_version"] != SpecialVersion.COVER
-        ):
-            if d in image_folders:
+    try:
+        for f in all_files:
+            if f in imported_files:
                 continue
-            image_folders.add(d)
-            d, f = dirname(d), d
 
-        folders.add(
-            dirname(d)
-            if limit_parent_folder else
-            d
-        )
+            d = abspath(dirname(f))
+            if d in root_folders:
+                # File directly in root folder is not allowed
+                continue
 
-        if len(folders) > limit:
-            break
+            file_data = extract_filename_data(f, prefer_folder_year=True)
+            metadata = read_comicinfo(f)
+            if metadata is not None:
+                file_data = comicinfo_to_filename_data(
+                    metadata,
+                    file_data,
+                    for_library_import=True
+                )
+                metadata_sources[f] = 'comicinfo'
+                comicinfo_metadata[f] = metadata
+            else:
+                metadata_sources[f] = 'filename'
 
-        unimported_files[f] = file_data
+            if (
+                f.endswith(FileConstants.IMAGE_EXTENSIONS)
+                and file_data["special_version"] != SpecialVersion.COVER
+            ):
+                if d in image_folders:
+                    continue
+                image_folders.add(d)
+                d, f = dirname(d), d
+
+            folders.add(
+                dirname(d)
+                if limit_parent_folder else
+                d
+            )
+
+            if len(folders) > limit:
+                break
+
+            unimported_files[f] = file_data
+    except NotADirectoryError:
+        raise InvalidKeyValue('folder_filter', folder_filter)
 
     # Sort by filename
     unimported_files = {

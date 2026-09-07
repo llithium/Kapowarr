@@ -134,20 +134,20 @@ def setup_logging(
             Defaults to True.
 
     Raises:
-        ValueError: The given log folder is not a folder, or the given log file
-            is not a file.
+        NotADirectoryError: The given log folder exists but is not a folder.
+        IsADirectoryError: The given log file exists but is not a file.
     """
     from backend.base.files import create_folder, folder_path
 
     if log_folder:
         if exists(log_folder) and not isdir(log_folder):
-            raise ValueError("Logging folder is not a folder")
+            raise NotADirectoryError(log_folder)
 
         create_folder(log_folder)
 
     if log_file:
         if exists(log_file) and not isfile(log_file):
-            raise ValueError("Logging file is not a file")
+            raise IsADirectoryError(log_file)
     else:
         log_file = Constants.LOGGER_FILENAME
 

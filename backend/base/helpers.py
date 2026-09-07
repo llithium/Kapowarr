@@ -221,15 +221,15 @@ def run_rar(args: List[str]) -> CompletedProcess[str]:
 
 # region Helpers
 def get_subclasses(
-    *classes: type,
+    *classes: Type[T],
     include_self: bool = False,
     recursive: bool = True,
     only_leafs: bool = False
-) -> List[type]:
+) -> List[Type[T]]:
     """Get subclasses of the given classes.
 
     Args:
-        *classes (type): The classes to get subclasses from.
+        *classes (Type[T]): The classes to get subclasses from.
 
         include_self (bool, optional): Whether to include the classes themselves.
             Defaults to False.
@@ -241,9 +241,9 @@ def get_subclasses(
             Defaults to False.
 
     Returns:
-        List[type]: The subclasses.
+        List[Type[T]]: The subclasses.
     """
-    result: List[type] = []
+    result: List[Type[T]] = []
     if include_self:
         result.extend(classes)
 
@@ -861,58 +861,6 @@ class CommaList(list):
         return ','.join(self)
 
 
-class DictKeyedDict(dict):
-    """
-    Normal dict but key is dict.
-    """
-
-    def __convert_dict(self, key: Mapping) -> str:
-        converted_key = ','.join(
-            sorted(key.keys()) + sorted(map(str, key.values()))
-        )
-        return converted_key
-
-    def __getitem__(self, key: Mapping) -> Any:
-        return super().__getitem__(
-            self.__convert_dict(key)
-        )[1]
-
-    def get(self, key: Mapping, default: Any = None) -> Any:
-        try:
-            return self[key]
-        except KeyError:
-            return default
-
-    def __setitem__(self, key: Mapping, value: Any) -> None:
-        return super().__setitem__(
-            self.__convert_dict(key),
-            (key, value)
-        )
-
-    def setdefault(self, key: Mapping, default: Any = None) -> Any:
-        if key not in self:
-            self[key] = default
-
-        return self[key]
-
-    def __contains__(self, key: object) -> bool:
-        if not isinstance(key, Mapping):
-            return False
-
-        return super().__contains__(
-            self.__convert_dict(key)
-        )
-
-    def keys(self) -> Iterator[Any]: # type: ignore
-        return (v[0] for v in super().values())
-
-    def values(self) -> Iterator[Any]: # type: ignore
-        return (v[1] for v in super().values())
-
-    def items(self) -> Iterator[Tuple[Any, Any]]: # type: ignore
-        return zip(self.keys(), self.values())
-
-
 # region Requests
 @lru_cache(1)
 def _running_urllib3_v2_and_above() -> bool:
@@ -1137,8 +1085,8 @@ class AsyncSession(ClientSession):
     async def get_text(
         self,
         url: str,
-        params: Dict[str, Any] = {},
-        headers: Dict[str, Any] = {},
+        params: Union[Dict[str, Any], None] = None,
+        headers: Union[Dict[str, Any], None] = None,
         quiet_fail: bool = False
     ) -> str:
         """Fetch a page and return the body.
@@ -1147,10 +1095,10 @@ class AsyncSession(ClientSession):
             url (str): The URL to fetch from.
 
             params (Dict[str, Any], optional): Any additional params.
-                Defaults to {}.
+                Defaults to None.
 
             headers (Dict[str, Any], optional): Any additional headers.
-                Defaults to {}.
+                Defaults to None.
 
             quiet_fail (bool, optional): If True, don't raise an exception
                 if the request fails. Return an empty string instead.
@@ -1163,7 +1111,9 @@ class AsyncSession(ClientSession):
             str: The body of the response.
         """
         try:
-            async with self.get(url, params=params, headers=headers) as response:
+            async with self.get(
+                url, params=params or {}, headers=headers or {}
+            ) as response:
                 return await response.text()
 
         except ClientError:
@@ -1174,8 +1124,8 @@ class AsyncSession(ClientSession):
     async def get_content(
         self,
         url: str,
-        params: Dict[str, Any] = {},
-        headers: Dict[str, Any] = {},
+        params: Union[Dict[str, Any], None] = None,
+        headers: Union[Dict[str, Any], None] = None,
         quiet_fail: bool = False
     ) -> bytes:
         """Fetch a page and return the content in bytes.
@@ -1184,10 +1134,10 @@ class AsyncSession(ClientSession):
             url (str): The URL to fetch from.
 
             params (Dict[str, Any], optional): Any additional params.
-                Defaults to {}.
+                Defaults to None.
 
             headers (Dict[str, Any], optional): Any additional headers.
-                Defaults to {}.
+                Defaults to None.
 
             quiet_fail (bool, optional): If True, don't raise an exception
                 if the request fails. Return an empty bytestring instead.
@@ -1200,7 +1150,9 @@ class AsyncSession(ClientSession):
             bytes: The content of the response.
         """
         try:
-            async with self.get(url, params=params, headers=headers) as response:
+            async with self.get(
+                url, params=params or {}, headers=headers or {}
+            ) as response:
                 return await response.content.read()
 
         except ClientError:
@@ -1331,10 +1283,10 @@ def _create_context(
     return
 
 
-def _pool_apply_func(args=(), kwds={}):
+def _pool_apply_func(args=(), kwds=None):
     func, value = args
     with context():
-        return func(*value, **kwds)
+        return func(*value, **(kwds or {}))
 
 
 def _pool_map_func(func_value):
@@ -1396,24 +1348,24 @@ class PortablePool(Pool):
         self,
         func: Callable[..., U],
         args: Iterable[Any] = (),
-        kwds: Mapping[str, Any] = {}
+        kwds: Union[Mapping[str, Any], None] = None
     ) -> U:
         new_args = (func, args)
         new_func = _pool_apply_func
-        return super().apply(new_func, new_args, kwds)
+        return super().apply(new_func, new_args, kwds or {})
 
     def apply_async(
         self,
         func,
         args=(),
-        kwds={},
+        kwds=None,
         callback=None,
         error_callback=None
     ):
         new_args = (func, args)
         new_func = _pool_apply_func
         return super().apply_async(
-            new_func, new_args, kwds,
+            new_func, new_args, kwds or {},
             callback, error_callback
         )
 

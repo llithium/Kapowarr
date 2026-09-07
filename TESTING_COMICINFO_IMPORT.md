@@ -1,6 +1,6 @@
 # Testing the ComicInfo Library Import fork
 
-This branch includes an isolated Docker Compose setup so the importer can be tested without touching an existing Kapowarr database or the production comics folder.
+This repository includes an isolated Docker Compose setup so the importer can be tested without touching an existing Kapowarr database or the production comics folder.
 
 ## Safety model
 
@@ -15,19 +15,19 @@ The test stack uses:
 
 It does **not** mount your normal Kapowarr database or your production comics directory.
 
-## 1. Check out the feature branch
+## 1. Check out the repository
 
 ```powershell
 git clone https://github.com/llithium/Kapowarr.git
 cd Kapowarr
-git switch feature/comicinfo-import-metadata
+git switch main
 ```
 
 If the repository is already cloned:
 
 ```powershell
 git fetch origin
-git switch feature/comicinfo-import-metadata
+git switch main
 git pull
 ```
 
@@ -153,6 +153,6 @@ The files in `./test-data/comics` are bind-mounted and are **not** deleted by `d
 
 ## Current limitations
 
-- Embedded ComicInfo reading currently supports CBZ/ZIP only.
-- CBR/RAR falls back to the existing filename parser.
-- The PR remains a draft until the full automated test suite and real Docker import behavior have been verified.
+- Embedded ComicInfo reading supports CBZ/ZIP and CBR/RAR. On macOS, RAR reading uses `bsdtar`; supported platforms also use the bundled RAR reader as a fallback.
+- Archives without readable ComicInfo metadata fall back to filename parsing.
+- Automated tests cover parsing, caching, and representative import flows. Use the Docker walkthrough above to verify behavior with your own tagged archives.

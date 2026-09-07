@@ -9,7 +9,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from threading import Thread, Timer
 from time import sleep, time
-from typing import Dict, List, Tuple, Type, Union
+from typing import Dict, List, Literal, Tuple, Type, TypedDict, Union
 
 from flask import Flask
 
@@ -131,7 +131,7 @@ class MassRenameIssue(Task):
         self,
         volume_id: int,
         issue_id: int,
-        filepath_filter: List[str] = []
+        filepath_filter: Union[List[str], None] = None
     ) -> None:
         """Create the task
 
@@ -140,11 +140,12 @@ class MassRenameIssue(Task):
             issue_id (int): The ID of the issue for which to perform the task.
             filepath_filter (List[str], optional): Only rename files in this
             list.
-                Defaults to [].
+                Defaults to None (all files).
         """
         self._volume_id = volume_id
         self._issue_id = issue_id
-        self.filepath_filter = filepath_filter
+        self.filepath_filter = list(
+            filepath_filter) if filepath_filter is not None else []
         return
 
     def run(self) -> None:
@@ -185,7 +186,7 @@ class MassConvertIssue(Task):
         self,
         volume_id: int,
         issue_id: int,
-        filepath_filter: List[str] = []
+        filepath_filter: Union[List[str], None] = None
     ) -> None:
         """Create the task
 
@@ -194,11 +195,12 @@ class MassConvertIssue(Task):
             issue_id (int): The ID of the issue for which to perform the task.
             filepath_filter (List[str], optional): Only rename files in this
             list.
-                Defaults to [].
+                Defaults to None (all files).
         """
         self._volume_id = volume_id
         self._issue_id = issue_id
-        self.filepath_filter = filepath_filter
+        self.filepath_filter = list(
+            filepath_filter) if filepath_filter is not None else []
         return
 
     def run(self) -> None:
@@ -323,7 +325,7 @@ class MassRenameVolume(Task):
     def __init__(
         self,
         volume_id: int,
-        filepath_filter: List[str] = []
+        filepath_filter: Union[List[str], None] = None
     ) -> None:
         """Create the task
 
@@ -331,10 +333,11 @@ class MassRenameVolume(Task):
             volume_id (int): The ID of the volume for which to perform the task.
             filepath_filter (List[str], optional): Only rename files in this
             list.
-                Defaults to [].
+                Defaults to None (all files).
         """
         self._volume_id = volume_id
-        self.filepath_filter = filepath_filter
+        self.filepath_filter = list(
+            filepath_filter) if filepath_filter is not None else []
         return
 
     def run(self) -> None:
@@ -371,7 +374,7 @@ class MassConvertVolume(Task):
     def __init__(
         self,
         volume_id: int,
-        filepath_filter: List[str] = []
+        filepath_filter: Union[List[str], None] = None
     ) -> None:
         """Create the task
 
@@ -379,10 +382,11 @@ class MassConvertVolume(Task):
             volume_id (int): The ID of the volume for which to perform the task.
             filepath_filter (List[str], optional): Only convert files in this
             list.
-                Defaults to [].
+                Defaults to None (all files).
         """
         self._volume_id = volume_id
-        self.filepath_filter = filepath_filter
+        self.filepath_filter = list(
+            filepath_filter) if filepath_filter is not None else []
         return
 
     def run(self) -> None:
@@ -499,10 +503,17 @@ task_library: Dict[str, Type[Task]] = {
 }
 
 
+class TaskEntry(TypedDict):
+    task: Task
+    id: int
+    status: Literal['queued', 'running']
+    thread: Thread
+
+
 class TaskHandler(metaclass=Singleton):
     "Note: Singleton"
 
-    queue: List[dict] = []
+    queue: List[TaskEntry] = []
     task_interval_waiter: Union[Timer, None] = None
 
     def __init__(self) -> None:
@@ -581,7 +592,7 @@ class TaskHandler(metaclass=Singleton):
         """
         LOGGER.debug(f'Adding task to queue: {task.display_title}')
         id = self.queue[-1]['id'] + 1 if self.queue else 1
-        task_data = {
+        task_data: TaskEntry = {
             'task': task,
             'id': id,
             'status': 'queued',
@@ -629,6 +640,7 @@ class TaskHandler(metaclass=Singleton):
                 if task['next_run'] <= current_time:
                     # Add task to queue
                     task_class = task_library[task['task_name']]
+                    inst: Task
                     if task_class is UpdateAll:
                         inst = task_class(allow_skipping=True)
                     else:
@@ -671,7 +683,7 @@ class TaskHandler(metaclass=Singleton):
 
         return
 
-    def __format_entry(self, task: dict) -> dict:
+    def __format_entry(self, task: TaskEntry) -> dict:
         """Format a queue entry for API response
 
         Args:
@@ -714,7 +726,7 @@ class TaskHandler(metaclass=Singleton):
         """
         return self.__format_entry(self.__get_raw_entry(task_id))
 
-    def __get_raw_entry(self, task_id: int) -> dict:
+    def __get_raw_entry(self, task_id: int) -> TaskEntry:
         """Get the raw entry from the queue based on it's id
 
         Args:
@@ -750,9 +762,10 @@ class TaskHandler(metaclass=Singleton):
             raise TaskNotDeletable(task_id)
 
         task['task'].stop = True
-        task['thread'].join()
+        if task['thread'].is_alive():
+            task['thread'].join()
         self.queue.remove(task)
-        LOGGER.info(f'Removed task: {task["task"].display_name} ({task_id})')
+        LOGGER.info(f'Removed task: {task["task"].display_title} ({task_id})')
         WebSocket().emit(TaskEndedEvent(task['task']))
         return
 

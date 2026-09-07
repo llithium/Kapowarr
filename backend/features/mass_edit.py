@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import List
+from typing import Iterator, List
 
 from backend.base.custom_exceptions import (InvalidKeyValue, KeyNotFound,
                                             RootFolderNotFound,
@@ -21,6 +21,17 @@ from backend.internals.db import iter_commit
 from backend.internals.server import MassEditorStatusEvent, WebSocket
 
 
+def _iter_volumes_with_progress(action: MassEditorAction) -> Iterator[int]:
+    """Yield volume IDs with progress events and a commit between operations."""
+    ws = WebSocket()
+    total_items = len(action.volume_ids)
+    for item_index, volume_id in enumerate(iter_commit(action.volume_ids), 1):
+        ws.emit(MassEditorStatusEvent(
+            action.identifier, item_index, total_items
+        ))
+        yield volume_id
+
+
 class MassEditorDelete(MassEditorAction):
     identifier = 'delete'
 
@@ -31,16 +42,7 @@ class MassEditorDelete(MassEditorAction):
 
         LOGGER.info(f'Using mass editor, deleting volumes: {self.volume_ids}')
 
-        ws = WebSocket()
-        total_items = len(self.volume_ids)
-
-        for item_index, volume_id in enumerate(iter_commit(self.volume_ids)):
-            ws.emit(MassEditorStatusEvent(
-                self.identifier,
-                item_index + 1,
-                total_items
-            ))
-
+        for volume_id in _iter_volumes_with_progress(self):
             try:
                 Volume(volume_id).delete(delete_volume_folder)
             except VolumeDownloadedFor:
@@ -66,16 +68,7 @@ class MassEditorRootFolder(MassEditorAction):
             f'Using mass editor, settings root folder to {root_folder_id} for volumes: {self.volume_ids}'
         )
 
-        ws = WebSocket()
-        total_items = len(self.volume_ids)
-
-        for item_index, volume_id in enumerate(iter_commit(self.volume_ids)):
-            ws.emit(MassEditorStatusEvent(
-                self.identifier,
-                item_index + 1,
-                total_items
-            ))
-
+        for volume_id in _iter_volumes_with_progress(self):
             Volume(volume_id).change_root_folder(root_folder_id)
 
         return
@@ -87,16 +80,7 @@ class MassEditorRename(MassEditorAction):
     def run(self, **kwargs) -> None:
         LOGGER.info(f'Using mass editor, renaming volumes: {self.volume_ids}')
 
-        ws = WebSocket()
-        total_items = len(self.volume_ids)
-
-        for item_index, volume_id in enumerate(iter_commit(self.volume_ids)):
-            ws.emit(MassEditorStatusEvent(
-                self.identifier,
-                item_index + 1,
-                total_items
-            ))
-
+        for volume_id in _iter_volumes_with_progress(self):
             mass_rename(volume_id)
 
         return
@@ -108,16 +92,7 @@ class MassEditorUpdate(MassEditorAction):
     def run(self, **kwargs) -> None:
         LOGGER.info(f'Using mass editor, updating volumes: {self.volume_ids}')
 
-        ws = WebSocket()
-        total_items = len(self.volume_ids)
-
-        for item_index, volume_id in enumerate(iter_commit(self.volume_ids)):
-            ws.emit(MassEditorStatusEvent(
-                self.identifier,
-                item_index + 1,
-                total_items
-            ))
-
+        for volume_id in _iter_volumes_with_progress(self):
             refresh_and_scan(volume_id)
 
         return
@@ -132,16 +107,7 @@ class MassEditorSearch(MassEditorAction):
         )
 
         download_handler = DownloadHandler()
-        ws = WebSocket()
-        total_items = len(self.volume_ids)
-
-        for item_index, volume_id in enumerate(iter_commit(self.volume_ids)):
-            ws.emit(MassEditorStatusEvent(
-                self.identifier,
-                item_index + 1,
-                total_items
-            ))
-
+        for volume_id in _iter_volumes_with_progress(self):
             search_results = auto_search(volume_id)
             download_handler.add_multiple(
                 (result['link'], volume_id, None, False)
@@ -159,16 +125,7 @@ class MassEditorConvert(MassEditorAction):
             f'Using mass editor, converting for volumes: {self.volume_ids}'
         )
 
-        ws = WebSocket()
-        total_items = len(self.volume_ids)
-
-        for item_index, volume_id in enumerate(iter_commit(self.volume_ids)):
-            ws.emit(MassEditorStatusEvent(
-                self.identifier,
-                item_index + 1,
-                total_items
-            ))
-
+        for volume_id in _iter_volumes_with_progress(self):
             mass_convert(volume_id)
         return
 

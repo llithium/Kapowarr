@@ -21,7 +21,7 @@ from backend.internals.server import TaskStatusEvent, WebSocket
 def _get_convertable_files(
     volume_id: int,
     issue_id: Union[int, None] = None,
-    filepath_filter: List[str] = []
+    filepath_filter: Union[List[str], None] = None
 ) -> Iterator[ProposedConversion]:
     """Get the files of a volume or issue that can be converted to a format that
     is more desired according to the format preference and extraction settings.
@@ -30,9 +30,9 @@ def _get_convertable_files(
         volume_id (int): The ID of the volume.
         issue_id (Union[int, None], optional): The ID of the issue.
             Defaults to None.
-        filepath_filter (List[str], optional): Only convert files mentioned in
-            this list.
-            Defaults to [].
+        filepath_filter (Union[List[str], None], optional): Only convert files
+            mentioned in this list.
+            Defaults to None.
 
     Yields:
         Iterator[ProposedConversion]: The proposed conversions of files to
@@ -45,7 +45,7 @@ def _get_convertable_files(
 
     for file in sorted(filtered_iter(
         (f["filepath"] for f in file_list),
-        set(filepath_filter)
+        set(filepath_filter or ())
     )):
         conversion_proposal = ConvertersManager.select_converter(file)
         if conversion_proposal is None:
@@ -85,7 +85,7 @@ def _trigger_conversion(conversion: ProposedConversion) -> List[str]:
 def mass_convert(
     volume_id: int,
     issue_id: Union[int, None] = None,
-    filepath_filter: List[str] = [],
+    filepath_filter: Union[List[str], None] = None,
     update_websocket_progress: bool = False,
     update_websocket_files: bool = False,
     process_individual_files: bool = True
@@ -98,9 +98,9 @@ def mass_convert(
         issue_id (Union[int, None], optional): The ID of the issue to convert for.
             Defaults to None.
 
-        filepath_filter (List[str], optional): Only convert files mentioned in
-            this list.
-            Defaults to [].
+        filepath_filter (Union[List[str], None], optional): Only convert files
+            mentioned in this list.
+            Defaults to None.
 
         update_websocket_progress (bool, optional): Send task progress updates
             over the websocket.
@@ -151,7 +151,7 @@ def mass_convert(
             )):
                 result += iter_result
                 ws.emit(TaskStatusEvent(
-                    f'Converted {idx+1}/{total_count}'
+                    f'Converted {idx + 1}/{total_count}'
                 ))
 
         else:

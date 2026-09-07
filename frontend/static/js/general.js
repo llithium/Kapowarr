@@ -22,12 +22,7 @@ function hide(to_hide, to_show=null) {
 };
 
 async function fetchAPI(endpoint, api_key, params={}, json_return=true) {
-	let formatted_params = '';
-	if (Object.keys(params).length) {
-		formatted_params = '&' + Object.entries(params).map(p => p.join('=')).join('&');
-	};
-
-	return fetch(`${url_base}/api${endpoint}?api_key=${api_key}${formatted_params}`)
+	return fetch(buildAPIUrl(endpoint, api_key, params))
 	.then(response => {
 		if (!response.ok) return Promise.reject(response);
 		if (json_return)
@@ -46,12 +41,7 @@ async function fetchAPI(endpoint, api_key, params={}, json_return=true) {
 };
 
 async function sendAPI(method, endpoint, api_key, params={}, body={}) {
-	let formatted_params = '';
-	if (Object.keys(params).length) {
-		formatted_params = '&' + Object.entries(params).map(p => p.join('=')).join('&');
-	};
-
-	return fetch(`${url_base}/api${endpoint}?api_key=${api_key}${formatted_params}`, {
+	return fetch(buildAPIUrl(endpoint, api_key, params), {
 		'method': method,
 		'headers': {'Content-Type': 'application/json'},
 		'body': JSON.stringify(body)
@@ -68,6 +58,12 @@ async function sendAPI(method, endpoint, api_key, params={}, body={}) {
 			return Promise.reject(response);
 		};
 	});
+};
+
+function buildAPIUrl(endpoint, api_key, params={}) {
+	const query = new URLSearchParams({api_key: api_key ?? ''});
+	Object.entries(params).forEach(([key, value]) => query.set(key, value));
+	return `${url_base}/api${endpoint}?${query}`;
 };
 
 //
@@ -280,63 +276,6 @@ function convertSize(size) {
 	).toString() + ' TB';
 
 	return size;
-};
-
-//
-// LocalStorage
-//
-const default_values = {
-	'lib_sorting': 'title',
-	'lib_view': 'posters',
-	'lib_filter': '',
-	'theme': 'light',
-	'translated_filter': 'all',
-	'api_key': null,
-	'last_login': 0,
-	'monitor_new_volume': true,
-	'monitor_new_issues': true,
-	'monitoring_scheme': "all"
-};
-
-function setupLocalStorage() {
-	if (!localStorage.getItem('kapowarr'))
-		localStorage.setItem('kapowarr', JSON.stringify(default_values));
-
-	const missing_keys = [
-		...Object.keys(default_values)
-	].filter(e =>
-		![...Object.keys(JSON.parse(localStorage.getItem('kapowarr')))].includes(e)
-	)
-
-	if (missing_keys.length) {
-		const storage = JSON.parse(localStorage.getItem('kapowarr'));
-
-		missing_keys.forEach(missing_key => {
-			storage[missing_key] = default_values[missing_key]
-		})
-
-		localStorage.setItem('kapowarr', JSON.stringify(storage));
-	};
-	return;
-};
-
-function getLocalStorage(...keys) {
-	const storage = JSON.parse(localStorage.getItem('kapowarr'));
-	const result = {};
-	for (const key of keys)
-		result[key] = storage[key];
-
-	return result;
-};
-
-function setLocalStorage(keys_values) {
-	const storage = JSON.parse(localStorage.getItem('kapowarr'));
-
-	for (const [key, value] of Object.entries(keys_values))
-		storage[key] = value;
-
-	localStorage.setItem('kapowarr', JSON.stringify(storage));
-	return;
 };
 
 // code run on load

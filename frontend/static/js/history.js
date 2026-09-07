@@ -1,7 +1,6 @@
 const HistoryEls = {
 	table: document.querySelector('#history'),
 	page_turner: {
-		container: document.querySelector('.page-turner'),
 		previous: document.querySelector('#previous-page'),
 		next: document.querySelector('#next-page'),
 		number: document.querySelector('#page-number')

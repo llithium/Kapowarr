@@ -48,18 +48,6 @@ class KapowarrCursor(Cursor):
             return r
         return dict(r)
 
-    def fetchmanydict(self, size: Union[int, None] = 1) -> List[Dict[str, Any]]:
-        """Same as `fetchmany` but convert the Row object to a dict.
-
-        Args:
-            size (Union[int, None], optional): The amount of rows to return.
-                Defaults to 1.
-
-        Returns:
-            List[Dict[str, Any]]: The rows.
-        """
-        return [dict(e) for e in self.fetchmany(size)]
-
     def fetchalldict(self) -> List[Dict[str, Any]]:
         """Same as `fetchall` but convert the Row object to a dict.
 
@@ -187,7 +175,10 @@ class DBConnection(Connection, metaclass=DBConnectionManager):
         return
 
     def __repr__(self) -> str:
-        return f'<{self.__class__.__name__}; {current_thread().name}; {id(self)}; closed={self.closed}>'
+        return (
+            f'<{self.__class__.__name__}; {current_thread().name}; '
+            f'{id(self)}; closed={self.closed}>'
+        )
 
 
 def set_db_location(
@@ -202,11 +193,11 @@ def set_db_location(
             `None` for the default location.
 
     Raises:
-        ValueError: Value of `db_folder` exists but is not a folder.
+        NotADirectoryError: Value of `db_folder` exists but is not a folder.
     """
     if db_folder:
         if exists(db_folder) and not isdir(db_folder):
-            raise ValueError('Database location is not a folder')
+            raise NotADirectoryError(db_folder)
 
     db_file_location = join(
         db_folder or folder_path(*Constants.DB_FOLDER),
