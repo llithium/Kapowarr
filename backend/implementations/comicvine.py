@@ -4,9 +4,11 @@
 Search for volumes/issues and fetch metadata for them on ComicVine
 """
 
-from asyncio import gather, run, sleep
+from asyncio import gather, get_running_loop, run, sleep
 from json import JSONDecodeError
 from re import IGNORECASE, compile
+from threading import Lock
+from time import monotonic
 from typing import Any, AsyncGenerator, Dict, Iterable, List, Sequence, Union
 
 from aiohttp import ContentTypeError
@@ -44,6 +46,66 @@ translation_regex = compile(
     IGNORECASE)
 headers = {'h2', 'h3', 'h4', 'h5', 'h6'}
 lists = {'ul', 'ol'}
+
+
+class _ComicVineRequestGate:
+    """Serialize and pace ComicVine API calls across asyncio event loops.
+
+    Kapowarr can run separate asyncio loops in Flask worker threads and several
+    ComicVine call sites intentionally build batches with ``gather``. A normal
+    ``asyncio.Lock`` cannot safely coordinate those independent loops, so the
+    process-wide lock is acquired in an executor thread. Holding the lock for
+    the complete metadata request guarantees that only one ComicVine API call
+    is in flight at a time, while cover-image requests remain unaffected.
+    """
+
+    def __init__(
+        self,
+        min_interval: float = 1.1,
+        cooldown: float = 60.0
+    ) -> None:
+        self.min_interval = min_interval
+        self.cooldown = cooldown
+        self._lock = Lock()
+        self._last_request_at = 0.0
+        self._blocked_until = 0.0
+
+    async def acquire(self) -> None:
+        loop = get_running_loop()
+        await loop.run_in_executor(None, self._lock.acquire)
+
+        now = monotonic()
+        if now < self._blocked_until:
+            self._lock.release()
+            raise CVRateLimitReached
+
+        wait_time = max(
+            0.0,
+            self._last_request_at + self.min_interval - now
+        )
+        if wait_time:
+            LOGGER.debug(
+                'Waiting %.2fs before the next ComicVine API request',
+                wait_time
+            )
+            await sleep(wait_time)
+
+        self._last_request_at = monotonic()
+
+    def release(self) -> None:
+        self._lock.release()
+
+    def mark_rate_limited(self, retry_after: Union[float, None] = None) -> float:
+        cooldown = retry_after if retry_after is not None else self.cooldown
+        cooldown = max(1.0, cooldown)
+        self._blocked_until = max(
+            self._blocked_until,
+            monotonic() + cooldown
+        )
+        return cooldown
+
+
+_cv_request_gate = _ComicVineRequestGate()
 
 
 def _clean_description(description: str, short: bool = False) -> str:
@@ -213,6 +275,12 @@ class ComicVine:
     ) -> Union[Dict[str, Any], T]:
         """Make an API call asynchronously (with error handling).
 
+        ComicVine applies both hourly resource quotas and velocity limiting.
+        Every metadata call therefore passes through a process-wide gate that
+        serializes requests and spaces their start times. If ComicVine returns
+        HTTP 420 (or API status 107), the gate enters a cooldown so queued calls
+        fail locally instead of continuing to hit ComicVine.
+
         Args:
             session (AsyncSession): The session to make the request with.
 
@@ -239,16 +307,44 @@ class ComicVine:
                 `default` on error.
         """
         url_path = force_suffix('/' + url_path.lstrip('/'), '/')
+        gate_acquired = False
 
         try:
+            await _cv_request_gate.acquire()
+            gate_acquired = True
+
             response = await session.get(
                 Constants.CV_API_URL + url_path,
                 params={**self._params, **params}
             )
+
+            if response.status == 420:
+                retry_after = response.headers.get('Retry-After')
+                try:
+                    retry_after_seconds = float(retry_after)
+                except (TypeError, ValueError):
+                    retry_after_seconds = None
+
+                cooldown = _cv_request_gate.mark_rate_limited(
+                    retry_after_seconds
+                )
+                LOGGER.warning(
+                    'ComicVine rate limit reached; pausing API requests for '
+                    '%.0f seconds',
+                    cooldown
+                )
+                raise CVRateLimitReached
+
             result: Dict[str, Any] = await response.json()
 
             if result['status_code'] == 107:
-                raise ClientError
+                cooldown = _cv_request_gate.mark_rate_limited()
+                LOGGER.warning(
+                    'ComicVine rate limit reached; pausing API requests for '
+                    '%.0f seconds',
+                    cooldown
+                )
+                raise CVRateLimitReached
             elif result['status_code'] == 101:
                 raise VolumeNotMatched
             elif result['status_code'] == 100:
@@ -256,10 +352,19 @@ class ComicVine:
 
             return result
 
+        except CVRateLimitReached:
+            if default is not None:
+                return default
+            raise
+
         except (ClientError, ContentTypeError, JSONDecodeError):
             if default is not None:
                 return default
             raise CVRateLimitReached
+
+        finally:
+            if gate_acquired:
+                _cv_request_gate.release()
 
     def __format_volume_output(
         self,
@@ -516,9 +621,9 @@ class ComicVine:
 
         LOGGER.debug(f'Fetching volume data for {formatted_cv_ids}')
 
-        # Each request to CV can return 100 volumes. Make 10 requests at the
-        # same time (one batch). Wait/cooldown in between batches. Spending time
-        # fetching covers immediately after each batch increases cooldown.
+        # Each request to CV can return 100 volumes. Batches are still assembled
+        # concurrently here, but __call_api serializes the actual metadata
+        # requests process-wide. Cover downloads below remain concurrent.
         volume_infos = []
         async with AsyncSession() as session:
             async for request_batch in self.__sleep_iter(
@@ -741,7 +846,8 @@ class ComicVine:
             series_name = next(iter(file_group.values()))['series'].lower()
             titles_to_groups.setdefault(series_name, []).append(group_numbers)
 
-        # Search for each title in batches
+        # Search for each title in batches. The process-wide API gate keeps the
+        # gathered searches serial and stops queued calls after a rate limit.
         titles_to_results: Dict[str, List[VolumeMetadata]] = {}
         async for title_batch in self.__sleep_iter(
             batched(list(titles_to_groups), 10), 10
