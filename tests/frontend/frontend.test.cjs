@@ -336,3 +336,16 @@ test('cover cards preserve the full artwork for real comic cover ratios', () => 
 	assert.match(coverRule, /object-fit:\s*contain/);
 	assert.match(coverRule, /aspect-ratio:\s*0\.646\s*\/\s*1/);
 });
+
+test('library status and metadata text use high-contrast tokens', () => {
+	const css = read('frontend/static/css/workspace.css');
+	assert.match(css, /--dimmed-text-color:\s*#4d5b73/);
+	assert.match(css, /--progress-background-color:\s*#d6e0f0/);
+	assert.match(css, /--progress-text-color:\s*#172746/);
+	assert.match(css, /--progress-background-color:\s*#2e4262/);
+	assert.match(css, /--progress-text-color:\s*#edf2fc/);
+	const progressRule = css.match(/\.list-prog-container, \.table-prog-container\s*\{[^}]+\}/)?.[0] ?? '';
+	assert.match(progressRule, /background:\s*var\(--progress-background-color\)/);
+	assert.match(progressRule, /color:\s*var\(--progress-text-color\)/);
+	assert.match(progressRule, /font:\s*700\s+\.75rem\/1/);
+});

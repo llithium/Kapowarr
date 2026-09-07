@@ -11,7 +11,7 @@
     --hover-color: #e9eef9;
     --border-color: #d7deeb;
     --text-color: #202e49;
-    --dimmed-text-color: #586781;
+    --dimmed-text-color: #4d5b73;
     --header-background-color: #ffffff;
     --header-color: #202e49;
     --nav-background-color: #1c3056;
@@ -20,6 +20,8 @@
     --volume-info-background-color: #1c3056;
     --success-color: #287454;
     --focus-color: #3564db;
+    --progress-background-color: #d6e0f0;
+    --progress-text-color: #172746;
 }
 :root.dark-mode {
     --action-color: #a9c3ff;
@@ -34,6 +36,8 @@
     --header-color: #edf2fc;
     --nav-background-color: #152138;
     --volume-info-background-color: #152138;
+    --progress-background-color: #2e4262;
+    --progress-text-color: #edf2fc;
 }
 body { overflow: hidden; }
 .app-header { flex: 0 0 var(--header-height); align-items: center; border-bottom: 1px solid var(--border-color); box-shadow: none; color: var(--header-color); }
@@ -91,12 +95,18 @@ button:disabled { cursor: default; opacity: .45; }
 .list-entry:hover .list-img { outline: 3px solid var(--action-color); outline-offset: 3px; }
 .list-entry > :where(h2,p) { text-align: left; padding: 0; font-size: .78rem; }
 .list-entry .list-title { padding: 10px 0 4px; white-space: normal; font-size: .9rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.list-entry .list-volume { padding: 0 0 3px; }
-.list-entry .list-monitored, .list-entry .list-unmonitored { font-size: .7rem; padding: 0; }
-.list-prog-container { margin-top: 10px; height: 20px; border-radius: 4px; font: .7rem var(--ui-font); background: var(--hover-color); color: var(--text-color); }
-.list-prog-bar { opacity: .25; }
-.table-prog-container { background: var(--hover-color); color: var(--text-color); font-family: var(--ui-font); }
-.table-prog-bar { opacity: .3; }
+.list-entry .list-volume { padding: 0 0 3px; color: var(--dimmed-text-color); font-size: .75rem; font-weight: 500; }
+.list-entry .list-monitored, .list-entry .list-unmonitored { padding: 0; color: var(--dimmed-text-color); font-size: .75rem; font-weight: 500; }
+.list-prog-container, .table-prog-container {
+    align-items: center;
+    border-radius: 4px;
+    background: var(--progress-background-color);
+    color: var(--progress-text-color);
+    font: 700 .75rem/1 var(--ui-font);
+    letter-spacing: .01em;
+}
+.list-prog-container { margin-top: 10px; height: 22px; }
+.list-prog-bar, .table-prog-bar { opacity: .25; }
 #table-container > table { border-bottom: 1px solid var(--border-color); }
 #table-container :where(th,td) { padding: 14px 12px; }
 #table-container thead { position: static; }
