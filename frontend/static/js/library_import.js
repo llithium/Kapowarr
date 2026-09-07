@@ -29,6 +29,328 @@ const LIEls = {
 
 const rowid_to_filepath = {};
 
+const LIProgress = {
+	mode: 'scan',
+	started_at: null,
+	timer: null,
+	observer: null
+};
+
+function formatElapsedTime(milliseconds) {
+	const total_seconds = Math.max(0, Math.floor(milliseconds / 1000));
+	const hours = Math.floor(total_seconds / 3600);
+	const minutes = Math.floor((total_seconds % 3600) / 60);
+	const seconds = total_seconds % 60;
+
+	return [hours, minutes, seconds]
+		.map(value => value.toString().padStart(2, '0'))
+		.join(':');
+};
+
+function libraryImportProgressContent(mode) {
+	if (mode === 'import-rename') {
+		return {
+			title: 'Importing and renaming comics',
+			summary: 'Kapowarr is adding the selected volumes, attaching files to issues, moving files into their managed folders, and applying your naming rules.',
+			activity: 'Import in progress',
+			steps: [
+				'Adding or reusing matched volumes',
+				'Attaching files to the matching issues',
+				'Moving files into managed volume folders',
+				'Renaming files with your media-management settings'
+			]
+		};
+	}
+
+	if (mode === 'import') {
+		return {
+			title: 'Importing selected comics',
+			summary: 'Kapowarr is adding the selected volumes and attaching the files to their matching issues without renaming your files.',
+			activity: 'Import in progress',
+			steps: [
+				'Adding or reusing matched volumes',
+				'Attaching files to the matching issues',
+				'Moving files only when an existing or shared folder requires it',
+				'Updating Kapowarr\'s file records'
+			]
+		};
+	}
+
+	return {
+		title: 'Preparing library import',
+		summary: 'Kapowarr is scanning your library and building the review list. The scan checks local files first and only uses ComicVine where it is needed.',
+		activity: 'Scan in progress',
+		steps: [
+			'Finding unimported comic files',
+			'Reading filenames and embedded ComicInfo.xml metadata',
+			'Checking volumes already in your Kapowarr library',
+			'Resolving ComicVine IDs or searching ComicVine for unmatched groups',
+			'Building the import preview'
+		]
+	};
+};
+
+function installLibraryImportProgressStyles() {
+	if (document.querySelector('#library-import-progress-styles'))
+		return;
+
+	const style = document.createElement('style');
+	style.id = 'library-import-progress-styles';
+	style.textContent = `
+		#loading-window {
+			min-height: calc(100vh - 8rem);
+			padding: 2rem 1rem;
+		}
+
+		.li-progress-card {
+			width: min(44rem, 100%);
+			display: flex;
+			flex-direction: column;
+			gap: 1.25rem;
+			border: 1px solid var(--border-color);
+			border-radius: 10px;
+			padding: clamp(1.25rem, 4vw, 2rem);
+			background-color: var(--foreground-color);
+			box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+		}
+
+		.li-progress-heading {
+			display: flex;
+			align-items: flex-start;
+			gap: 1rem;
+		}
+
+		.li-progress-spinner {
+			width: 2.25rem;
+			height: 2.25rem;
+			flex: 0 0 auto;
+			border: 3px solid var(--border-color);
+			border-top-color: var(--accent-color);
+			border-radius: 50%;
+			animation: li-progress-spin .9s linear infinite;
+		}
+
+		.li-progress-title {
+			margin: 0;
+			text-align: left !important;
+		}
+
+		.li-progress-summary {
+			margin: .4rem 0 0;
+			line-height: 1.45;
+			color: var(--text-color);
+			opacity: .85;
+		}
+
+		.li-progress-bar {
+			height: .55rem;
+			position: relative;
+			overflow: hidden;
+			border: 1px solid var(--border-color);
+			border-radius: 999px;
+			background-color: var(--background-color);
+		}
+
+		.li-progress-bar::after {
+			content: '';
+			position: absolute;
+			inset-block: 0;
+			left: -35%;
+			width: 35%;
+			border-radius: inherit;
+			background-color: var(--accent-color);
+			animation: li-progress-slide 1.45s ease-in-out infinite;
+		}
+
+		.li-progress-status-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 1rem;
+			font-size: .95rem;
+		}
+
+		.li-progress-activity {
+			font-weight: 600;
+		}
+
+		.li-progress-elapsed {
+			font-variant-numeric: tabular-nums;
+			opacity: .8;
+		}
+
+		.li-progress-details {
+			border-top: 1px solid var(--border-color);
+			padding-top: 1rem;
+		}
+
+		.li-progress-details h3 {
+			margin: 0 0 .75rem;
+			font-size: 1rem;
+			font-weight: 600;
+		}
+
+		.li-progress-steps {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			display: grid;
+			gap: .65rem;
+		}
+
+		.li-progress-steps li {
+			display: flex;
+			align-items: center;
+			gap: .7rem;
+			line-height: 1.35;
+		}
+
+		.li-progress-step-dot {
+			width: .65rem;
+			height: .65rem;
+			flex: 0 0 auto;
+			border: 2px solid var(--accent-color);
+			border-radius: 50%;
+			animation: li-progress-pulse 1.8s ease-in-out infinite;
+		}
+
+		.li-progress-steps li:nth-child(2) .li-progress-step-dot { animation-delay: .25s; }
+		.li-progress-steps li:nth-child(3) .li-progress-step-dot { animation-delay: .5s; }
+		.li-progress-steps li:nth-child(4) .li-progress-step-dot { animation-delay: .75s; }
+		.li-progress-steps li:nth-child(5) .li-progress-step-dot { animation-delay: 1s; }
+
+		.li-progress-note {
+			margin: 0;
+			border-top: 1px solid var(--border-color);
+			padding-top: 1rem;
+			font-size: .9rem;
+			line-height: 1.4;
+			opacity: .78;
+		}
+
+		@keyframes li-progress-spin {
+			to { transform: rotate(360deg); }
+		}
+
+		@keyframes li-progress-slide {
+			0% { left: -35%; }
+			55% { left: 100%; }
+			100% { left: 100%; }
+		}
+
+		@keyframes li-progress-pulse {
+			0%, 100% { opacity: .35; transform: scale(.85); }
+			50% { opacity: 1; transform: scale(1); }
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.li-progress-spinner,
+			.li-progress-bar::after,
+			.li-progress-step-dot {
+				animation: none;
+			}
+		}
+
+		@media (max-width: 36rem) {
+			.li-progress-status-row {
+				align-items: flex-start;
+				flex-direction: column;
+				gap: .35rem;
+			}
+		}
+	`;
+	document.head.appendChild(style);
+};
+
+function renderLibraryImportProgress() {
+	installLibraryImportProgressStyles();
+	const content = libraryImportProgressContent(LIProgress.mode);
+	const steps = content.steps
+		.map(step => `
+			<li>
+				<span class="li-progress-step-dot" aria-hidden="true"></span>
+				<span>${step}</span>
+			</li>
+		`)
+		.join('');
+
+	LIEls.views.loading.innerHTML = `
+		<section class="li-progress-card" role="status" aria-live="polite">
+			<div class="li-progress-heading">
+				<div class="li-progress-spinner" aria-hidden="true"></div>
+				<div>
+					<h2 class="li-progress-title">${content.title}</h2>
+					<p class="li-progress-summary">${content.summary}</p>
+				</div>
+			</div>
+			<div class="li-progress-bar" aria-label="Operation in progress"></div>
+			<div class="li-progress-status-row">
+				<span class="li-progress-activity">${content.activity}</span>
+				<span class="li-progress-elapsed">Elapsed <span id="li-progress-time">00:00:00</span></span>
+			</div>
+			<div class="li-progress-details">
+				<h3>What Kapowarr is doing</h3>
+				<ul class="li-progress-steps">${steps}</ul>
+			</div>
+			<p class="li-progress-note" id="li-progress-note">Large libraries can take a while. Unchanged ComicInfo metadata may be reused from the Library Import cache.</p>
+		</section>
+	`;
+};
+
+function updateLibraryImportElapsedTime() {
+	if (LIProgress.started_at === null)
+		return;
+
+	const elapsed = Date.now() - LIProgress.started_at;
+	const timer = document.querySelector('#li-progress-time');
+	if (timer)
+		timer.innerText = formatElapsedTime(elapsed);
+
+	const note = document.querySelector('#li-progress-note');
+	if (note && LIProgress.mode === 'scan' && elapsed >= 10000)
+		note.innerText = 'Still working. iCloud-only archives can take longer if macOS needs to make their contents available. Successfully cached ComicInfo metadata will not be reopened on later unchanged scans.';
+};
+
+function stopLibraryImportProgressTimer() {
+	if (LIProgress.timer !== null) {
+		clearInterval(LIProgress.timer);
+		LIProgress.timer = null;
+	}
+};
+
+function startLibraryImportProgressTimer() {
+	stopLibraryImportProgressTimer();
+	if (LIProgress.started_at === null)
+		LIProgress.started_at = Date.now();
+	updateLibraryImportElapsedTime();
+	LIProgress.timer = setInterval(updateLibraryImportElapsedTime, 1000);
+};
+
+function setLibraryImportLoadingMode(mode) {
+	LIProgress.mode = mode;
+	LIProgress.started_at = Date.now();
+	renderLibraryImportProgress();
+	startLibraryImportProgressTimer();
+};
+
+function setupLibraryImportProgressObserver() {
+	LIProgress.observer = new MutationObserver(() => {
+		if (LIEls.views.loading.classList.contains('hidden')) {
+			stopLibraryImportProgressTimer();
+			LIProgress.started_at = null;
+		} else if (LIProgress.timer === null) {
+			if (LIProgress.started_at === null)
+				LIProgress.started_at = Date.now();
+			startLibraryImportProgressTimer();
+		}
+	});
+
+	LIProgress.observer.observe(LIEls.views.loading, {
+		attributes: true,
+		attributeFilter: ['class']
+	});
+};
+
 function describeMatch(result) {
 	if (!result.cv.id)
 		return ['No automatic match', 'Choose a match manually.'];
@@ -69,6 +391,7 @@ function loadProposal(api_key) {
 	if (ffi.offsetParent !== null && (ffi.value || null) !== null)
 		params.folder_filter = encodeURIComponent(ffi.value);
 
+	setLibraryImportLoadingMode('scan');
 	hide(
 		[LIEls.views.start, document.querySelector('#folder-filter-error')],
 		[LIEls.views.loading]
@@ -266,12 +589,16 @@ function importLibrary(api_key, rename=false) {
 			};
 		});
 
+	setLibraryImportLoadingMode(rename ? 'import-rename' : 'import');
 	hide([LIEls.views.list], [LIEls.views.loading]);
 	sendAPI('POST', '/libraryimport', api_key, {rename_files: rename}, data)
 	.then(response => hide([LIEls.views.loading], [LIEls.views.start]));
 };
 
 // code run on load
+
+renderLibraryImportProgress();
+setupLibraryImportProgressObserver();
 
 usingApiKey()
 .then(api_key => {
