@@ -293,9 +293,9 @@ const default_values = {
 	'translated_filter': 'all',
 	'api_key': null,
 	'last_login': 0,
-	'monitor_new_volume': true,
-	'monitor_new_issues': true,
-	'monitoring_scheme': "all"
+	'monitor_new_volume': false,
+	'monitor_new_issues': false,
+	'monitoring_scheme': "none"
 };
 
 function setupLocalStorage() {

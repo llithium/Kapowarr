@@ -186,6 +186,9 @@ class DownloadHandler(metaclass=Singleton):
         This can safely be called at any point in time and with the queue in
         any state.
         """
+        if not self.settings.sv.downloads_enabled:
+            return
+
         active_downloads = 0
         max_downloads = self.settings.sv.concurrent_direct_downloads
         for download in self.queue:
@@ -421,6 +424,13 @@ class DownloadHandler(metaclass=Singleton):
             f'{link}'
         )
 
+        if not self.settings.sv.downloads_enabled:
+            LOGGER.info('Downloads disabled; refusing to enqueue %s', link)
+            return (
+                [],
+                EnqueuingDownloadFailureReason.DOWNLOADS_DISABLED
+            )
+
         if self.link_in_queue(link):
             LOGGER.info('Download already in queue')
             return [], None
@@ -499,6 +509,10 @@ class DownloadHandler(metaclass=Singleton):
         Load downloads from the database and add them to the queue
         for re-downloading
         """
+        if not self.settings.sv.downloads_enabled:
+            LOGGER.info('Downloads disabled; not restoring queued downloads')
+            return
+
         cursor = get_db()
         downloads = cursor.execute("""
             SELECT

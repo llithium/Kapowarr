@@ -114,6 +114,8 @@ class PublicSettingsValues:
     extract_issue_ranges: bool = False
     format_preference: CommaList = field(default_factory=lambda: CommaList(''))
 
+    downloads_enabled: bool = True
+
     service_preference: CommaList = field(default_factory=lambda: CommaList(
         (s.value for s in GCDownloadSource._member_map_.values())
     ))

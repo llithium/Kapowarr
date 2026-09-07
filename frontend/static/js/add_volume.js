@@ -400,12 +400,10 @@ function showAddWindow(comicvine_id, api_key) {
 	SearchEls.window.cv_input.value = comicvine_id;
     SearchEls.window.special_state_input.value = "auto";
 	
-	const monitoring_pref = getLocalStorage(
-		'monitor_new_volume', 'monitor_new_issues', 'monitoring_scheme'
-	);
-	SearchEls.window.monitor_volume_input.value = monitoring_pref.monitor_new_volume;
-	SearchEls.window.monitor_issues_input.value = monitoring_pref.monitor_new_issues;
-	SearchEls.window.monitoring_scheme.value = monitoring_pref.monitoring_scheme;
+	SearchEls.window.monitor_volume_input.value = 'false';
+	SearchEls.window.monitor_issues_input.value = 'false';
+	SearchEls.window.monitoring_scheme.value = 'none';
+	SearchEls.window.auto_search_input.checked = false;
 };
 
 function addVolume() {
@@ -432,12 +430,6 @@ function addVolume() {
 		data.volume_folder = volume_folder;
 	};
 	
-	setLocalStorage({
-		'monitor_new_volume': data.monitor,
-		'monitor_new_issues': data.monitor_new_issues,
-		'monitoring_scheme': data.monitoring_scheme
-	});
-
 	usingApiKey()
 	.then(api_key => {
 		sendAPI('POST', '/volumes', api_key, {}, data)

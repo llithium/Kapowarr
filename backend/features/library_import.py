@@ -784,9 +784,9 @@ def import_library(
             volume_id = Library.add(
                 comicvine_id=cv_id,
                 root_folder_id=root_folder.id,
-                monitored=True,
-                monitor_scheme=MonitorScheme.ALL,
-                monitor_new_issues=True,
+                monitored=False,
+                monitor_scheme=MonitorScheme.NONE,
+                monitor_new_issues=False,
                 volume_folder=(
                     lcf
                     if not rename_files and not shared_source_folder else

@@ -1,3 +1,9 @@
+## Enable Downloads
+
+The **Enable Downloads** switch is the global kill switch for Kapowarr's download functionality. When it is disabled, automatic download searches are skipped and new manual or automatic downloads are refused. Downloads that were already actively transferring are allowed to finish; queued downloads remain paused until downloads are enabled again.
+
+This does not disable library management features such as Library Import, Refresh & Scan, file matching, renaming, or conversion.
+
 ## Download Location
 
 ### Direct Download Temporary Folder
