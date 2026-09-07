@@ -329,3 +329,10 @@ test('volumes with no monitored issues have a finite progress bar', () => {
 	assert.equal(element('#list-library .vol-1 .list-prog-bar').style.width, '0%');
 	assert.equal(element('#list-library .vol-1 .list-prog-container').title, 'No monitored issues');
 });
+
+test('cover cards preserve the full artwork for real comic cover ratios', () => {
+	const css = read('frontend/static/css/workspace.css');
+	const coverRule = css.match(/\.list-img\s*\{[^}]+\}/)?.[0] ?? '';
+	assert.match(coverRule, /object-fit:\s*contain/);
+	assert.match(coverRule, /aspect-ratio:\s*0\.646\s*\/\s*1/);
+});
