@@ -118,6 +118,7 @@
 
 {% block main %}
 <main>
+    <div class="page-heading"><h1>Add comics</h1><a href="{{url_base}}/library-import" class="secondary-action">Import files</a></div>
 	<div>
 		<form class="search-bar icon-text-color" aria-label="Search Bar">
 			<button type="submit" id="search-button" title="Start the search">
@@ -129,7 +130,6 @@
 			</button>
 		</form>
 		<section id="search-explain" aria-label="Explanation">
-			<h1>Find a volume</h1>
 			<p>Search Comic Vine by the series title or its volume ID.</p>
 			<p>For example: <code>cv:4050-2127</code>, <code>cv:2127</code>, or <code>4050-2127</code>.</p>
 		</section>
@@ -141,7 +141,7 @@
 		</section>
 		<section id="search-failed" class="hidden">
 			<p>The Comic Vine api key is not set or is invalid</p>
-			<p>Please set a working Comic Vine api key at Settings -> General -> Comic Vine API</p>
+			<p><a class="primary-action" href="{{url_base}}/settings/general">Set up Comic Vine</a></p>
 		</section>
 		<section id="search-blocked" class="hidden">
 			<p>Add a root folder before adding volumes.</p>

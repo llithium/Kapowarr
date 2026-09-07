@@ -24,6 +24,7 @@
 
 {% block main %}
 <main>
+    <div class="page-heading"><h1>Download history</h1></div>
 	<section class="tool-bar-container" aria-label="Tool bar">
 		<div class="tool-bar">
 			{{ icon_button("refresh-button", "Refresh the list", "refresh.svg", "Refresh") }}
@@ -32,6 +33,7 @@
 	</section>
 	<div class="main-window">
 		{{ page_turner() }}
+        <p id="activity-message" role="status">Loading…</p>
 		<div class="table-container">
 			<table>
 				<thead>

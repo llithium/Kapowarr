@@ -264,3 +264,68 @@ test(
 		assert.equal(error.classList.contains('hidden'), false);
 	}
 );
+
+function libraryContext(overrides = {}) {
+	const elements = new Map();
+	const element = selector => {
+		if (!elements.has(selector)) elements.set(selector, {
+			value: '', checked: false, style: {}, dataset: {},
+			classList: { add() {}, remove() {}, toggle() {} },
+			querySelector: child => element(`${selector} ${child}`),
+			querySelectorAll: () => [],
+			hasAttribute: () => false
+		});
+		return elements.get(selector);
+	};
+	const ctx = context({
+		document: { querySelector: element },
+		hide: (_, visible) => { ctx.visible = visible[0]; },
+		window: { confirm: () => false },
+		...overrides
+	});
+	vm.createContext(ctx);
+	vm.runInContext(read('frontend/static/js/volumes.js').split('// code run on load')[0], ctx);
+	vm.runInContext('populateLibrary = () => {}; updateSelection = () => {};', ctx);
+	return { ctx, element, run: code => vm.runInContext(code, ctx) };
+}
+
+test('library search ignores old responses and recovers from a failed request', async () => {
+	const pending = [];
+	const { ctx, element, run } = libraryContext({
+		fetchAPI: () => new Promise((resolve, reject) => pending.push({ resolve, reject }))
+	});
+	run("fetchLibrary('key')");
+	element('#search-input').value = 'new query';
+	run("fetchLibrary('key')");
+	pending[1].resolve({ result: [] });
+	await new Promise(setImmediate);
+	assert.equal(element('#library-empty-title').textContent, 'No matching comics');
+	pending[0].resolve({ result: [{ id: 1 }] });
+	await new Promise(setImmediate);
+	assert.equal(ctx.visible, element('#empty-library'));
+	run("fetchLibrary('key')");
+	pending[2].reject(new Error('Offline'));
+	await new Promise(setImmediate);
+	assert.equal(ctx.visible, element('#library-error'));
+	run("fetchLibrary('key')");
+	pending[3].resolve({ result: [{ id: 1 }] });
+	await new Promise(setImmediate);
+	assert.equal(ctx.visible, element('#library-container'));
+});
+
+test('bulk actions require a selection and deletion requires confirmation', () => {
+	let calls = 0;
+	const { element, run } = libraryContext({ sendAPI: () => { calls++; } });
+	run("runAction('key', 'delete')");
+	assert.equal(calls, 0);
+	element('#table-library').querySelectorAll = () => [{ parentNode: { parentNode: { dataset: { id: '1' } } } }];
+	run("runAction('key', 'delete', {delete_folder: true})");
+	assert.equal(calls, 0);
+});
+
+test('volumes with no monitored issues have a finite progress bar', () => {
+	const { element, run } = libraryContext();
+	run("new LibraryEntry(1, 'key').setProgressBar(0, 0)");
+	assert.equal(element('#list-library .vol-1 .list-prog-bar').style.width, '0%');
+	assert.equal(element('#list-library .vol-1 .list-prog-container').title, 'No monitored issues');
+});

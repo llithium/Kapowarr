@@ -29,8 +29,8 @@ def ui_manifest():
                 "start_url": f"{Server.url_base}/",
                 "scope": f"{Server.url_base}/",
                 "id": f"{Server.url_base}/",
-                "background_color": "#464b51",
-                "theme_color": "#ebc700",
+                "background_color": "#f3f6fc",
+                "theme_color": "#244fc2",
                 "icons": [
                     {
                         "src": f"{Server.url_base}/static/img/favicon.svg",

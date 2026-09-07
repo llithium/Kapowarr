@@ -18,6 +18,9 @@ function fillList(api_key) {
 	fetchAPI('/blocklist', api_key, {offset: offset})
 	.then(json => {
 		BlockEls.table.innerHTML = '';
+        document.querySelector('#activity-message').textContent = json.result.length ? '' : (offset ? 'No more entries.' : 'No blocked downloads.');
+        BlockEls.page_turner.previous.disabled = offset === 0;
+        BlockEls.page_turner.next.disabled = json.result.length < 50;
 		json.result.forEach(obj => {
 			const entry = BlockEls.entry.cloneNode(true);
 
@@ -52,7 +55,9 @@ function fillList(api_key) {
 
 			BlockEls.table.appendChild(entry);
 		});
-	});
+	}).catch(() => {
+        document.querySelector('#activity-message').textContent = 'Couldn’t load entries. Use Refresh to try again.';
+    });
 };
 
 function deleteEntry(id, api_key) {
@@ -61,10 +66,14 @@ function deleteEntry(id, api_key) {
 };
 
 function clearList(api_key) {
-	sendAPI('DELETE', '/blocklist', api_key)
-	offset = 0;
-	BlockEls.page_turner.number.innerText = 'Page 1';
-	BlockEls.table.innerHTML = '';
+    if (!window.confirm('Clear the complete blocklist?')) return;
+    sendAPI('DELETE', '/blocklist', api_key).then(() => {
+        offset = 0;
+        BlockEls.page_turner.number.innerText = 'Page 1';
+        fillList(api_key);
+    }).catch(() => {
+        document.querySelector('#activity-message').textContent = 'Couldn’t clear entries. Try again.';
+    });
 };
 
 function reduceOffset(api_key) {

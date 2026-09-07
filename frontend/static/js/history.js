@@ -18,6 +18,9 @@ function fillHistory(api_key) {
 	fetchAPI('/activity/history', api_key, {offset: offset})
 	.then(json => {
 		HistoryEls.table.innerHTML = '';
+        document.querySelector('#activity-message').textContent = json.result.length ? '' : (offset ? 'No more entries.' : 'No downloads yet.');
+        HistoryEls.page_turner.previous.disabled = offset === 0;
+        HistoryEls.page_turner.next.disabled = json.result.length < 50;
 		json.result.forEach(obj => {
 			const entry = HistoryEls.entry.cloneNode(true);
 
@@ -48,14 +51,20 @@ function fillHistory(api_key) {
 
 			HistoryEls.table.appendChild(entry);
 		});
-	});
+	}).catch(() => {
+        document.querySelector('#activity-message').textContent = 'Couldn’t load entries. Use Refresh to try again.';
+    });
 };
 
 function clearHistory(api_key) {
-	sendAPI('DELETE', '/activity/history', api_key)
-	offset = 0;
-	HistoryEls.page_turner.number.innerText = 'Page 1';
-	HistoryEls.table.innerHTML = '';
+    if (!window.confirm('Clear the complete history?')) return;
+    sendAPI('DELETE', '/activity/history', api_key).then(() => {
+        offset = 0;
+        HistoryEls.page_turner.number.innerText = 'Page 1';
+        fillHistory(api_key);
+    }).catch(() => {
+        document.querySelector('#activity-message').textContent = 'Couldn’t clear entries. Try again.';
+    });
 };
 
 function reduceOffset(api_key) {
