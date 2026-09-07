@@ -1,0 +1,352 @@
+name: Apply hidden sidecar fix
+
+on:
+  push:
+    branches:
+      - fix/hidden-sidecars-and-existing-imports
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[auto-patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/hidden-sidecars-and-existing-imports
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply code changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one match, found {count}: {old!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          # Never recurse into hidden application/cache folders such as .Panels.
+          replace_once(
+              'backend/base/files.py',
+              'from typing import Dict, Iterable, List, Sequence, Union\nfrom zipfile import ZIP_DEFLATED, ZipFile',
+              'from typing import Dict, Iterable, List, Sequence, Union\nfrom unicodedata import normalize\nfrom zipfile import ZIP_DEFLATED, ZipFile'
+          )
+          replace_once(
+              'backend/base/files.py',
+              '"""List all files in a folder recursively with absolute paths. Hidden files\n    (files starting with `.`) are ignored.',
+              '"""List all files in a folder recursively with absolute paths. Hidden files\n    and folders (names starting with `.`) are ignored.'
+          )
+          replace_once(
+              'backend/base/files.py',
+              "        for f in scandir(to_do):\n            if f.is_dir():\n                to_dos.append(f.path)\n\n            elif (",
+              "        for f in scandir(to_do):\n            if f.is_dir() and not f.name.startswith('.'):\n                to_dos.append(f.path)\n\n            elif ("
+          )
+          replace_once(
+              'backend/base/files.py',
+              "    return (\n        force_suffix(abspath(folder))\n    ).startswith(\n        force_suffix(abspath(base_folder))\n    )",
+              "    # macOS filesystems commonly return decomposed Unicode names while a\n    # migrated database can contain composed Unicode. Compare canonical NFC paths\n    # so e.g. `Pérez` and its decomposed on-disk representation are equivalent.\n    folder_path = force_suffix(normalize('NFC', abspath(folder)))\n    base_path = force_suffix(normalize('NFC', abspath(base_folder)))\n    return folder_path.startswith(base_path)"
+          )
+
+          # During Library Import, keep the filename/folder series year. ComicInfo
+          # Year is an issue year and must not overwrite it, but it also should not
+          # erase the useful series year parsed from the path.
+          replace_once(
+              'backend/implementations/comicinfo.py',
+              "    if 'year' in metadata:\n        result['year'] = None if for_library_import else metadata['year']",
+              "    if 'year' in metadata and not for_library_import:\n        result['year'] = metadata['year']"
+          )
+
+          # Make fuzzy existing-library matching reject clearly different runs.
+          replace_once(
+              'backend/features/library_import.py',
+              "        else:\n            continue\n\n        issues = volume.get_issues(_skip_files=True)",
+              "        else:\n            continue\n\n        series_year = first_file['year']\n        if isinstance(series_year, int) and volume_data.year is not None:\n            year_delta = abs(series_year - volume_data.year)\n            if year_delta == 0:\n                score += 15\n                reasons.append('series year matches')\n            elif year_delta == 1:\n                score += 5\n                reasons.append('series year is adjacent')\n            else:\n                score -= 60\n                reasons.append('series year conflicts')\n\n        issues = volume.get_issues(_skip_files=True)"
+          )
+
+          helper_anchor = "\n\ndef _match_unmatched_comicinfo_files(\n"
+          helper = r'''
+
+
+def _group_is_already_tracked(
+    files: Dict[str, FilenameData],
+    comicinfo_metadata: Dict[str, ComicInfoData],
+    volume_id: int
+) -> bool:
+    """Return whether an exact ComicInfo match is already represented in DB.
+
+    This is intentionally limited to groups with direct ComicVine metadata. It
+    prevents a migrated library from re-offering files whose paths changed on
+    disk, while still allowing Library Import to add a genuinely new issue to
+    an existing volume from a staging folder.
+    """
+    metadata = [
+        comicinfo_metadata[filepath]
+        for filepath in files
+        if filepath in comicinfo_metadata
+    ]
+    if not metadata:
+        return False
+
+    direct_issue_ids = {
+        item['comicvine_issue_id']
+        for item in metadata
+        if item.get('comicvine_issue_id') is not None
+    }
+    direct_volume_ids = {
+        item['comicvine_volume_id']
+        for item in metadata
+        if item.get('comicvine_volume_id') is not None
+    }
+    if not (direct_issue_ids or direct_volume_ids):
+        return False
+
+    issues = Library.get_volume(volume_id).get_issues()
+    issues_with_files = [issue for issue in issues if issue.files]
+
+    if direct_issue_ids:
+        tracked_issue_ids = {
+            issue.comicvine_id
+            for issue in issues_with_files
+        }
+        return direct_issue_ids.issubset(tracked_issue_ids)
+
+    requested_numbers = set()
+    for file_data in files.values():
+        issue_number = file_data['issue_number']
+        if isinstance(issue_number, tuple):
+            requested_numbers.update(
+                issue.calculated_issue_number
+                for issue in issues
+                if issue_number[0] <= issue.calculated_issue_number <= issue_number[1]
+            )
+        elif issue_number is not None:
+            requested_numbers.add(issue_number)
+
+    if requested_numbers:
+        tracked_numbers = {
+            issue.calculated_issue_number
+            for issue in issues_with_files
+        }
+        return requested_numbers.issubset(tracked_numbers)
+
+    # A directly identified special/collected volume with no issue number is
+    # already represented once its only/primary issue has a file binding.
+    return bool(issues_with_files)
+'''
+          replace_once(
+              'backend/features/library_import.py',
+              helper_anchor,
+              helper + helper_anchor
+          )
+
+          replace_once(
+              'backend/features/library_import.py',
+              "    group_to_cv: Dict[int, Dict[str, Any]] = {}\n    groups_needing_cv: Dict[int, Dict[str, FilenameData]] = {}",
+              "    group_to_cv: Dict[int, Dict[str, Any]] = {}\n    skipped_existing_groups: Set[int] = set()\n    groups_needing_cv: Dict[int, Dict[str, FilenameData]] = {}"
+          )
+          replace_once(
+              'backend/features/library_import.py',
+              "        if existing_match is not None:\n            group_to_cv[group_number] = existing_match\n        else:\n            groups_needing_cv[group_number] = files",
+              "        if existing_match is not None:\n            existing_volume_id = existing_match.get('already_added')\n            if (\n                existing_match.get('match_source') == 'comicinfo-id'\n                and isinstance(existing_volume_id, int)\n                and _group_is_already_tracked(\n                    files, comicinfo_metadata, existing_volume_id\n                )\n            ):\n                LOGGER.debug(\n                    'Skipping Library Import group %d: direct ComicInfo match '\n                    'is already tracked by volume %d',\n                    group_number, existing_volume_id\n                )\n                skipped_existing_groups.add(group_number)\n                continue\n\n            group_to_cv[group_number] = existing_match\n        else:\n            groups_needing_cv[group_number] = files"
+          )
+          replace_once(
+              'backend/features/library_import.py',
+              "        for group_number, files in group_to_files.items()\n        for file in files\n    ]",
+              "        for group_number, files in group_to_files.items()\n        if group_number not in skipped_existing_groups\n        for file in files\n    ]"
+          )
+          PY
+
+      - name: Add regression tests
+        shell: bash
+        run: |
+          cat > tests/Tbackend/hidden_sidecars.py <<'PY'
+          import tempfile
+          import unittest
+          from pathlib import Path
+          from unicodedata import normalize
+
+          from backend.base.definitions import FileConstants
+          from backend.base.files import folder_is_inside_folder, list_files
+
+
+          class HiddenSidecarFiltering(unittest.TestCase):
+              def test_list_files_does_not_descend_hidden_directories(self):
+                  with tempfile.TemporaryDirectory() as temp:
+                      root = Path(temp)
+                      visible = root / 'Comic.cbz'
+                      visible.write_bytes(b'comic')
+
+                      panels = root / '.Panels' / 'thumbnails'
+                      panels.mkdir(parents=True)
+                      (panels / 'Comic.cbz.jpg').write_bytes(b'thumbnail')
+
+                      archive_temp = root / '.archive_extract' / 'nested'
+                      archive_temp.mkdir(parents=True)
+                      (archive_temp / 'Temp.cbz').write_bytes(b'temp')
+
+                      files = list_files(
+                          str(root), FileConstants.SCANNABLE_EXTENSIONS
+                      )
+                      self.assertEqual(files, [str(visible)])
+
+              def test_folder_comparison_normalises_macos_unicode(self):
+                  base = '/comics/DC Comics/Wonder Woman By George Pérez/Volume 01 (2016)'
+                  child = normalize('NFD', base) + '/Wonder Woman 001.cbz'
+                  self.assertTrue(folder_is_inside_folder(base, child))
+
+
+          if __name__ == '__main__':
+              unittest.main()
+          PY
+
+          cat > tests/Tbackend/library_import_duplicates.py <<'PY'
+          import unittest
+          from types import SimpleNamespace
+          from unittest.mock import patch
+
+          from backend.features.library_import import (
+              _find_existing_volume_match,
+              _group_is_already_tracked,
+          )
+          from backend.implementations.comicinfo import comicinfo_to_filename_data
+
+
+          def file_data(series='Example', year=2020, issue_number=1.0):
+              return {
+                  'series': series,
+                  'year': year,
+                  'volume_number': 1,
+                  'special_version': None,
+                  'issue_number': issue_number,
+                  'annual': False,
+              }
+
+
+          class ExistingImportFiltering(unittest.TestCase):
+              def test_library_import_keeps_filename_series_year(self):
+                  fallback = file_data(series='Worlds Finest', year=2013)
+                  result = comicinfo_to_filename_data(
+                      {'series': "Worlds' Finest", 'year': 2014},
+                      fallback,
+                      for_library_import=True,
+                  )
+                  self.assertEqual(result['year'], 2013)
+
+              def test_direct_issue_already_with_file_is_skipped(self):
+                  filepath = '/comics/Example/Example 001.cbz'
+                  files = {filepath: file_data()}
+                  metadata = {
+                      filepath: {
+                          'comicvine_issue_id': 9001,
+                          'comicvine_volume_id': 1001,
+                      }
+                  }
+                  issue = SimpleNamespace(
+                      comicvine_id=9001,
+                      calculated_issue_number=1.0,
+                      files=[{'filepath': '/old/path/Example 001.cbz'}],
+                  )
+                  volume = SimpleNamespace(get_issues=lambda: [issue])
+
+                  with patch(
+                      'backend.features.library_import.Library.get_volume',
+                      return_value=volume,
+                  ):
+                      self.assertTrue(
+                          _group_is_already_tracked(files, metadata, 12)
+                      )
+
+              def test_direct_new_issue_in_existing_volume_is_not_skipped(self):
+                  filepath = '/imports/Example 002.cbz'
+                  files = {filepath: file_data(issue_number=2.0)}
+                  metadata = {
+                      filepath: {
+                          'comicvine_issue_id': 9002,
+                          'comicvine_volume_id': 1001,
+                      }
+                  }
+                  issue = SimpleNamespace(
+                      comicvine_id=9002,
+                      calculated_issue_number=2.0,
+                      files=[],
+                  )
+                  volume = SimpleNamespace(get_issues=lambda: [issue])
+
+                  with patch(
+                      'backend.features.library_import.Library.get_volume',
+                      return_value=volume,
+                  ):
+                      self.assertFalse(
+                          _group_is_already_tracked(files, metadata, 12)
+                      )
+
+              def test_far_apart_series_year_is_not_fuzzy_matched(self):
+                  filepath = "/imports/Worlds' Finest (2013) Volume 001.cbz"
+                  files = {
+                      filepath: file_data(
+                          series="Worlds' Finest",
+                          year=2013,
+                          issue_number=1.0,
+                      )
+                  }
+                  volume_data = SimpleNamespace(
+                      comicvine_id=1990,
+                      title="Worlds' Finest",
+                      alt_title=None,
+                      year=1990,
+                      volume_number=1,
+                      publisher='DC Comics',
+                      site_url='https://example.invalid/1990',
+                  )
+                  issue = SimpleNamespace(
+                      comicvine_id=5001,
+                      calculated_issue_number=1.0,
+                      date='1990-01-01',
+                  )
+                  volume = SimpleNamespace(
+                      vd=volume_data,
+                      get_issues=lambda _skip_files=False: [issue],
+                  )
+
+                  with patch(
+                      'backend.features.library_import.Library.get_volume',
+                      return_value=volume,
+                  ):
+                      result = _find_existing_volume_match(files, {}, [1])
+
+                  self.assertIsNone(result)
+
+
+          if __name__ == '__main__':
+              unittest.main()
+          PY
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        shell: bash
+        run: |
+          mkdir -p db
+          python -m unittest discover -s ./tests -p '*.py'
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          rm .github/workflows/apply-hidden-sidecar-fix.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add backend/base/files.py backend/implementations/comicinfo.py backend/features/library_import.py tests/Tbackend/hidden_sidecars.py tests/Tbackend/library_import_duplicates.py .github/workflows/apply-hidden-sidecar-fix.yml
+          git commit -m "Fix hidden sidecar scans and duplicate library imports [auto-patch]"
+          git push origin HEAD:fix/hidden-sidecars-and-existing-imports
