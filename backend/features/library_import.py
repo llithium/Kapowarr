@@ -636,7 +636,7 @@ def propose_library_import(
     # series that is already managed. Direct ComicInfo IDs are checked inside
     # this stage before fuzzy existing-library scoring.
     group_to_cv: Dict[int, Dict[str, Any]] = {}
-    skipped_existing_groups: Set[int] = set()
+    skipped_existing_groups = set()
     groups_needing_cv: Dict[int, Dict[str, FilenameData]] = {}
     for group_number, files in group_to_files.items():
         existing_match = _find_existing_volume_match(
