@@ -1,0 +1,345 @@
+name: Apply download toggle
+
+on:
+  push:
+    branches:
+      - feature/disable-downloads-unmonitored-default
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[auto-patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/disable-downloads-unmonitored-default
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply feature changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f'{path}: expected exactly one match, found {count}: {old!r}'
+                  )
+              p.write_text(text.replace(old, new, 1))
+
+          # Global download kill switch. Keep it enabled by default for backwards
+          # compatibility; users can explicitly disable it in Download Settings.
+          replace_once(
+              'backend/internals/settings.py',
+              '    service_preference: CommaList = field(default_factory=lambda: CommaList(\n',
+              '    downloads_enabled: bool = True\n\n'
+              '    service_preference: CommaList = field(default_factory=lambda: CommaList(\n'
+          )
+
+          replace_once(
+              'backend/base/definitions.py',
+              '    LINK_BROKEN = "Download link broken"\n\n\nclass DownloadType',
+              '    LINK_BROKEN = "Download link broken"\n'
+              '    DOWNLOADS_DISABLED = "Downloads are disabled in settings"\n\n\n'
+              'class DownloadType'
+          )
+
+          # Refuse new downloads and do not start/restore queued downloads while
+          # the kill switch is off. Already-running transfers are allowed to finish.
+          replace_once(
+              'backend/features/download_queue.py',
+              '        active_downloads = 0\n'
+              '        max_downloads = self.settings.sv.concurrent_direct_downloads',
+              '        if not self.settings.sv.downloads_enabled:\n'
+              '            return\n\n'
+              '        active_downloads = 0\n'
+              '        max_downloads = self.settings.sv.concurrent_direct_downloads'
+          )
+          replace_once(
+              'backend/features/download_queue.py',
+              '        if self.link_in_queue(link):\n'
+              "            LOGGER.info('Download already in queue')",
+              '        if not self.settings.sv.downloads_enabled:\n'
+              "            LOGGER.info('Downloads disabled; refusing to enqueue %s', link)\n"
+              '            return (\n'
+              '                [],\n'
+              '                EnqueuingDownloadFailureReason.DOWNLOADS_DISABLED\n'
+              '            )\n\n'
+              '        if self.link_in_queue(link):\n'
+              "            LOGGER.info('Download already in queue')"
+          )
+          replace_once(
+              'backend/features/download_queue.py',
+              '        cursor = get_db()\n'
+              '        downloads = cursor.execute("""\n'
+              '            SELECT\n'
+              '                id, volume_id, client_type, external_client_id,',
+              '        if not self.settings.sv.downloads_enabled:\n'
+              "            LOGGER.info('Downloads disabled; not restoring queued downloads')\n"
+              '            return\n\n'
+              '        cursor = get_db()\n'
+              '        downloads = cursor.execute("""\n'
+              '            SELECT\n'
+              '                id, volume_id, client_type, external_client_id,'
+          )
+
+          # Download-category tasks (Auto Search / Search All) become no-ops when
+          # downloads are disabled, so scheduled searches do not hit GetComics.
+          replace_once(
+              'backend/features/tasks.py',
+              'from backend.internals.server import (TaskAddedEvent, TaskEndedEvent,\n'
+              '                                      TaskStatusEvent, WebSocket)\n',
+              'from backend.internals.server import (TaskAddedEvent, TaskEndedEvent,\n'
+              '                                      TaskStatusEvent, WebSocket)\n'
+              'from backend.internals.settings import Settings\n'
+          )
+          replace_once(
+              'backend/features/tasks.py',
+              '                result = task.run()\n'
+              '                cursor = get_db()',
+              "                if (\n"
+              "                    task.category == 'download'\n"
+              '                    and not Settings().sv.downloads_enabled\n'
+              '                ):\n'
+              "                    LOGGER.info(\n"
+              "                        'Downloads disabled; skipping task %s',\n"
+              '                        task.display_title\n'
+              '                    )\n'
+              '                    result = []\n'
+              '                else:\n'
+              '                    result = task.run()\n'
+              '                cursor = get_db()'
+          )
+
+          # New volumes are unmonitored by default at the model/API level and do
+          # not automatically search unless explicitly requested.
+          replace_once(
+              'backend/implementations/volumes.py',
+              '        monitored: bool,\n'
+              '        monitor_scheme: MonitorScheme = MonitorScheme.ALL,\n'
+              '        monitor_new_issues: bool = True,',
+              '        monitored: bool = False,\n'
+              '        monitor_scheme: MonitorScheme = MonitorScheme.NONE,\n'
+              '        monitor_new_issues: bool = False,'
+          )
+          replace_once(
+              'backend/implementations/volumes.py',
+              '        if auto_search:\n'
+              '            from backend.features.tasks import AutoSearchVolume, TaskHandler',
+              '        if auto_search and Settings().sv.downloads_enabled:\n'
+              '            from backend.features.tasks import AutoSearchVolume, TaskHandler'
+          )
+
+          # Library Import is a library-management workflow in this fork. Imported
+          # volumes should not opt themselves into download monitoring.
+          replace_once(
+              'backend/features/library_import.py',
+              '                monitored=True,\n'
+              '                monitor_scheme=MonitorScheme.ALL,\n'
+              '                monitor_new_issues=True,',
+              '                monitored=False,\n'
+              '                monitor_scheme=MonitorScheme.NONE,\n'
+              '                monitor_new_issues=False,'
+          )
+
+          replace_once(
+              'frontend/api.py',
+              '            monitored=True,\n'
+              '            monitor_new_issues=True,',
+              '            monitored=False,\n'
+              '            monitor_new_issues=False,'
+          )
+          replace_once(
+              'frontend/api.py',
+              "        monitor = data.get('monitor', True)",
+              "        monitor = data.get('monitor', False)"
+          )
+          replace_once(
+              'frontend/api.py',
+              '        monitoring_scheme = data.get(\'monitoring_scheme\') or "all"',
+              '        monitoring_scheme = data.get(\'monitoring_scheme\') or "none"'
+          )
+          replace_once(
+              'frontend/api.py',
+              "        monitor_new_issues = data.get('monitor_new_issues', True)",
+              "        monitor_new_issues = data.get('monitor_new_issues', False)"
+          )
+          replace_once(
+              'frontend/api.py',
+              "        auto_search = data.get('auto_search', True)",
+              "        auto_search = data.get('auto_search', False)"
+          )
+
+          # Add-volume dialog always opens in the safe, unmonitored state rather
+          # than inheriting an old browser-local monitoring preference.
+          replace_once(
+              'frontend/static/js/add_volume.js',
+              "\tconst monitoring_pref = getLocalStorage(\n"
+              "\t\t'monitor_new_volume', 'monitor_new_issues', 'monitoring_scheme'\n"
+              "\t);\n"
+              "\tSearchEls.window.monitor_volume_input.value = monitoring_pref.monitor_new_volume;\n"
+              "\tSearchEls.window.monitor_issues_input.value = monitoring_pref.monitor_new_issues;\n"
+              "\tSearchEls.window.monitoring_scheme.value = monitoring_pref.monitoring_scheme;",
+              "\tSearchEls.window.monitor_volume_input.value = 'false';\n"
+              "\tSearchEls.window.monitor_issues_input.value = 'false';\n"
+              "\tSearchEls.window.monitoring_scheme.value = 'none';\n"
+              "\tSearchEls.window.auto_search_input.checked = false;"
+          )
+          replace_once(
+              'frontend/static/js/add_volume.js',
+              "\tsetLocalStorage({\n"
+              "\t\t'monitor_new_volume': data.monitor,\n"
+              "\t\t'monitor_new_issues': data.monitor_new_issues,\n"
+              "\t\t'monitoring_scheme': data.monitoring_scheme\n"
+              "\t});\n\n",
+              ''
+          )
+          replace_once(
+              'frontend/static/js/general.js',
+              "\t'monitor_new_volume': true,\n"
+              "\t'monitor_new_issues': true,\n"
+              "\t'monitoring_scheme': \"all\"",
+              "\t'monitor_new_volume': false,\n"
+              "\t'monitor_new_issues': false,\n"
+              "\t'monitoring_scheme': \"none\""
+          )
+
+          # Download Settings UI.
+          replace_once(
+              'frontend/templates/settings_download.html',
+              '\t\t\t<h2>Download Location</h2>',
+              '\t\t\t<h2>Downloads</h2>\n'
+              '\t\t\t<table class="fold-table">\n'
+              '\t\t\t\t<tbody>\n'
+              '\t\t\t\t\t<tr>\n'
+              '\t\t\t\t\t\t<th><label for="downloads-enabled-input">Enable Downloads</label></th>\n'
+              '\t\t\t\t\t\t<td>\n'
+              '\t\t\t\t\t\t\t<input type="checkbox" id="downloads-enabled-input">\n'
+              '\t\t\t\t\t\t\t<p>Allow Kapowarr to run automatic download searches and enqueue or start new downloads. When disabled, already-running transfers are allowed to finish.</p>\n'
+              '\t\t\t\t\t\t</td>\n'
+              '\t\t\t\t\t</tr>\n'
+              '\t\t\t\t</tbody>\n'
+              '\t\t\t</table>\n'
+              '\t\t\t<h2>Download Location</h2>'
+          )
+          replace_once(
+              'frontend/static/js/settings_download.js',
+              "\t.then(json => {\n"
+              "\t\tdocument.querySelector('#download-folder-input').value = json.result.download_folder;",
+              "\t.then(json => {\n"
+              "\t\tdocument.querySelector('#downloads-enabled-input').checked = json.result.downloads_enabled;\n"
+              "\t\tdocument.querySelector('#download-folder-input').value = json.result.download_folder;"
+          )
+          replace_once(
+              'frontend/static/js/settings_download.js',
+              "\tconst data = {\n"
+              "\t\t'download_folder': document.querySelector('#download-folder-input').value,",
+              "\tconst data = {\n"
+              "\t\t'downloads_enabled': document.querySelector('#downloads-enabled-input').checked,\n"
+              "\t\t'download_folder': document.querySelector('#download-folder-input').value,"
+          )
+
+          # Documentation.
+          replace_once(
+              'docs/src/settings/download.md',
+              '## Download Location',
+              '## Enable Downloads\n\n'
+              'The **Enable Downloads** switch is the global kill switch for Kapowarr\'s download functionality. When it is disabled, automatic download searches are skipped and new manual or automatic downloads are refused. Downloads that were already actively transferring are allowed to finish; queued downloads remain paused until downloads are enabled again.\n\n'
+              'This does not disable library management features such as Library Import, Refresh & Scan, file matching, renaming, or conversion.\n\n'
+              '## Download Location'
+          )
+          PY
+
+      - name: Add regression tests
+        shell: bash
+        run: |
+          cat > tests/Tbackend/download_preferences.py <<'PY'
+          import inspect
+          import unittest
+          from asyncio import run
+          from types import SimpleNamespace
+          from unittest.mock import patch
+
+          from backend.base.definitions import (
+              EnqueuingDownloadFailureReason,
+              MonitorScheme,
+          )
+          from backend.features.download_queue import DownloadHandler
+          from backend.implementations.volumes import Library
+          from backend.internals.settings import SettingsValues
+
+
+          class DownloadPreferences(unittest.TestCase):
+              def test_download_feature_is_enabled_by_default_for_compatibility(self):
+                  self.assertTrue(SettingsValues().downloads_enabled)
+
+              def test_new_volumes_are_unmonitored_by_default(self):
+                  parameters = inspect.signature(Library.add).parameters
+                  self.assertFalse(parameters['monitored'].default)
+                  self.assertEqual(
+                      parameters['monitor_scheme'].default,
+                      MonitorScheme.NONE,
+                  )
+                  self.assertFalse(parameters['monitor_new_issues'].default)
+                  self.assertFalse(parameters['auto_search'].default)
+
+              def test_disabled_downloads_are_not_enqueued(self):
+                  handler = DownloadHandler()
+                  current = handler.settings.sv
+                  disabled = SimpleNamespace(
+                      **{
+                          **current.__dict__,
+                          'downloads_enabled': False,
+                      }
+                  )
+
+                  with patch.object(
+                      handler.settings,
+                      'get_settings',
+                      return_value=disabled,
+                  ):
+                      downloads, reason = run(handler.add(
+                          'https://getcomics.org/example',
+                          1,
+                      ))
+
+                  self.assertEqual(downloads, [])
+                  self.assertEqual(
+                      reason,
+                      EnqueuingDownloadFailureReason.DOWNLOADS_DISABLED,
+                  )
+
+
+          if __name__ == '__main__':
+              unittest.main()
+          PY
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        shell: bash
+        run: |
+          mkdir -p db
+          python -m unittest discover -s ./tests -p '*.py'
+
+      - name: Commit feature
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-download-toggle.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend frontend docs tests
+          git commit -m "Add download kill switch and unmonitored defaults [auto-patch]"
+          git push origin HEAD:feature/disable-downloads-unmonitored-default
