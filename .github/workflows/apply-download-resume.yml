@@ -1,0 +1,88 @@
+name: Apply download resume behavior
+
+on:
+  push:
+    branches:
+      - feature/disable-downloads-unmonitored-default
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[auto-resume-patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/disable-downloads-unmonitored-default
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply resume behavior
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f'{path}: expected exactly one match, found {count}: {old!r}'
+                  )
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'backend/features/download_queue.py',
+              '                if active_downloads >= max_downloads:\n'
+              '                    break\n\n'
+              '        return\n\n'
+              '    def set_queue_location(',
+              '                if active_downloads >= max_downloads:\n'
+              '                    break\n\n'
+              '        return\n\n'
+              '    def resume(self) -> None:\n'
+              '        """Resume downloads after the global download switch is enabled."""\n'
+              '        if self.queue:\n'
+              '            self._process_queue()\n'
+              '        else:\n'
+              '            self.load_downloads()\n'
+              '        return\n\n'
+              '    def set_queue_location('
+          )
+
+          replace_once(
+              'frontend/api.py',
+              '        settings.update(data, from_public=True)\n\n'
+              '        if hosting_changes:',
+              '        settings.update(data, from_public=True)\n\n'
+              "        if data.get('downloads_enabled') is True:\n"
+              '            DownloadHandler().resume()\n\n'
+              '        if hosting_changes:'
+          )
+          PY
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        shell: bash
+        run: |
+          mkdir -p db
+          python -m unittest discover -s ./tests -p '*.py'
+
+      - name: Commit resume behavior
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-download-resume.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend frontend
+          git commit -m "Resume paused downloads when re-enabled [auto-resume-patch]"
+          git push origin HEAD:feature/disable-downloads-unmonitored-default
