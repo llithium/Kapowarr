@@ -359,7 +359,7 @@ usingApiKey()
 			}
 		);
 
-	socket.on(
+	socket_ready.then(socket => socket.on(
 		'downloaded_status',
 		data => {
 			const inst = new LibraryEntry(data.volume_id, api_key);
@@ -370,12 +370,12 @@ usingApiKey()
 							- data.not_downloaded_issues.length;
 			inst.setProgressBar(new_progress[0], new_progress[1])
 		}
-	);
+	));
 	// Socket is init after API key so wait for that like this
-	socket.on(
+	socket_ready.then(socket => socket.on(
 		'mass_editor_status',
 		data => library_els.mass_edit.progress.innerText = `${data.current_item}/${data.total_items}`
-	);
+	));
 });
 library_els.search.container.action = 'javascript:searchLibrary();';
 library_els.mass_edit.select_all.onchange =

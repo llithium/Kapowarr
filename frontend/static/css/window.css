@@ -5,8 +5,9 @@
 .window[show-window] {
 	position: absolute;
 	inset: 0 0 0 0;
-	background-color: rgba(0, 0, 0, 0.6);
-	z-index: 3;
+	background-color: rgb(10 11 9 / 72%);
+	backdrop-filter: blur(2px);
+	z-index: 10;
 }
 
 .window > section:not([show-window]) {
@@ -24,6 +25,9 @@
 	display: flex;
 	background-color: var(--background-color);
 	color: var(--text-color);
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
 }
 
 .window > section[show-window].wide-window {
@@ -46,7 +50,7 @@
 
 .window-header,
 .window-footer {
-	min-height: 4.5rem;
+	min-height: 4rem;
 	display: flex;
 	align-items: center;
 	font-size: .8rem;
@@ -57,6 +61,11 @@
 .window-header {
 	justify-content: space-between;
 	border-bottom: 2px solid var(--border-color);
+}
+
+.window-header h2 {
+	font-size: 1.2rem;
+	font-weight: 600;
 }
 
 .window-header > button:last-of-type {
@@ -122,8 +131,9 @@
 }
 
 .window-footer button {
-	padding: .5rem 1rem;
-	border-radius: 2px;
+	min-height: 2.75rem;
+	padding: .55rem 1rem;
+	border-radius: 4px;
 	color: var(--light-color);
 }
 
@@ -165,5 +175,6 @@
 	.window > section[show-window] {
 		width: 100%;
 		height: 100%;
+		border-radius: 0;
 	}
 }

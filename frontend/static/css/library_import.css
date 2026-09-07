@@ -7,17 +7,39 @@ main {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 1rem;
+	gap: 1.25rem;
 
 	padding-bottom: 1.5rem;
 }
 
-#start-window h2 {
+#start-window h1 {
 	margin-top: min(3vw, 2rem);
 
 	font-size: clamp(1rem, 5vw, 2rem);
-	font-weight: 500;
+	font-weight: 600;
 	text-align: center;
+}
+
+#start-window .intro {
+	color: var(--dimmed-text-color);
+	text-align: center;
+}
+
+#start-window details {
+	width: min(100%, 50rem);
+	padding: .85rem 1rem;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	background: var(--foreground-color);
+}
+
+#start-window summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+
+#start-window details ul {
+	margin: 1rem 0 0 1.25rem;
 }
 
 #start-window > p,
@@ -89,6 +111,14 @@ main {
 	text-decoration: none;
 
 	transition: background-color 100ms linear;
+}
+
+#run-import-button,
+#import-button {
+	border-color: var(--accent-color);
+	background: var(--accent-color);
+	color: var(--dark-color);
+	font-weight: 600;
 }
 
 #run-import-button:hover,

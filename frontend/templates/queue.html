@@ -22,16 +22,16 @@
 	<td class="number-column"></td>
 	<td class="option-column">
         <button title="Move download up" class="move-up-dl">
-			<img src="{{ url_for('static', filename='img/arrow_up.svg') }}">
+			<img src="{{ url_for('static', filename='img/arrow_up.svg') }}" alt="">
         </button>
         <button title="Move download down" class="move-down-dl">
-			<img src="{{ url_for('static', filename='img/arrow_down.svg') }}">
+			<img src="{{ url_for('static', filename='img/arrow_down.svg') }}" alt="">
         </button>
 		<button title="Remove download" class="remove-dl">
-			<img src="{{ url_for('static', filename='img/delete.svg') }}">
+			<img src="{{ url_for('static', filename='img/delete.svg') }}" alt="">
 		</button>
         <button title="Remove and blocklist download" class="blocklist-dl">
-            <img src="{{ url_for('static', filename='img/blocklist.svg') }}">
+            <img src="{{ url_for('static', filename='img/blocklist.svg') }}" alt="">
         </button>
 	</td>
 </tr>
@@ -66,7 +66,8 @@
         </table>
     </div>
     <section id="empty-window" class="loading-screen">
-        <p>Queue empty</p>
+		<h2>Queue is empty</h2>
+		<p>Downloads will appear here when searches find a match.</p>
     </section>
 </main>
 {% endblock main %}

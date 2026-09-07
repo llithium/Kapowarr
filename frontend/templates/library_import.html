@@ -65,16 +65,19 @@
 {% block main %}
 <main>
 	<div id="start-window">
-		<h2>Import an existing organized library to add volumes to Kapowarr</h2>
-		<p>A few notes:</p>
+		<h1>Import an existing library</h1>
+		<p class="intro">Scan organized comic folders, review the matches, then choose what to import.</p>
+		<details>
+			<summary>Before you scan</summary>
 		<ul>
 			<li>Tagged CBZ/ZIP files are matched from embedded ComicInfo.xml metadata before Kapowarr falls back to the filename.</li>
 			<li>Volumes already in your Kapowarr library are checked before a new ComicVine search, which makes adding more issues to an existing series more reliable.</li>
-			<li>Check if Kapowarr matched correctly! Comicvine has separate releases for normal volumes, TPB's, one shots, hard covers, etc. So even though the name and year match, it could still be a wrong match.</li>
-			<li>Importing a lot of new volumes in one go will quickly make Kapowarr reach the rate limit of ComicVine. Import volumes in batches to avoid this. It's advised to not go above 50 volumes at a time.</li>
+			<li>Review matches carefully. ComicVine lists standard volumes, collected editions, one-shots, hardcovers, and other releases separately.</li>
+			<li>Import in batches of no more than 50 new volumes to avoid ComicVine rate limits.</li>
 			<li>Files are not allowed to be directly in the root folder. They have to be in a sub-folder.</li>
 			<li>If each issue has a separate sub-folder, enable 'Apply limit to parent folder' so that the limit is correctly applied.</li>
 		</ul>
+		</details>
 		<table class="fold-table">
 			<tbody>
 				<tr>
@@ -127,14 +130,16 @@
 		<button id="run-import-button">Scan</button>
 	</div>
 	<div id="loading-window" class="hidden">
-		<h2>Loading...</h2>
+		<h2>Scanning library</h2>
 	</div>
 	<div id="no-result-window" class="hidden">
-		<h2>No results</h2>
+		<h2>No comic folders found</h2>
+		<p>Check the folder selection and scan limit, then try again.</p>
 		<button class="cancel-button">Go Back</button>
 	</div>
 	<div id="no-cv-window" class="hidden">
-		<h2>Set ComicVine API Key first in the settings</h2>
+		<h2>ComicVine API key required</h2>
+		<p>Add an API key in General settings before scanning your library.</p>
 		<button class="cancel-button">Go Back</button>
 		<a href="{{url_base}}/settings/general#cv-input">Go to settings</a>
 	</div>

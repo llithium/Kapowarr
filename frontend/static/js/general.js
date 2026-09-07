@@ -342,19 +342,45 @@ function setLocalStorage(keys_values) {
 // code run on load
 
 const url_base = document.querySelector('#url_base').dataset.value;
+const main_content = document.querySelector('main');
+if (main_content !== null) {
+	main_content.id = 'main-content';
+	main_content.tabIndex = -1;
+};
+document.querySelectorAll('a.current-nav').forEach(link => {
+	link.setAttribute('aria-current', 'page');
+});
 const volume_id = parseInt(window.location.pathname.split('/').at(-1)) || null;
 mapButtons(volume_id);
 
 let socket;
-usingApiKey()
-.then(api_key => {
-	setTimeout(() => fillTaskQueue(api_key), 200);
-	socket = connectToWebSocket(api_key);
-});
-
 setupLocalStorage();
 if (getLocalStorage('theme')['theme'] === 'dark')
 	document.querySelector(':root').classList.add('dark-mode');
 
-document.querySelector('#toggle-nav').onclick = e =>
-	document.querySelector('#nav-bar').classList.toggle('show-nav');
+const socket_ready = usingApiKey()
+.then(api_key => {
+	setTimeout(() => fillTaskQueue(api_key), 200);
+	socket = connectToWebSocket(api_key);
+	return socket;
+});
+
+const nav_toggle = document.querySelector('#toggle-nav');
+const nav_bar = document.querySelector('#nav-bar');
+nav_toggle.setAttribute('aria-hidden', 'false');
+nav_toggle.setAttribute('aria-expanded', 'false');
+nav_toggle.onclick = () => {
+	const is_open = nav_bar.classList.toggle('show-nav');
+	nav_toggle.setAttribute('aria-expanded', is_open.toString());
+};
+
+document.addEventListener('click', event => {
+	if (
+		nav_bar.classList.contains('show-nav')
+		&& !nav_bar.contains(event.target)
+		&& !nav_toggle.contains(event.target)
+	) {
+		nav_bar.classList.remove('show-nav');
+		nav_toggle.setAttribute('aria-expanded', 'false');
+	};
+});

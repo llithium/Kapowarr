@@ -62,7 +62,38 @@ main:not(
 }
 
 #library-container {
-	padding: 1.5rem;
+	padding: clamp(1rem, 2.5vw, 2rem);
+}
+
+#empty-library p {
+	max-width: 34rem;
+	color: var(--dimmed-text-color);
+	font-size: 1rem;
+}
+
+.empty-actions {
+	display: flex;
+	gap: .75rem;
+	flex-wrap: wrap;
+	justify-content: center;
+}
+
+.empty-actions a {
+	min-height: 2.75rem;
+	display: inline-flex;
+	align-items: center;
+	padding: .6rem 1rem;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	background: var(--foreground-color);
+	font-size: .95rem;
+	font-weight: 600;
+}
+
+.empty-actions a.primary-action {
+	border-color: var(--accent-color);
+	background: var(--accent-color);
+	color: var(--dark-color);
 }
 
 main:has(#massedit-toggle:checked) #library-container {
@@ -97,13 +128,16 @@ main:has(#massedit-toggle:checked) #library-container {
 	text-decoration: none;
 	color: var(--dimmed-text-color);
 	background-color: var(--foreground-color);
-	border-radius: 1px;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	overflow: hidden;
 
-	transition: box-shadow 200ms ease-in;
+	transition: box-shadow 160ms ease, transform 160ms ease;
 }
 
 .list-entry:hover {
-	box-shadow: 0 0 12px #000;
+	box-shadow: 0 8px 22px var(--shadow-color);
+	transform: translateY(-2px);
 	text-decoration: none;
 }
 
@@ -112,13 +146,24 @@ main:has(#massedit-toggle:checked) #library-container {
 }
 
 .list-entry > :where(h2, p) {
-	padding: .1rem .2rem;
+	padding: .15rem .45rem;
 	text-align: center;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	overflow-x: hidden;
 	font-size: clamp(.65rem, .8vw, .75rem);
 	font-weight: 400;
+}
+
+.list-entry .list-title {
+	padding-top: .55rem;
+	color: var(--text-color);
+	font-size: .8rem;
+	font-weight: 600;
+}
+
+.list-entry > p:last-child {
+	padding-bottom: .55rem;
 }
 
 .list-entry[monitored] .list-unmonitored,
@@ -139,6 +184,7 @@ main:has(#massedit-toggle:checked) #library-container {
 
 	text-align: center;
 	font-size: clamp(.65rem, .8vw, .75rem);
+	font-family: 'IBM Plex Mono', monospace;
 }
 
 .list-prog-bar,
@@ -191,6 +237,19 @@ main:has(#massedit-toggle:checked) #table-container {
 	transition: background-color 200ms ease-in-out;
 }
 
+#table-container thead {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: var(--background-color);
+}
+
+#table-container th {
+	color: var(--dimmed-text-color);
+	font-size: .78rem;
+	font-weight: 600;
+}
+
 .table-entry:hover {
 	background-color: var(--hover-color);
 }
@@ -229,7 +288,9 @@ main:has(#massedit-toggle:checked) #table-container {
 	flex-wrap: wrap;
 	gap: clamp(.5rem, 4vw, 3rem);
 
-	padding-top: 2rem;
+	margin-top: 2rem;
+	padding: 1rem;
+	border-top: 1px solid var(--border-color);
 	color: var(--text-color);
 
 	font-size: .8rem;
@@ -315,6 +376,7 @@ main:has(#massedit-toggle:checked) .action-bar {
 #cancel-massedit {
 	background-color: var(--error-color);
 	border-color: var(--error-color);
+	color: white;
 }
 
 main:has(#massedit-toggle:checked) #lib-stats {

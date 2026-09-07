@@ -1,7 +1,11 @@
 .settings-container {
 	overflow-x: auto;
 	color: var(--text-color);
-	padding: 1rem;
+	padding: clamp(1rem, 3vw, 2rem);
+}
+
+.settings-container > form {
+	max-width: 74rem;
 }
 
 .settings-container a {
@@ -12,12 +16,13 @@
 /* Sections titles */
 /*  */
 .settings-container h2 {
-	margin-bottom: 1rem;
+	margin-bottom: .75rem;
+	padding-bottom: .45rem;
 
 	border-bottom: 1px solid var(--border-color);
 
-	font-weight: 500;
-	font-size: 1.5rem;
+	font-weight: 600;
+	font-size: 1.35rem;
 }
 
 .settings-container h2:not(:first-of-type) {
@@ -49,6 +54,10 @@
 	padding-top: 0.5rem;
 }
 
+.settings-container table tr:hover > :where(th, td) {
+	background: color-mix(in srgb, var(--hover-color) 55%, transparent);
+}
+
 .settings-container table select,
 .settings-container table input,
 #convert-table tr:nth-last-child(2) td p {
@@ -56,12 +65,12 @@
 
 	padding: .5rem .75rem;
 	border-radius: 6px;
-	border: 2px solid var(--border-color);
-	background-color: var(--background-color);
+	border: 1px solid var(--border-color);
+	background-color: var(--foreground-color);
 	color: var(--text-color);
 
 	font-size: 1rem;
-	font-family: "Ubuntu Mono", Menlo, Monaco, Consolas, "Courier New", monospace;
+	font-family: 'IBM Plex Mono', Menlo, Monaco, Consolas, monospace;
 }
 
 .settings-container table input[type="checkbox"] {
@@ -72,6 +81,8 @@
 .settings-container td p {
 	margin-top: .3rem;
 	color: var(--dimmed-text-color);
+	max-width: 65ch;
+	font-size: .88rem;
 }
 
 /*  */

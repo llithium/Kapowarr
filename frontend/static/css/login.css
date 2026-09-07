@@ -4,13 +4,13 @@ body {
 	display: flex;
 	justify-content: center;
 	align-items: center;
-	gap: 8rem;
+	gap: clamp(3rem, 10vw, 8rem);
 
 	background-color: var(--background-color);
 }
 
 #text-container {
-	text-align: center;
+	text-align: left;
 }
 
 #text-container h1 {
@@ -18,7 +18,9 @@ body {
 
 	color: var(--accent-color);
 
-	font-size: min(20vw, 8rem);
+	font-size: clamp(3.5rem, 10vw, 7rem);
+	font-weight: 700;
+	letter-spacing: -.05em;
 }
 
 #text-container p {
@@ -36,8 +38,7 @@ input {
 	margin-bottom: .3rem;
 
 	padding: .6rem;
-	outline: 0;
-	border: 1px solid transparent;
+	border: 2px solid var(--border-color);
 	border-radius: 4px;
 	color: var(--dark-color);
 
@@ -51,8 +52,8 @@ input:focus {
 }
 
 input::placeholder {
-	font-size: .6rem;
-	text-align: right;
+	font-size: 1rem;
+	text-align: left;
 	transition: color .3s ease-out;
 }
 
@@ -67,4 +68,24 @@ input:focus::placeholder {
 	background-color: var(--accent-color);
 
 	font-size: 1.1rem;
+	font-weight: 600;
+}
+
+@media (max-width: 720px) {
+	body {
+		flex-direction: column;
+		gap: 2.5rem;
+		padding: 1.5rem;
+	}
+
+	#text-container {
+		text-align: center;
+	}
+
+	#login-form,
+	.input-container,
+	#login-form input,
+	#login-form button {
+		width: min(100%, 22rem);
+	}
 }

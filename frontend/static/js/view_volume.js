@@ -964,7 +964,7 @@ usingApiKey()
 	document.querySelector('#submit-manage-issues').onclick =
 	e => submitManagedIssues(api_key);
 
-	socket.on(
+	socket_ready.then(socket => socket.on(
 		'downloaded_status',
 		data => {
 			if (data.volume_id !== volume_id)
@@ -976,7 +976,7 @@ usingApiKey()
 				issue_id => new IssueEntry(issue_id, api_key).setDownloaded(false)
 			);
 		}
-	);
+	));
 });
 
 ViewEls.tool_bar.files.onclick = e => showWindow('files-window');

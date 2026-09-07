@@ -102,8 +102,10 @@ function deleteEntry(id, api_key, blocklist=false) {
 usingApiKey()
 .then(api_key => {
 	fillQueue(api_key);
-	socket.on('queue_added', data => addQueueEntry(api_key, data));
-	socket.on('queue_status', updateQueueEntry);
-	socket.on('queue_ended', data => removeQueueEntry(data.id));
+	socket_ready.then(socket => {
+		socket.on('queue_added', data => addQueueEntry(api_key, data));
+		socket.on('queue_status', updateQueueEntry);
+		socket.on('queue_ended', data => removeQueueEntry(data.id));
+	});
     QEls.tool_bar.remove_all.onclick = e => deleteAll(api_key);
 });
