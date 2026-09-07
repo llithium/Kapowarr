@@ -10,9 +10,15 @@
 
 {% block main %}
 <main>
+    <div class="page-heading"><h1>Downloads</h1></div>
+    <nav class="settings-tabs" aria-label="Settings categories">
+    {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] %}
+        <a href="{{url_base}}/settings/{{path}}" {% if request.path.endswith('/' + path) %}aria-current="page"{% endif %}>{{label}}</a>
+    {% endfor %}
+    </nav>
 	<section class="tool-bar-container" aria-label="Tool bar">
 		<div class="tool-bar">
-			{{ icon_button("save-button", "Save the changes made", "save.svg", "Save", True) }}
+			{{ icon_button("save-button", "Save the changes made", "save.svg", "Save changes", True) }}
 		</div>
 	</section>
 	<div class="settings-container">

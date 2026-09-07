@@ -45,51 +45,49 @@
 	</tr>
 {% endblock %}
 
-{% block right_side_header %}
+{% block main %}
+<main>
+    <div class="page-heading"><h1>Library</h1> <a class="primary-action" href="{{url_base}}/add">Add comics</a></div>
+	<input type="checkbox" id="massedit-toggle" class="hidden">
 	<form id="search-container" class="icon-dark-color" aria-label="Search bar">
 		<button type="submit" id="start-search" aria-label="Start search">
 			<img src="{{url_base}}/static/img/search.svg" alt="">
 		</button>
-		<input type="text" id="search-input" placeholder="Search" aria-label="Search input">
+		<input type="text" id="search-input" placeholder="Search your library…" aria-label="Search your library">
 		<button type="button" id="clear-search" aria-label="Clear search">
 			<img src="{{url_base}}/static/img/cancel.svg" alt="">
 		</button>
 	</form>
-{% endblock %}
-
-{% block main %}
-<main>
-	<input type="checkbox" id="massedit-toggle" class="hidden">
 	<section class="tool-bar-container" aria-label="Tool bar">
 		<div class="tool-bar">
 			{{ icon_button(
 				"updateall-button",
 				"Trigger a 'refresh and scan' for all volumes",
 				"refresh.svg",
-				"Update All"
+				"Refresh"
 			) }}
 			{{ icon_button(
 				"searchall-button",
 				"Trigger a 'search monitored' for all volumes",
 				"search.svg",
-				"Search All"
+				"Find missing"
 			) }}
 			{{ icon_button(
 				"massedit-button",
 				"Start mass-editing the volumes",
 				"edit.svg",
-				"Mass Edit"
+				"Select"
 			) }}
 		</div>
 		<div class="tool-bar">
 			<select id="filter-button" aria-label="Apply a filter">
-				<option value="">No Filter</option>
-				<option value="wanted">Wanted</option>
+				<option value="">All comics</option>
+				<option value="wanted">Missing issues</option>
 				<option value="monitored">Monitored</option>
 			</select>
 			<select id="view-button" aria-label="Change the view">
-				<option value="posters">Posters</option>
-				<option value="table">Table</option>
+				<option value="posters">Covers</option>
+				<option value="table">List</option>
 			</select>
 			<select id="sort-button" aria-label="Sort the list of volumes">
 				<option value="title">Title</option>
@@ -98,7 +96,7 @@
 				<option value="recently_added">Recently Added</option>
 				<option value="recently_released">Recently Released</option>
 				<option value="publisher">Publisher</option>
-                <option value="wanted">Wanted</option>
+                <option value="wanted">Missing issues</option>
 			</select>
 		</div>
 	</section>
@@ -110,21 +108,25 @@
 		</noscript>
 	</div>
 	<div id="empty-library" class="loading-screen hidden">
-		<h2>Your library is empty</h2>
-		<p>Add a ComicVine volume or import an existing comic folder to get started.</p>
-		<div class="empty-actions">
-			<a class="primary-action" href="{{url_base}}/add">Add a volume</a>
-			<a href="{{url_base}}/library-import">Import a library</a>
+		<h2 id="library-empty-title">Your collection starts here</h2>
+		<p id="library-empty-description">Add a ComicVine volume or import an existing comic folder to get started.</p>
+		<button id="reset-library" class="secondary-action hidden" type="button">Clear search and filters</button>
+		<div class="empty-actions" id="library-empty-actions">
+			<a class="primary-action" href="{{url_base}}/add">Add comics</a>
+			<a href="{{url_base}}/library-import">Import files</a>
 		</div>
 	</div>
+	<div id="library-error" class="loading-screen hidden" role="alert"><h2>Couldn’t load your library</h2><p>Check your connection and try again.</p><button id="retry-library" class="primary-action" type="button">Try again</button></div>
 	<div id="library-container" class="hidden">
+		<p id="library-result-count" role="status"></p>
 		<div id="list-library">
 			<div class="space-taker"></div>
 		</div>
 		<div id="table-container">
-			<section class="action-bar" aria-label="Action Bar">
+			<section class="action-bar" aria-label="Selected comics">
+                <p id="selection-count" role="status">0 selected</p>
                 <div class="action-divider">
-                    <button id="cancel-massedit">Quit</button>
+                    <button id="cancel-massedit">Done</button>
                 </div>
 				<div class="action-divider">
 					<div class="option-container">

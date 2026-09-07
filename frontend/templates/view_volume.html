@@ -350,6 +350,7 @@
 		<h2>Loading...</h2>
 	</div>
 	<main class="hidden">
+        <div class="volume-back"><a href="{{url_base}}/">‹ Library</a></div>
 		<section class="tool-bar-container" aria-label="Tool bar">
 			<div class="tool-bar">
 				{{ icon_button(
@@ -370,6 +371,8 @@
 					"manual_search.svg",
 					"Manual Search"
 				) }}
+            </div>
+            <details class="volume-tools"><summary>Manage volume</summary><div class="tool-bar">
 				{{ icon_button(
 					"rename-button",
 					"Preview how the files of the volume will be renamed",
@@ -406,7 +409,7 @@
 					"delete.svg",
 					"Delete"
 				) }}
-			</div>
+            </div></details>
 		</section>
 		<div id="volume-content">
 			<div class="volume-mobile-description-container">

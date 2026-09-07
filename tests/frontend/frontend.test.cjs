@@ -264,3 +264,88 @@ test(
 		assert.equal(error.classList.contains('hidden'), false);
 	}
 );
+
+function libraryContext(overrides = {}) {
+	const elements = new Map();
+	const element = selector => {
+		if (!elements.has(selector)) elements.set(selector, {
+			value: '', checked: false, style: {}, dataset: {},
+			classList: { add() {}, remove() {}, toggle() {} },
+			querySelector: child => element(`${selector} ${child}`),
+			querySelectorAll: () => [],
+			hasAttribute: () => false
+		});
+		return elements.get(selector);
+	};
+	const ctx = context({
+		document: { querySelector: element },
+		hide: (_, visible) => { ctx.visible = visible[0]; },
+		window: { confirm: () => false },
+		...overrides
+	});
+	vm.createContext(ctx);
+	vm.runInContext(read('frontend/static/js/volumes.js').split('// code run on load')[0], ctx);
+	vm.runInContext('populateLibrary = () => {}; updateSelection = () => {};', ctx);
+	return { ctx, element, run: code => vm.runInContext(code, ctx) };
+}
+
+test('library search ignores old responses and recovers from a failed request', async () => {
+	const pending = [];
+	const { ctx, element, run } = libraryContext({
+		fetchAPI: () => new Promise((resolve, reject) => pending.push({ resolve, reject }))
+	});
+	run("fetchLibrary('key')");
+	element('#search-input').value = 'new query';
+	run("fetchLibrary('key')");
+	pending[1].resolve({ result: [] });
+	await new Promise(setImmediate);
+	assert.equal(element('#library-empty-title').textContent, 'No matching comics');
+	pending[0].resolve({ result: [{ id: 1 }] });
+	await new Promise(setImmediate);
+	assert.equal(ctx.visible, element('#empty-library'));
+	run("fetchLibrary('key')");
+	pending[2].reject(new Error('Offline'));
+	await new Promise(setImmediate);
+	assert.equal(ctx.visible, element('#library-error'));
+	run("fetchLibrary('key')");
+	pending[3].resolve({ result: [{ id: 1 }] });
+	await new Promise(setImmediate);
+	assert.equal(ctx.visible, element('#library-container'));
+});
+
+test('bulk actions require a selection and deletion requires confirmation', () => {
+	let calls = 0;
+	const { element, run } = libraryContext({ sendAPI: () => { calls++; } });
+	run("runAction('key', 'delete')");
+	assert.equal(calls, 0);
+	element('#table-library').querySelectorAll = () => [{ parentNode: { parentNode: { dataset: { id: '1' } } } }];
+	run("runAction('key', 'delete', {delete_folder: true})");
+	assert.equal(calls, 0);
+});
+
+test('volumes with no monitored issues have a finite progress bar', () => {
+	const { element, run } = libraryContext();
+	run("new LibraryEntry(1, 'key').setProgressBar(0, 0)");
+	assert.equal(element('#list-library .vol-1 .list-prog-bar').style.width, '0%');
+	assert.equal(element('#list-library .vol-1 .list-prog-container').title, 'No monitored issues');
+});
+
+test('cover cards preserve the full artwork for real comic cover ratios', () => {
+	const css = read('frontend/static/css/workspace.css');
+	const coverRule = css.match(/\.list-img\s*\{[^}]+\}/)?.[0] ?? '';
+	assert.match(coverRule, /object-fit:\s*contain/);
+	assert.match(coverRule, /aspect-ratio:\s*0\.646\s*\/\s*1/);
+});
+
+test('library status and metadata text use high-contrast tokens', () => {
+	const css = read('frontend/static/css/workspace.css');
+	assert.match(css, /--dimmed-text-color:\s*#4d5b73/);
+	assert.match(css, /--progress-background-color:\s*#d6e0f0/);
+	assert.match(css, /--progress-text-color:\s*#172746/);
+	assert.match(css, /--progress-background-color:\s*#2e4262/);
+	assert.match(css, /--progress-text-color:\s*#edf2fc/);
+	const progressRule = css.match(/\.list-prog-container, \.table-prog-container\s*\{[^}]+\}/)?.[0] ?? '';
+	assert.match(progressRule, /background:\s*var\(--progress-background-color\)/);
+	assert.match(progressRule, /color:\s*var\(--progress-text-color\)/);
+	assert.match(progressRule, /font:\s*700\s+\.75rem\/1/);
+});

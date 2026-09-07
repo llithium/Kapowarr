@@ -2,6 +2,7 @@ const library_els = {
 	pages: {
 		loading: document.querySelector('#loading-library'),
 		empty: document.querySelector('#empty-library'),
+		error: document.querySelector('#library-error'),
 		view: document.querySelector('#library-container'),
 	},
 	views: {
@@ -90,13 +91,17 @@ class LibraryEntry {
 	) {
 		downloaded_count = Math.min(downloaded_count, total_count);
 
-		const progress = downloaded_count / total_count * 100;
+		const progress = total_count > 0 ? downloaded_count / total_count * 100 : 0;
 		const list_bar = this.list_entry.querySelector('.list-prog-bar'),
 			table_bar = this.table_entry.querySelector('.table-prog-bar');
 
 		this.list_entry.querySelector('.list-prog-num').innerText =
 		this.table_entry.querySelector('.table-prog-num').innerText =
 			`${downloaded_count}/${total_count}`;
+
+		this.list_entry.querySelector('.list-prog-container').title = total_count > 0
+			? `${downloaded_count} of ${total_count} monitored issues downloaded`
+			: 'No monitored issues';
 
 		list_bar.style.width =
 		table_bar.style.width =
@@ -199,7 +204,9 @@ function populateLibrary(volumes, api_key) {
 	library_els.views.table.appendChild(table_fragment);
 };
 
+let libraryRequest = 0;
 function fetchLibrary(api_key) {
+	const request = ++libraryRequest;
 	library_els.mass_edit.progress.innerText = '';
 	showLibraryPage(library_els.pages.loading);
 
@@ -213,12 +220,25 @@ function fetchLibrary(api_key) {
 
 	fetchAPI('/volumes', api_key, params)
 	.then(json => {
+		if (request !== libraryRequest) return;
+		library_els.mass_edit.select_all.checked = false;
+		document.querySelector('#library-result-count').textContent = `${json.result.length} ${json.result.length === 1 ? 'volume' : 'volumes'}`;
 		if (json.result.length === 0) {
+			const filtered = Boolean(query || params.filter);
+			document.querySelector('#library-empty-title').textContent = filtered ? 'No matching comics' : 'Your collection starts here';
+			document.querySelector('#library-empty-description').textContent = filtered
+				? 'Try another title or clear your search and filters.'
+				: 'Add a comic series or import the files you already have.';
+			document.querySelector('#reset-library').classList.toggle('hidden', !filtered);
+			document.querySelector('#library-empty-actions').classList.toggle('hidden', filtered);
 			showLibraryPage(library_els.pages.empty);
 		} else {
 			populateLibrary(json.result, api_key);
 			showLibraryPage(library_els.pages.view);
 		};
+		updateSelection();
+	}).catch(() => {
+		if (request === libraryRequest) showLibraryPage(library_els.pages.error);
 	});
 };
 
@@ -251,11 +271,15 @@ function fetchStats(api_key) {
 // Mass Edit
 //
 function runAction(api_key, action, args={}) {
-	showLibraryPage(library_els.pages.loading);
-
 	const volume_ids = [...library_els.views.table.querySelectorAll(
 		'input[type="checkbox"]:checked'
 	)].map(v => parseInt(v.parentNode.parentNode.dataset.id))
+
+	if (!volume_ids.length) return;
+	if (action === 'delete' && !window.confirm(
+		`Remove ${volume_ids.length} selected volumes from your library?${args.delete_folder ? ' Their folders and files will also be permanently deleted.' : ' Their files will be kept.'}`
+	)) return;
+	showLibraryPage(library_els.pages.loading);
 
 	sendAPI('POST', '/masseditor', api_key, {}, {
 		'volume_ids': volume_ids,
@@ -265,8 +289,18 @@ function runAction(api_key, action, args={}) {
 	.then(response => {
 		library_els.mass_edit.select_all.checked = false;
 		fetchLibrary(api_key);
-	});
+		fetchStats(api_key);
+	}).catch(() => showLibraryPage(library_els.pages.error));
 };
+
+function updateSelection() {
+	const boxes = [...library_els.views.table.querySelectorAll('input[type="checkbox"]')];
+	const count = boxes.filter(box => box.checked).length;
+	document.querySelector('#selection-count').textContent = `${count} selected`;
+	library_els.mass_edit.select_all.checked = boxes.length > 0 && count === boxes.length;
+	library_els.mass_edit.select_all.indeterminate = count > 0 && count < boxes.length;
+	library_els.mass_edit.bar.querySelectorAll('button[data-action]').forEach(button => button.disabled = count === 0);
+}
 
 // code run on load
 
@@ -302,29 +336,29 @@ usingApiKey()
 		fetchLibrary(api_key);
 	};
 
-    library_els.mass_edit.button.onclick =
-    library_els.mass_edit.cancel.onclick =
-        e => {
-            const toggle = library_els.mass_edit.toggle;
-            if (toggle.hasAttribute('checked'))
-                toggle.removeAttribute('checked');
-            else {
-                const select = document.querySelector('select[name="root_folder_id"]');
-                if (select.querySelector('option') === null) {
-                    fetchAPI('/rootfolder', api_key)
-                    .then(json => {
-                        json.result.forEach(rf => {
-                            const entry = document.createElement('option');
-                            entry.value = rf.id;
-                            entry.innerText = rf.folder;
-                            select.appendChild(entry);
-                        });
-                        toggle.setAttribute('checked', '');
-                    });
-                } else
-                    toggle.setAttribute('checked', '');
-            }
-        };
+	library_els.mass_edit.button.onclick =
+	library_els.mass_edit.cancel.onclick =
+		e => {
+			const toggle = library_els.mass_edit.toggle;
+			if (toggle.hasAttribute('checked'))
+				toggle.removeAttribute('checked');
+			else {
+				const select = document.querySelector('select[name="root_folder_id"]');
+				if (select.querySelector('option') === null) {
+					fetchAPI('/rootfolder', api_key)
+					.then(json => {
+						json.result.forEach(rf => {
+							const entry = document.createElement('option');
+							entry.value = rf.id;
+							entry.innerText = rf.folder;
+							select.appendChild(entry);
+						});
+						toggle.setAttribute('checked', '');
+					});
+				} else
+					toggle.setAttribute('checked', '');
+			}
+		};
 	library_els.mass_edit.bar.querySelectorAll('.action-divider > button[data-action]').forEach(
 		b => b.onclick = e => runAction(api_key, e.target.dataset.action)
 	);
@@ -377,7 +411,26 @@ usingApiKey()
 		data => library_els.mass_edit.progress.innerText = `${data.current_item}/${data.total_items}`
 	));
 });
-library_els.search.container.action = 'javascript:searchLibrary();';
+library_els.search.container.addEventListener('submit', event => {
+	event.preventDefault();
+	searchLibrary();
+});
+let searchTimer;
+library_els.search.input.addEventListener('input', () => {
+	clearTimeout(searchTimer);
+	searchTimer = setTimeout(searchLibrary, 250);
+});
+document.querySelector('#retry-library').onclick = searchLibrary;
+document.querySelector('#reset-library').onclick = () => {
+	library_els.search.input.value = '';
+	library_els.view_options.filter.value = '';
+	setLocalStorage({lib_filter: ''});
+	searchLibrary();
+};
+library_els.views.table.addEventListener('change', updateSelection);
+updateSelection();
 library_els.mass_edit.select_all.onchange =
-	e => library_els.views.table.querySelectorAll('input[type="checkbox"]')
-			.forEach(c => c.checked = library_els.mass_edit.select_all.checked);
+	e => {
+		library_els.views.table.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = library_els.mass_edit.select_all.checked);
+		updateSelection();
+	};

@@ -185,11 +185,11 @@
 /* Authentication Selection */
 /*  */
 #settings-form:has(#auth-toggle > option:checked[value="password"]) #username-input-row {
-	display: none;
+	display: none !important;
 }
 
 #settings-form:has(#auth-toggle > option:checked[value=""]) :where(#username-input-row, #password-input-row) {
-	display: none;
+	display: none !important;
 }
 
 
@@ -197,7 +197,7 @@
 /* Proxy Selection */
 /*  */
 #settings-form > table:has(#proxy-type-input > option:checked[value=""]) tr:nth-child(n + 2) {
-	display: none;
+	display: none !important;
 }
 
 /*  */

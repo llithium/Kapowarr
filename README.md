@@ -25,7 +25,7 @@ Featured on [Noted](https://noted.lol/kapowarr/) and [Respectlytics](https://res
 - Download using DDL, Pixeldrain, Mega and many other services
 - Downloaded files automatically get moved wherever you want and renamed in the format you desire
 - Archive files can be extracted and their contents renamed after downloading or with a single click
-- The recognisable UI from the *arr suite of software
+- A responsive comic library with cover and list views, live search, and light and dark themes
 
 ## Installation, support and documentation
 
@@ -35,7 +35,13 @@ Featured on [Noted](https://noted.lol/kapowarr/) and [Respectlytics](https://res
 - For all documentation, see the [documentation hub](https://casvt.github.io/Kapowarr/).
 - For donations, go to the [Ko-Fi page](https://ko-fi.com/casvt).
 
-## Screenshots
+## Interface
+
+This fork uses a redesigned workspace with persistent navigation, larger comic covers, live library search, and grouped volume-management actions. See [the interface notes](docs/UI.md) for the layout and validation workflow.
+
+## Upstream screenshots
+
+These screenshots show the original upstream interface, before this fork’s redesign.
 
 ![](https://github.com/user-attachments/assets/04656209-288e-4263-a2df-93e06758c443)
 ![](https://github.com/user-attachments/assets/3fa8177c-f016-4cbd-b73e-6b577840b08e)

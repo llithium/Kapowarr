@@ -293,6 +293,12 @@
 
 {% block main %}
 <main>
+    <div class="page-heading"><h1>Download clients</h1></div>
+    <nav class="settings-tabs" aria-label="Settings categories">
+    {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] %}
+        <a href="{{url_base}}/settings/{{path}}" {% if request.path.endswith('/' + path) %}aria-current="page"{% endif %}>{{label}}</a>
+    {% endfor %}
+    </nav>
 	<div class="settings-container">
 		<h2>Built-in Clients</h2>
 		<div id="builtin-client-list" class="client-list">
