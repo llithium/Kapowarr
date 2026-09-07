@@ -6,7 +6,8 @@ The (re)naming of folders and media files
 
 from __future__ import annotations
 
-from os.path import abspath, basename, isdir, isfile, join, splitext
+from os.path import (abspath, basename, isdir, isfile, join, relpath,
+                     sep, splitext)
 from re import compile
 from string import Formatter
 from typing import Dict, List, Tuple, Type, Union
@@ -749,6 +750,10 @@ def preview_mass_rename(
     renames = {}
     for file in files:
         if not isfile(file):
+            continue
+
+        relative_parts = relpath(file, volume_data.folder).split(sep)
+        if any(part.startswith('.') for part in relative_parts[:-1]):
             continue
 
         LOGGER.debug(f'Renaming: original filename: {file}')

@@ -205,6 +205,19 @@ def _find_existing_volume_match(
         else:
             continue
 
+        series_year = first_file['year']
+        if isinstance(series_year, int) and volume_data.year is not None:
+            year_delta = abs(series_year - volume_data.year)
+            if year_delta == 0:
+                score += 15
+                reasons.append('series year matches')
+            elif year_delta == 1:
+                score += 5
+                reasons.append('series year is adjacent')
+            else:
+                score -= 60
+                reasons.append('series year conflicts')
+
         issues = volume.get_issues(_skip_files=True)
         calculated_numbers = {
             issue.calculated_issue_number
@@ -309,6 +322,77 @@ def _find_existing_volume_match(
         return best_match
 
     return None
+
+
+def _group_is_already_tracked(
+    files: Dict[str, FilenameData],
+    comicinfo_metadata: Dict[str, ComicInfoData],
+    volume_id: int
+) -> bool:
+    """Return whether an exact ComicInfo match is already in the DB.
+
+    This is intentionally limited to groups with direct ComicVine
+    metadata. It prevents a migrated library from re-offering files
+    whose paths changed on disk, while still allowing Library Import
+    to add a genuinely new issue to an existing volume.
+    """
+    metadata = [
+        comicinfo_metadata[filepath]
+        for filepath in files
+        if filepath in comicinfo_metadata
+    ]
+    if not metadata:
+        return False
+
+    direct_issue_ids = {
+        item['comicvine_issue_id']
+        for item in metadata
+        if item.get('comicvine_issue_id') is not None
+    }
+    direct_volume_ids = {
+        item['comicvine_volume_id']
+        for item in metadata
+        if item.get('comicvine_volume_id') is not None
+    }
+    if not (direct_issue_ids or direct_volume_ids):
+        return False
+
+    issues = Library.get_volume(volume_id).get_issues()
+    issues_with_files = [issue for issue in issues if issue.files]
+
+    if direct_issue_ids:
+        tracked_issue_ids = {
+            issue.comicvine_id
+            for issue in issues_with_files
+        }
+        return direct_issue_ids.issubset(tracked_issue_ids)
+
+    requested_numbers = set()
+    for file_data in files.values():
+        issue_number = file_data['issue_number']
+        if isinstance(issue_number, tuple):
+            requested_numbers.update(
+                issue.calculated_issue_number
+                for issue in issues
+                if (
+                    issue_number[0]
+                    <= issue.calculated_issue_number
+                    <= issue_number[1]
+                )
+            )
+        elif issue_number is not None:
+            requested_numbers.add(issue_number)
+
+    if requested_numbers:
+        tracked_numbers = {
+            issue.calculated_issue_number
+            for issue in issues_with_files
+        }
+        return requested_numbers.issubset(tracked_numbers)
+
+    # A directly identified special/collected volume with no issue
+    # number is already represented once its primary issue has a file.
+    return bool(issues_with_files)
 
 
 def _match_unmatched_comicinfo_files(
@@ -552,6 +636,7 @@ def propose_library_import(
     # series that is already managed. Direct ComicInfo IDs are checked inside
     # this stage before fuzzy existing-library scoring.
     group_to_cv: Dict[int, Dict[str, Any]] = {}
+    skipped_existing_groups: Set[int] = set()
     groups_needing_cv: Dict[int, Dict[str, FilenameData]] = {}
     for group_number, files in group_to_files.items():
         existing_match = _find_existing_volume_match(
@@ -560,6 +645,22 @@ def propose_library_import(
             existing_volume_ids
         )
         if existing_match is not None:
+            existing_volume_id = existing_match.get('already_added')
+            if (
+                existing_match.get('match_source') == 'comicinfo-id'
+                and isinstance(existing_volume_id, int)
+                and _group_is_already_tracked(
+                    files, comicinfo_metadata, existing_volume_id
+                )
+            ):
+                LOGGER.debug(
+                    'Skipping Library Import group %d: direct ComicInfo match '
+                    'is already tracked by volume %d',
+                    group_number, existing_volume_id
+                )
+                skipped_existing_groups.add(group_number)
+                continue
+
             group_to_cv[group_number] = existing_match
         else:
             groups_needing_cv[group_number] = files
@@ -606,6 +707,7 @@ def propose_library_import(
             'comicinfo': comicinfo_metadata.get(file)
         }
         for group_number, files in group_to_files.items()
+        if group_number not in skipped_existing_groups
         for file in files
     ]
 

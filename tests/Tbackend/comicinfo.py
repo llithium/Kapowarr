@@ -154,7 +154,7 @@ class ComicInfoReader(unittest.TestCase):
         metadata = {
             'series': 'Batman',
             'issue_number': '85',
-            'year': 2020,
+            'year': 2021,
             'format': 'Comic'
         }
         fallback = {
@@ -174,7 +174,7 @@ class ComicInfoReader(unittest.TestCase):
             ),
             {
                 'series': 'Batman',
-                'year': None,
+                'year': 2020,
                 'volume_number': None,
                 'special_version': None,
                 'issue_number': 85.0,
