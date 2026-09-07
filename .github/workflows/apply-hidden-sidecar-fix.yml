@@ -68,6 +68,19 @@ jobs:
               "    if 'year' in metadata and not for_library_import:\n        result['year'] = metadata['year']"
           )
 
+          # Update the old regression to verify that an issue year does not
+          # replace a different filename-derived series year.
+          p = Path('tests/Tbackend/comicinfo.py')
+          text = p.read_text()
+          start = text.index(
+              '    def test_library_import_does_not_treat_issue_year_as_series_year(self):'
+          )
+          end = text.index('\n    def ', start + 10)
+          block = text[start:end]
+          block = block.replace("'year': 2020,", "'year': 2021,", 1)
+          block = block.replace("'year': None,", "'year': 2020,", 1)
+          p.write_text(text[:start] + block + text[end:])
+
           # Make fuzzy existing-library matching reject clearly different runs.
           replace_once(
               'backend/features/library_import.py',
@@ -168,6 +181,19 @@ jobs:
               'backend/features/library_import.py',
               "        for group_number, files in group_to_files.items()\n        for file in files\n    ]",
               "        for group_number, files in group_to_files.items()\n        if group_number not in skipped_existing_groups\n        for file in files\n    ]"
+          )
+
+          # Rename previews are DB-backed, so stale sidecar rows can remain until
+          # the next scan. Hide files under hidden directories there as well.
+          replace_once(
+              'backend/implementations/naming.py',
+              'from os.path import abspath, basename, isdir, isfile, join, splitext',
+              'from os.path import (abspath, basename, isdir, isfile, join, relpath,\n                     sep, splitext)'
+          )
+          replace_once(
+              'backend/implementations/naming.py',
+              "    for file in files:\n        if not isfile(file):\n            continue\n\n        LOGGER.debug(f'Renaming: original filename: {file}')",
+              "    for file in files:\n        if not isfile(file):\n            continue\n\n        relative_parts = relpath(file, volume_data.folder).split(sep)\n        if any(part.startswith('.') for part in relative_parts[:-1]):\n            continue\n\n        LOGGER.debug(f'Renaming: original filename: {file}')"
           )
           PY
 
