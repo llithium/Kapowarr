@@ -157,10 +157,163 @@ class FilesDB:
 
     @staticmethod
     def update_filepaths(old_to_new_mapping: Dict[str, str]) -> None:
-        get_db().executemany(
-            "UPDATE files SET filepath = ? WHERE filepath = ?;",
-            ((new, old) for old, new in old_to_new_mapping.items())
-        )
+        """Update filepaths after files have been moved/renamed.
+
+        A destination filepath can already exist in the database even when the
+        destination does not exist on disk. This can happen after restoring or
+        migrating a Kapowarr database whose file table still contains stale
+        paths. A plain ``UPDATE`` then violates the UNIQUE constraint on
+        ``files.filepath`` after the filesystem rename has already succeeded.
+
+        Temporarily move all source rows out of the filepath namespace first so
+        swaps/chained renames are safe. If a non-source destination row already
+        exists, merge that stale row's links into the source row before assigning
+        the final filepath.
+        """
+        if not old_to_new_mapping:
+            return
+
+        cursor = get_db()
+        staged_files: Dict[str, tuple] = {}
+
+        # Stage source rows under guaranteed-unique database-only paths. This
+        # frees destinations that are also sources in the same rename batch.
+        for old, new in old_to_new_mapping.items():
+            if old == new:
+                continue
+
+            file_row = cursor.execute(
+                "SELECT id FROM files WHERE filepath = ? LIMIT 1;",
+                (old,)
+            ).fetchone()
+            if file_row is None:
+                continue
+
+            file_id = file_row[0]
+            temporary_path = f'{old}.kapowarr-db-rename-{file_id}'
+            while cursor.execute(
+                "SELECT 1 FROM files WHERE filepath = ? LIMIT 1;",
+                (temporary_path,)
+            ).fetchone():
+                temporary_path += '_'
+
+            cursor.execute(
+                "UPDATE files SET filepath = ? WHERE id = ?;",
+                (temporary_path, file_id)
+            )
+            staged_files[old] = (file_id, new)
+
+        for old, (source_id, new) in staged_files.items():
+            target_row = cursor.execute(
+                "SELECT id FROM files WHERE filepath = ? LIMIT 1;",
+                (new,)
+            ).fetchone()
+
+            if target_row is not None:
+                target_id = target_row[0]
+                if target_id != source_id:
+                    LOGGER.warning(
+                        'Merging duplicate file database rows during rename: '
+                        '%s -> %s',
+                        old,
+                        new
+                    )
+
+                    # Preserve all issue bindings from the stale destination,
+                    # including manual/forced matches.
+                    cursor.execute(
+                        """
+                        INSERT OR IGNORE INTO issues_files(
+                            file_id, issue_id, forced
+                        )
+                        SELECT ?, issue_id, forced
+                        FROM issues_files
+                        WHERE file_id = ?;
+                        """,
+                        (source_id, target_id)
+                    )
+                    cursor.execute(
+                        """
+                        UPDATE issues_files
+                        SET forced = 1
+                        WHERE file_id = ?
+                            AND issue_id IN (
+                                SELECT issue_id
+                                FROM issues_files
+                                WHERE file_id = ?
+                                    AND forced = 1
+                            );
+                        """,
+                        (source_id, target_id)
+                    )
+
+                    source_general = cursor.execute(
+                        """
+                        SELECT volume_id, file_type, forced
+                        FROM volume_files
+                        WHERE file_id = ?
+                        LIMIT 1;
+                        """,
+                        (source_id,)
+                    ).fetchone()
+                    target_general = cursor.execute(
+                        """
+                        SELECT volume_id, file_type, forced
+                        FROM volume_files
+                        WHERE file_id = ?
+                        LIMIT 1;
+                        """,
+                        (target_id,)
+                    ).fetchone()
+
+                    if source_general is None and target_general is not None:
+                        cursor.execute(
+                            """
+                            INSERT INTO volume_files(
+                                file_id, volume_id, file_type, forced
+                            ) VALUES (?, ?, ?, ?);
+                            """,
+                            (
+                                source_id,
+                                target_general[0],
+                                target_general[1],
+                                target_general[2]
+                            )
+                        )
+                    elif (
+                        source_general is not None
+                        and target_general is not None
+                        and target_general[2]
+                        and not source_general[2]
+                        and source_general[:2] == target_general[:2]
+                    ):
+                        cursor.execute(
+                            """
+                            UPDATE volume_files
+                            SET forced = 1
+                            WHERE file_id = ?;
+                            """,
+                            (source_id,)
+                        )
+
+                    cursor.execute(
+                        "DELETE FROM issues_files WHERE file_id = ?;",
+                        (target_id,)
+                    )
+                    cursor.execute(
+                        "DELETE FROM volume_files WHERE file_id = ?;",
+                        (target_id,)
+                    )
+                    cursor.execute(
+                        "DELETE FROM files WHERE id = ?;",
+                        (target_id,)
+                    )
+
+            cursor.execute(
+                "UPDATE files SET filepath = ? WHERE id = ?;",
+                (new, source_id)
+            )
+
         return
 
     @staticmethod
