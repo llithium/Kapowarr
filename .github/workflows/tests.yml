@@ -1,6 +1,7 @@
 name: Tests
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - development
@@ -8,29 +9,44 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    # Commits created by ad-hoc GitHub Actions patch workflows can cause
+    # recursion-suppressed pull_request runs with zero jobs and a misleading
+    # failure notification. Skip those bot-generated PR updates. The permanent
+    # upstream sync workflow is intentionally allowed through so its PRs still
+    # receive the full test matrix.
+    if: ${{ github.actor != 'github-actions[bot]' || github.head_ref == 'upstream-sync' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-        
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Set up checkout
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         name: Set up Python ${{ matrix.python-version }}
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
+          cache: pip
 
       - run: pip install -r requirements.txt
         name: Install dependencies
 
       - run: |
-          mkdir db
+          mkdir -p db
           python -m unittest discover -s ./tests -p '*.py'
         name: Run Tests
