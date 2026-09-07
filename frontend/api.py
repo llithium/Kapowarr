@@ -452,6 +452,9 @@ def api_settings():
 
         settings.update(data, from_public=True)
 
+        if data.get('downloads_enabled') is True:
+            DownloadHandler().resume()
+
         if hosting_changes:
             Server().restart(StartType.RESTART_HOSTING_CHANGES)
         elif proxy_changes:

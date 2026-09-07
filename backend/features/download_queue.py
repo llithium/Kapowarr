@@ -209,6 +209,14 @@ class DownloadHandler(metaclass=Singleton):
 
         return
 
+    def resume(self) -> None:
+        """Resume downloads after the global download switch is enabled."""
+        if self.queue:
+            self._process_queue()
+        else:
+            self.load_downloads()
+        return
+
     def set_queue_location(
         self,
         download_id: int,
