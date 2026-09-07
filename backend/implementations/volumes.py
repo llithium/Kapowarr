@@ -1075,9 +1075,9 @@ class Library:
         cls,
         comicvine_id: int,
         root_folder_id: int,
-        monitored: bool,
-        monitor_scheme: MonitorScheme = MonitorScheme.ALL,
-        monitor_new_issues: bool = True,
+        monitored: bool = False,
+        monitor_scheme: MonitorScheme = MonitorScheme.NONE,
+        monitor_new_issues: bool = False,
         volume_folder: Union[str, None] = None,
         special_version: Union[SpecialVersion, None] = None,
         auto_search: bool = False
@@ -1256,7 +1256,7 @@ class Library:
 
             mass_process_files(volume_id)
 
-        if auto_search:
+        if auto_search and Settings().sv.downloads_enabled:
             from backend.features.tasks import AutoSearchVolume, TaskHandler
 
             # Volume is accessed from different thread so changes must be saved,
