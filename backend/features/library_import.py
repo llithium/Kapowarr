@@ -4,7 +4,8 @@ from asyncio import run
 from glob import glob
 from itertools import chain
 from os.path import abspath, basename, dirname, isfile, join, splitext
-from typing import Any, Dict, List, Tuple, Union
+from pathlib import Path
+from typing import Any, Dict, List, Set, Tuple, Union
 
 from backend.base.custom_exceptions import (CVRateLimitReached,
                                             InvalidKeyValue,
@@ -72,6 +73,35 @@ def create_groups(
 
 def _normalised_publisher(value: str) -> str:
     return normalise_string(value).casefold().replace(' ', '')
+
+
+def _is_panels_path(filepath: str) -> bool:
+    """Return whether a path is inside a Panels.app ``.panels`` package.
+
+    Panels packages are application sidecars/bundles, not comic archives for
+    Kapowarr to import. Library Import can otherwise discover images inside the
+    bundle and promote the bundle itself to an import candidate.
+    """
+    return any(
+        part.casefold().endswith('.panels')
+        for part in Path(abspath(filepath)).parts
+    )
+
+
+def _is_managed_volume_file(
+    filepath: str,
+    managed_volume_folders: Set[str]
+) -> bool:
+    """Return whether a file already lives in a Kapowarr-managed folder.
+
+    Library Import is for unmanaged media. Files inside an existing volume
+    folder belong to Refresh & Scan, even when the exact filepath row in the DB
+    is stale because the file was renamed outside Kapowarr.
+    """
+    return any(
+        folder_is_inside_folder(folder, filepath)
+        for folder in managed_volume_folders
+    )
 
 
 def _find_existing_volume_match(
@@ -380,6 +410,10 @@ def propose_library_import(
     filename parsing remains the fallback for untagged files and unsupported
     archive types.
 
+    Files inside folders already managed by Kapowarr are intentionally excluded
+    even when their exact DB filepath is stale. Use Refresh & Scan for those
+    files. Panels.app ``.panels`` packages are also excluded.
+
     Args:
         folder_filter (Union[str, None], optional): Only scan the folders that
             match the given value. Can either be a folder or a glob pattern.
@@ -410,6 +444,16 @@ def propose_library_import(
         for r in RootFolders().get_folder_list()
     }
 
+    existing_volume_ids = Library.get_volumes()
+    managed_volume_folders = {
+        abspath(volume.vd.folder)
+        for volume in (
+            Library.get_volume(volume_id)
+            for volume_id in existing_volume_ids
+        )
+        if volume.vd.folder
+    }
+
     if folder_filter:
         scan_folders = set((
             f
@@ -438,7 +482,8 @@ def propose_library_import(
         for f in FilesDB.fetch()
     }
 
-    # Filter away imported files and apply limit
+    # Filter away imported files, files in managed volume folders, application
+    # sidecar packages, and then apply the folder limit.
     folders = set()
     image_folders = set()
     unimported_files: Dict[str, FilenameData] = {}
@@ -446,7 +491,11 @@ def propose_library_import(
     comicinfo_metadata: Dict[str, ComicInfoData] = {}
 
     for f in all_files:
-        if f in imported_files:
+        if (
+            f in imported_files
+            or _is_panels_path(f)
+            or _is_managed_volume_file(f, managed_volume_folders)
+        ):
             continue
 
         d = abspath(dirname(f))
@@ -502,7 +551,6 @@ def propose_library_import(
     # needless ComicVine search when the user is simply adding more issues to a
     # series that is already managed. Direct ComicInfo IDs are checked inside
     # this stage before fuzzy existing-library scoring.
-    existing_volume_ids = Library.get_volumes()
     group_to_cv: Dict[int, Dict[str, Any]] = {}
     groups_needing_cv: Dict[int, Dict[str, FilenameData]] = {}
     for group_number, files in group_to_files.items():
