@@ -308,10 +308,14 @@ header {
 	justify-content: space-between;
 	flex: 0 0 auto;
 	/* Z-index avoids button animations from showing in front of the nav */
-	z-index: 2;
+	z-index: 3;
 	background-color: var(--nav-background-color);
 	color: var(--nav-color);
 	box-shadow: 1px 0 0 rgb(255 255 255 / 6%);
+}
+
+#nav-scrim {
+	display: none;
 }
 
 nav, .sub-nav {
@@ -538,6 +542,31 @@ main > *:not(.tool-bar-container) {
 	font-weight: 600;
 }
 
+.empty-actions {
+	display: flex;
+	gap: .75rem;
+	flex-wrap: wrap;
+	justify-content: center;
+}
+
+.empty-actions a {
+	min-height: 2.75rem;
+	display: inline-flex;
+	align-items: center;
+	padding: .6rem 1rem;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	background: var(--foreground-color);
+	font-size: .95rem;
+	font-weight: 600;
+}
+
+.empty-actions a.primary-action {
+	border-color: var(--accent-color);
+	background: var(--accent-color);
+	color: var(--dark-color);
+}
+
 .fold-table th {
 	width: 30%;
 	text-align: right;
@@ -586,6 +615,17 @@ main > *:not(.tool-bar-container) {
 	}
 	#nav-bar.show-nav {
 		left: 0;
+	}
+	#nav-scrim {
+		display: none;
+	}
+	.nav-main:has(#nav-bar.show-nav) #nav-scrim {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		width: 100%;
+		display: block;
+		background: rgb(0 0 0 / 38%);
 	}
 	.tool-bar > * {
 		width: 3.5rem;

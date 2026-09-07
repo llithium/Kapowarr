@@ -306,11 +306,22 @@ const socket_ready = usingApiKey()
 
 const nav_toggle = document.querySelector('#toggle-nav');
 const nav_bar = document.querySelector('#nav-bar');
+const nav_scrim = document.querySelector('#nav-scrim');
+function closeNavigation() {
+	nav_bar.classList.remove('show-nav');
+	nav_toggle.setAttribute('aria-expanded', 'false');
+};
 nav_toggle.setAttribute('aria-hidden', 'false');
 nav_toggle.setAttribute('aria-expanded', 'false');
 nav_toggle.onclick = () => {
 	const is_open = nav_bar.classList.toggle('show-nav');
 	nav_toggle.setAttribute('aria-expanded', is_open.toString());
+};
+nav_scrim.onclick = closeNavigation;
+if (typeof nav_bar.querySelectorAll === 'function') {
+	nav_bar.querySelectorAll('a').forEach(link => {
+		link.addEventListener('click', closeNavigation);
+	});
 };
 
 document.addEventListener('click', event => {
@@ -319,7 +330,13 @@ document.addEventListener('click', event => {
 		&& !nav_bar.contains(event.target)
 		&& !nav_toggle.contains(event.target)
 	) {
-		nav_bar.classList.remove('show-nav');
-		nav_toggle.setAttribute('aria-expanded', 'false');
+		closeNavigation();
+	};
+});
+
+document.addEventListener('keydown', event => {
+	if (event.key === 'Escape' && nav_bar.classList.contains('show-nav')) {
+		closeNavigation();
+		nav_toggle.focus();
 	};
 });

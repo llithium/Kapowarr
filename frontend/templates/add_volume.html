@@ -123,15 +123,15 @@
 			<button type="submit" id="search-button" title="Start the search">
 				<img src="{{url_base}}/static/img/search.svg" alt="">
 			</button>
-			<input type="text" id="search-input" required autofocus aria-label="Search term">
+			<input type="text" id="search-input" required autofocus placeholder="Search title or Comic Vine ID" aria-label="Search title or Comic Vine ID">
 			<button type="button" id="search-cancel-button" title="Clear search">
 				<img src="{{url_base}}/static/img/cancel.svg" alt="">
 			</button>
 		</form>
 		<section id="search-explain" aria-label="Explanation">
-			<p>It's easy to add a new volume, just start typing the name of the volume you want to add</p>
-			<br>
-			<p>You can also search using the CV ID of a volume. e.g. 'cv:4050-2127', 'cv:2127' or '4050-2127'</p>
+			<h1>Find a volume</h1>
+			<p>Search Comic Vine by the series title or its volume ID.</p>
+			<p>For example: <code>cv:4050-2127</code>, <code>cv:2127</code>, or <code>4050-2127</code>.</p>
 		</section>
 		<section id="search-empty" class="hidden">
 			<p>No results</p>
@@ -144,8 +144,10 @@
 			<p>Please set a working Comic Vine api key at Settings -> General -> Comic Vine API</p>
 		</section>
 		<section id="search-blocked" class="hidden">
-			<p>You can't add volumes before having added at least one root folder</p>
-			<p>A root folder can be added at Settings -> Media Management -> Root Folders</p>
+			<p>Add a root folder before adding volumes.</p>
+			<div class="empty-actions">
+				<a class="primary-action" href="{{url_base}}/settings/mediamanagement">Add a root folder</a>
+			</div>
 		</section>
 		<section id="search-results" class="hidden" aria-label="Search Results">
 			<div class="filter-bar" aria-label="Filter Bar">

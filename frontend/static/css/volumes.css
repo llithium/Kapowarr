@@ -71,31 +71,6 @@ main:not(
 	font-size: 1rem;
 }
 
-.empty-actions {
-	display: flex;
-	gap: .75rem;
-	flex-wrap: wrap;
-	justify-content: center;
-}
-
-.empty-actions a {
-	min-height: 2.75rem;
-	display: inline-flex;
-	align-items: center;
-	padding: .6rem 1rem;
-	border: 1px solid var(--border-color);
-	border-radius: 4px;
-	background: var(--foreground-color);
-	font-size: .95rem;
-	font-weight: 600;
-}
-
-.empty-actions a.primary-action {
-	border-color: var(--accent-color);
-	background: var(--accent-color);
-	color: var(--dark-color);
-}
-
 main:has(#massedit-toggle:checked) #library-container {
 	overflow-y: hidden;
 }
