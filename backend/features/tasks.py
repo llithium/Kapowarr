@@ -25,6 +25,7 @@ from backend.implementations.volumes import Volume, refresh_and_scan
 from backend.internals.db import close_db, get_db
 from backend.internals.server import (TaskAddedEvent, TaskEndedEvent,
                                       TaskStatusEvent, WebSocket)
+from backend.internals.settings import Settings
 
 
 class Task(ABC):
@@ -533,7 +534,20 @@ class TaskHandler(metaclass=Singleton):
         with self.context():
             socket = WebSocket()
             try:
-                result = task.run()
+                result: Union[
+                    None, List[Tuple[str, int, Union[int, None]]]
+                ]
+                if (
+                    task.category == 'download'
+                    and not Settings().sv.downloads_enabled
+                ):
+                    LOGGER.info(
+                        'Downloads disabled; skipping task %s',
+                        task.display_title
+                    )
+                    result = []
+                else:
+                    result = task.run()
                 cursor = get_db()
 
                 # Note in history

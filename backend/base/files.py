@@ -14,6 +14,7 @@ from os.path import (abspath, basename, commonpath, dirname, isdir,
 from re import compile
 from shutil import chown, copy2, copytree, move, rmtree
 from typing import Dict, Iterable, List, Sequence, Union
+from unicodedata import normalize
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from backend.base.definitions import (CharConstants, Constants,
@@ -76,7 +77,7 @@ def list_files(
     ext: Union[Iterable[str], None] = None
 ) -> List[str]:
     """List all files in a folder recursively with absolute paths. Hidden files
-    (files starting with `.`) are ignored.
+    and folders (names starting with `.`) are ignored.
 
     Args:
         folder (str): The base folder to search through.
@@ -95,7 +96,7 @@ def list_files(
     while to_dos:
         to_do = to_dos.popleft()
         for f in scandir(to_do):
-            if f.is_dir():
+            if f.is_dir() and not f.name.startswith('.'):
                 to_dos.append(f.path)
 
             elif (
@@ -160,11 +161,12 @@ def folder_is_inside_folder(
     Returns:
         bool: Whether `folder` is in `base_folder` or equal to it.
     """
-    return (
-        force_suffix(abspath(folder))
-    ).startswith(
-        force_suffix(abspath(base_folder))
-    )
+    # macOS filesystems commonly return decomposed Unicode names while a
+    # migrated database can contain composed Unicode. Compare canonical NFC paths
+    # so e.g. `Pérez` and its decomposed on-disk representation are equivalent.
+    folder_path = force_suffix(normalize('NFC', abspath(folder)))
+    base_path = force_suffix(normalize('NFC', abspath(base_folder)))
+    return folder_path.startswith(base_path)
 
 
 def are_folders_colliding(

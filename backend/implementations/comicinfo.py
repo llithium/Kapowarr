@@ -13,8 +13,8 @@ from backend.base.definitions import FilenameData, OSType, SpecialVersion
 from backend.base.file_extraction import extract_issue_number
 from backend.base.helpers import get_os_type, normalise_string, run_rar
 from backend.base.logging import LOGGER
-from backend.implementations.library_import_cache import (get_cached_comicinfo,
-                                                          store_cached_comicinfo)
+from backend.implementations.library_import_cache import (
+    get_cached_comicinfo, store_cached_comicinfo)
 
 
 class ComicInfoData(TypedDict, total=False):
@@ -365,8 +365,8 @@ def comicinfo_to_filename_data(
         # assumption can make a good metadata match look worse than it is.
         result['volume_number'] = None
 
-    if 'year' in metadata:
-        result['year'] = None if for_library_import else metadata['year']
+    if 'year' in metadata and not for_library_import:
+        result['year'] = metadata['year']
 
     format_value = metadata.get('format')
     if format_value:

@@ -1,6 +1,7 @@
 function fillSettings(api_key) {
 	fetchAPI('/settings', api_key)
 	.then(json => {
+		document.querySelector('#downloads-enabled-input').checked = json.result.downloads_enabled;
 		document.querySelector('#download-folder-input').value = json.result.download_folder;
 		document.querySelector('#concurrent-direct-downloads-input').value = json.result.concurrent_direct_downloads;
 		document.querySelector('#download-timeout-input').value = ((json.result.failing_download_timeout || 0) / 60) || '';
@@ -14,6 +15,7 @@ function saveSettings(api_key) {
 	document.querySelector("#save-button p").innerText = 'Saving';
 	document.querySelector('#download-folder-input').classList.remove('error-input');
 	const data = {
+		'downloads_enabled': document.querySelector('#downloads-enabled-input').checked,
 		'download_folder': document.querySelector('#download-folder-input').value,
 		'concurrent_direct_downloads': parseInt(document.querySelector('#concurrent-direct-downloads-input').value),
 		'failing_download_timeout': parseInt(document.querySelector('#download-timeout-input').value || 0) * 60,

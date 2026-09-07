@@ -452,6 +452,9 @@ def api_settings():
 
         settings.update(data, from_public=True)
 
+        if data.get('downloads_enabled') is True:
+            DownloadHandler().resume()
+
         if hosting_changes:
             Server().restart(StartType.RESTART_HOSTING_CHANGES)
         elif proxy_changes:
@@ -747,8 +750,8 @@ def api_volumes_search():
             volume_number=data['volume_number'],
             description="",
             site_url="",
-            monitored=True,
-            monitor_new_issues=True,
+            monitored=False,
+            monitor_new_issues=False,
             root_folder=1,
             folder="",
             custom_folder=False,
@@ -787,23 +790,23 @@ def api_volumes():
         if root_folder_id is None:
             raise KeyNotFound('root_folder_id')
 
-        monitor = data.get('monitor', True)
+        monitor = data.get('monitor', False)
         if not isinstance(monitor, bool):
             raise InvalidKeyValue('monitor', monitor)
 
-        monitoring_scheme = data.get('monitoring_scheme') or "all"
+        monitoring_scheme = data.get('monitoring_scheme') or "none"
         try:
             monitoring_scheme = MonitorScheme(monitoring_scheme)
         except ValueError:
             raise InvalidKeyValue("monitoring_scheme", monitoring_scheme)
 
-        monitor_new_issues = data.get('monitor_new_issues', True)
+        monitor_new_issues = data.get('monitor_new_issues', False)
         if not isinstance(monitor_new_issues, bool):
             raise InvalidKeyValue('monitor_new_issues', monitor_new_issues)
 
         volume_folder = data.get('volume_folder') or None
 
-        auto_search = data.get('auto_search', True)
+        auto_search = data.get('auto_search', False)
         if not isinstance(auto_search, bool):
             raise InvalidKeyValue('auto_search', auto_search)
 

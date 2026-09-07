@@ -2,6 +2,7 @@ import unittest
 from asyncio import run
 from unittest.mock import AsyncMock, Mock, patch
 
+from backend.base.custom_exceptions import CVRateLimitReached
 from backend.implementations.comicinfo_cv import match_comicinfo_ids
 
 
@@ -56,10 +57,44 @@ class ComicInfoComicVineMatching(unittest.TestCase):
         self.assertEqual(result[1]['match_source'], 'comicinfo-id')
         self.assertEqual(result[1]['confidence'], 100)
         self.assertTrue(result[1]['direct_id'])
-        comicvine.search_volumes.assert_awaited_once_with(
-            '4050-796',
-            allow_rate_limit_reached=True
+        comicvine.search_volumes.assert_awaited_once_with('4050-796')
+
+    def test_direct_volume_id_is_preserved_when_rate_limited(self):
+        filepath = '/imports/Jennifer Blood - Blood Legacy (2014) Volume 01 TPB.cbz'
+        groups = {
+            1: {
+                filepath: {
+                    **self._file_data('Jennifer Blood - Blood Legacy'),
+                    'year': 2014,
+                    'issue_number': None
+                }
+            }
+        }
+        metadata = {
+            filepath: {
+                'series': 'Jennifer Blood - Blood Legacy',
+                'year': 2014,
+                'issue_count': 1,
+                'comicvine_volume_id': 75362
+            }
+        }
+        comicvine = Mock()
+        comicvine.search_volumes = AsyncMock(
+            side_effect=CVRateLimitReached
         )
+
+        result = run(match_comicinfo_ids(comicvine, groups, metadata))
+
+        self.assertEqual(result[1]['id'], 75362)
+        self.assertEqual(
+            result[1]['title'],
+            'Jennifer Blood - Blood Legacy (2014)'
+        )
+        self.assertEqual(result[1]['issue_count'], 1)
+        self.assertEqual(result[1]['match_source'], 'comicinfo-id-pending')
+        self.assertTrue(result[1]['metadata_pending'])
+        self.assertTrue(result[1]['direct_id'])
+        self.assertIn('rate limiting', result[1]['match_reason'])
 
     def test_issue_ids_resolve_to_one_parent_volume(self):
         first = '/imports/Batman Issue 001.cbz'
@@ -133,3 +168,7 @@ class ComicInfoComicVineMatching(unittest.TestCase):
 
         self.assertEqual(result, {})
         comicvine.search_volumes.assert_not_awaited()
+
+
+if __name__ == '__main__':
+    unittest.main()

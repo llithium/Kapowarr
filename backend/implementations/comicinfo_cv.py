@@ -2,10 +2,10 @@
 
 """Resolve direct ComicVine references embedded in ComicInfo.xml."""
 
-from asyncio import gather
 from typing import Any, Dict, List, Set, Tuple
 
-from backend.base.definitions import FilenameData
+from backend.base.custom_exceptions import CVRateLimitReached
+from backend.base.definitions import Constants, FilenameData
 from backend.base.helpers import AsyncSession, batched
 from backend.base.logging import LOGGER
 from backend.implementations.comicinfo import ComicInfoData
@@ -65,6 +65,71 @@ async def _fetch_issue_volume_ids(
     return result
 
 
+def _pending_direct_match(
+    group_number: int,
+    volume_id: int,
+    reason: str,
+    file_groups: Dict[int, Dict[str, FilenameData]],
+    comicinfo_metadata: Dict[str, ComicInfoData]
+) -> Dict[str, Any]:
+    """Build an exact-ID preview while ComicVine metadata is unavailable.
+
+    A 4050-* ID embedded in ComicInfo.xml is still an exact volume reference.
+    Library Import should not turn that into "No automatic match" merely
+    because ComicVine is temporarily rate limited. Use local ComicInfo/filename
+    metadata for the preview and let a later rescan replace it with the cached
+    ComicVine metadata once the API is available again.
+    """
+    files = file_groups[group_number]
+    local_metadata = [
+        comicinfo_metadata[filepath]
+        for filepath in files
+        if filepath in comicinfo_metadata
+    ]
+    first_file = next(iter(files.values()))
+
+    series = next((
+        metadata.get('series')
+        for metadata in local_metadata
+        if metadata.get('series')
+    ), None) or first_file['series']
+
+    year = next((
+        metadata.get('year')
+        for metadata in local_metadata
+        if metadata.get('year') is not None
+    ), None)
+    if year is None:
+        year = first_file['year']
+
+    issue_count = next((
+        metadata.get('issue_count')
+        for metadata in local_metadata
+        if metadata.get('issue_count') is not None
+    ), None)
+
+    title = series or f'ComicVine volume 4050-{volume_id}'
+    if year is not None:
+        title = f'{title} ({year})'
+
+    return {
+        'id': volume_id,
+        'title': title,
+        'issue_count': issue_count,
+        'link': f'{Constants.CV_SITE_URL}/volume/4050-{volume_id}/',
+        'already_added': None,
+        'match_source': 'comicinfo-id-pending',
+        'confidence': 100,
+        'match_reason': (
+            reason + '; exact ID preserved while ComicVine metadata is '
+            'temporarily unavailable due to rate limiting. Rescan later to '
+            'refresh the metadata.'
+        ),
+        'direct_id': True,
+        'metadata_pending': True
+    }
+
+
 async def match_comicinfo_ids(
     comicvine: ComicVine,
     file_groups: Dict[int, Dict[str, FilenameData]],
@@ -80,7 +145,9 @@ async def match_comicinfo_ids(
 
     Exact ComicVine volume metadata is cached for 24 hours so an interrupted or
     repeated Library Import scan can resume without repeating already-completed
-    direct-ID lookups.
+    direct-ID lookups. If ComicVine is rate limited after an exact volume ID has
+    already been resolved, the exact ID is still returned as a pending match so
+    the UI does not falsely report that no automatic match exists.
     """
     direct_groups: Dict[int, Tuple[object, Set[int]]] = {}
     issue_ids_to_resolve: Set[int] = set()
@@ -168,23 +235,28 @@ async def match_comicinfo_ids(
         for volume_id in unique_volume_ids
         if volume_id not in volume_results
     ]
+    rate_limited_volume_ids: Set[int] = set()
 
     if missing_volume_ids:
-        search_results = await gather(*(
-            comicvine.search_volumes(
-                f'4050-{volume_id}',
-                allow_rate_limit_reached=True
-            )
-            for volume_id in missing_volume_ids
-        ))
-        fetched_volume_results = {
-            volume_id: next((
+        fetched_volume_results: Dict[int, Any] = {}
+        for index, volume_id in enumerate(missing_volume_ids):
+            try:
+                results = await comicvine.search_volumes(
+                    f'4050-{volume_id}'
+                )
+            except CVRateLimitReached:
+                # The request gate already blocks queued follow-up calls. Mark
+                # every still-missing exact ID as pending rather than falling
+                # through to a title search that cannot succeed during the same
+                # cooldown window.
+                rate_limited_volume_ids.update(missing_volume_ids[index:])
+                break
+
+            fetched_volume_results[volume_id] = next((
                 result
                 for result in results
                 if result['comicvine_id'] == volume_id
             ), None)
-            for volume_id, results in zip(missing_volume_ids, search_results)
-        }
 
         fetched_volumes = [
             volume
@@ -203,19 +275,27 @@ async def match_comicinfo_ids(
     matches: Dict[int, Dict[str, Any]] = {}
     for group_number, (volume_id, reason) in resolved_groups.items():
         volume = volume_results.get(volume_id)
-        if volume is None:
+        if volume is not None:
+            matches[group_number] = {
+                'id': volume['comicvine_id'],
+                'title': f"{volume['title']} ({volume['year']})",
+                'issue_count': volume['issue_count'],
+                'link': volume['site_url'],
+                'already_added': volume.get('already_added'),
+                'match_source': 'comicinfo-id',
+                'confidence': 100,
+                'match_reason': reason,
+                'direct_id': True
+            }
             continue
 
-        matches[group_number] = {
-            'id': volume['comicvine_id'],
-            'title': f"{volume['title']} ({volume['year']})",
-            'issue_count': volume['issue_count'],
-            'link': volume['site_url'],
-            'already_added': volume.get('already_added'),
-            'match_source': 'comicinfo-id',
-            'confidence': 100,
-            'match_reason': reason,
-            'direct_id': True
-        }
+        if volume_id in rate_limited_volume_ids:
+            matches[group_number] = _pending_direct_match(
+                group_number,
+                volume_id,
+                reason,
+                file_groups,
+                comicinfo_metadata
+            )
 
     return matches
