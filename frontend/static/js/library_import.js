@@ -11,6 +11,7 @@ const LIEls = {
 		no_cv: document.querySelector('#no-cv-window')
 	},
 	proposal_list: document.querySelector('.proposal-list'),
+	conflict_notice: document.querySelector('#import-conflict-notice'),
 	select_all: document.querySelector('#selectall-input'),
 	search: {
 		window: document.querySelector('#cv-window'),
@@ -398,7 +399,10 @@ function loadProposal(api_key) {
 	);
 
 	LIEls.proposal_list.innerHTML = '';
+	hide([LIEls.conflict_notice]);
 	LIEls.select_all.checked = true;
+	LIEls.buttons.import.disabled = false;
+	LIEls.buttons.import_rename.disabled = false;
 
 	fetchAPI('/libraryimport', api_key, params)
 	.then(json => {
@@ -450,10 +454,23 @@ function loadProposal(api_key) {
 
 			const [match_text, match_reason] = describeMatch(result);
 			const match_details = entry.querySelector('.match-details');
-			match_details.innerText = match_text;
-			match_details.title = match_reason;
+			if (result.conflict) {
+				entry.classList.add('import-conflict');
+				const checkbox = entry.querySelector('input[type="checkbox"]');
+				const edit_button = entry.querySelector('button');
+				checkbox.checked = false;
+				checkbox.disabled = true;
+				edit_button.disabled = true;
+				edit_button.title = result.conflict.message;
+				match_details.innerText = 'Already present';
+				match_details.title = result.conflict.message;
+			} else {
+				match_details.innerText = match_text;
+				match_details.title = match_reason;
+			}
 
-			entry.querySelector('button').onclick = e => openEditCVMatch(rowid);
+			if (!result.conflict)
+				entry.querySelector('button').onclick = e => openEditCVMatch(rowid);
 
 			LIEls.proposal_list.appendChild(entry);
 		});
@@ -592,7 +609,27 @@ function importLibrary(api_key, rename=false) {
 	setLibraryImportLoadingMode(rename ? 'import-rename' : 'import');
 	hide([LIEls.views.list], [LIEls.views.loading]);
 	sendAPI('POST', '/libraryimport', api_key, {rename_files: rename}, data)
-	.then(response => hide([LIEls.views.loading], [LIEls.views.start]));
+	.then(response => response.json())
+	.then(json => {
+		const conflicts = json.result.conflicts;
+		if (!conflicts.length) {
+			hide([LIEls.views.loading], [LIEls.views.start]);
+			return;
+		}
+
+		const list = LIEls.conflict_notice.querySelector('ul');
+		list.innerHTML = '';
+		conflicts.forEach(conflict => {
+			const item = document.createElement('li');
+			item.innerText = `${conflict.filepath}: ${conflict.message}`;
+			item.title = conflict.destination;
+			list.appendChild(item);
+		});
+		LIEls.buttons.import.disabled = true;
+		LIEls.buttons.import_rename.disabled = true;
+		hide([LIEls.views.loading], [LIEls.views.list]);
+		hide([], [LIEls.conflict_notice]);
+	});
 };
 
 // code run on load

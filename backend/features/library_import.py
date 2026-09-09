@@ -3,7 +3,7 @@
 from asyncio import run
 from glob import glob
 from itertools import chain
-from os.path import abspath, basename, dirname, isfile, join, splitext
+from os.path import abspath, basename, dirname, exists, isfile, join, splitext
 from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple, Union
 
@@ -398,6 +398,32 @@ def _group_is_already_tracked(
     return bool(issues_with_files)
 
 
+def _preview_import_conflict(
+    files: Dict[str, FilenameData],
+    existing_volume_id: int
+) -> Union[Dict[str, str], None]:
+    """Return an import conflict that can be shown before moving files.
+
+    Existing-library imports place unrenamed files directly in the volume
+    folder. Never let that operation replace a file that is already there.
+    This preflight is only advisory; ``import_library`` repeats the check just
+    before every move to protect against files appearing after the preview.
+    """
+    volume_folder = Library.get_volume(existing_volume_id).vd.folder
+    for filepath in files:
+        destination = join(volume_folder, basename(filepath))
+        if abspath(filepath) != abspath(destination) and exists(destination):
+            return {
+                'message': (
+                    'A file with this name is already in the Kapowarr '
+                    'volume folder. It will not be imported.'
+                ),
+                'destination': destination
+            }
+
+    return None
+
+
 def _match_unmatched_comicinfo_files(
     volume_id: int,
     files: List[str]
@@ -587,9 +613,6 @@ def propose_library_import(
                 continue
 
             d = abspath(dirname(f))
-            if d in root_folders:
-                # File directly in root folder is not allowed
-                continue
 
             file_data = extract_filename_data(f, prefer_folder_year=True)
             metadata = read_comicinfo(f)
@@ -642,7 +665,7 @@ def propose_library_import(
     # series that is already managed. Direct ComicInfo IDs are checked inside
     # this stage before fuzzy existing-library scoring.
     group_to_cv: Dict[int, Dict[str, Any]] = {}
-    skipped_existing_groups = set()
+    group_conflicts: Dict[int, Dict[str, str]] = {}
     groups_needing_cv: Dict[int, Dict[str, FilenameData]] = {}
     for group_number, files in group_to_files.items():
         existing_match = _find_existing_volume_match(
@@ -660,12 +683,22 @@ def propose_library_import(
                 )
             ):
                 LOGGER.debug(
-                    'Skipping Library Import group %d: direct ComicInfo match '
-                    'is already tracked by volume %d',
+                    'Marking Library Import group %d as already tracked by '
+                    'volume %d',
                     group_number, existing_volume_id
                 )
-                skipped_existing_groups.add(group_number)
-                continue
+                group_conflicts[group_number] = {
+                    'message': (
+                        'This ComicInfo.xml issue is already linked to the '
+                        'matched Kapowarr volume. It will not be imported.'
+                    ),
+                    'destination': ''
+                }
+
+            elif isinstance(existing_volume_id, int):
+                conflict = _preview_import_conflict(files, existing_volume_id)
+                if conflict is not None:
+                    group_conflicts[group_number] = conflict
 
             group_to_cv[group_number] = existing_match
         else:
@@ -710,10 +743,11 @@ def propose_library_import(
             'cv': group_to_cv[group_number],
             'group_number': group_number,
             'metadata_source': metadata_sources.get(file, 'filename'),
-            'comicinfo': comicinfo_metadata.get(file)
+            'comicinfo': comicinfo_metadata.get(file),
+            # A group-level conflict disables every one of its rows in the UI.
+            'conflict': group_conflicts.get(group_number)
         }
         for group_number, files in group_to_files.items()
-        if group_number not in skipped_existing_groups
         for file in files
     ]
 
@@ -749,7 +783,7 @@ def _source_folder_is_shared(
 def import_library(
     matches: List[CVFileMapping],
     rename_files: bool = False
-) -> None:
+) -> List[Dict[str, str]]:
     """Add volume to library and import linked files.
 
     Args:
@@ -757,8 +791,14 @@ def import_library(
 
         rename_files (bool, optional): Trigger a rename after importing files.
             Defaults to False.
+
+    Returns:
+        Files that were not imported because their target path already exists.
+        The caller can show these to the user instead of silently replacing
+        existing library content.
     """
     LOGGER.info('Starting library import')
+    conflicts: List[Dict[str, str]] = []
 
     cvid_to_filepath: Dict[int, List[str]] = {}
     for m in matches:
@@ -780,9 +820,9 @@ def import_library(
             files,
             cvid_to_filepath
         )
-        if not rename_files and force_suffix(lcf) == root_folder.folder:
-            # Back out. Volume folder will be equal to root folder.
-            continue
+        source_is_root_folder = (
+            force_suffix(lcf) == force_suffix(root_folder.folder)
+        )
 
         volume_already_added = False
 
@@ -795,7 +835,11 @@ def import_library(
                 monitor_new_issues=False,
                 volume_folder=(
                     lcf
-                    if not rename_files and not shared_source_folder else
+                    if (
+                        not rename_files
+                        and not shared_source_folder
+                        and not source_is_root_folder
+                    ) else
                     None
                 )
             )
@@ -824,15 +868,20 @@ def import_library(
             # Hit rate limit so can't add any volumes anymore
             break
 
-        if shared_source_folder:
+        if shared_source_folder or source_is_root_folder:
             LOGGER.info(
-                'Import source %s contains files for multiple volumes; '
+                'Import source %s needs a dedicated volume folder; '
                 'using a dedicated folder for ComicVine volume %s',
                 lcf,
                 cv_id
             )
 
-        if rename_files or volume_already_added or shared_source_folder:
+        if (
+            rename_files
+            or volume_already_added
+            or shared_source_folder
+            or source_is_root_folder
+        ):
             # Move files not already in the volume folder into the volume folder
             vf = Library.get_volume(volume_id).vd.folder
 
@@ -849,14 +898,35 @@ def import_library(
             else:
                 file_changes = change_basefolder(files, lcf, vf)
 
+            safe_file_changes = {}
             for old, new in file_changes.items():
+                if old != new and exists(new):
+                    LOGGER.warning(
+                        'Skipping Library Import file %s because destination '
+                        '%s already exists', old, new
+                    )
+                    conflicts.append({
+                        'filepath': old,
+                        'destination': new,
+                        'message': (
+                            'A file with this name is already in the '
+                            'Kapowarr volume folder.'
+                        )
+                    })
+                    continue
+                safe_file_changes[old] = new
+
+            if not safe_file_changes:
+                continue
+
+            for old, new in safe_file_changes.items():
                 if old != new:
                     rename_file(old, new)
                     delete_empty_parent_folders(
                         dirname(old), root_folder.folder
                     )
 
-            files = list(file_changes.values())
+            files = list(safe_file_changes.values())
 
         scan_files(volume_id, filepath_filter=files)
         _match_unmatched_comicinfo_files(volume_id, files)
@@ -865,4 +935,4 @@ def import_library(
             # Rename the filenames themselves
             mass_rename(volume_id, filepath_filter=files)
 
-    return
+    return conflicts

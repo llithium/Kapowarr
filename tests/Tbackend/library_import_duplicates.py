@@ -3,7 +3,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from backend.features.library_import import (_find_existing_volume_match,
-                                             _group_is_already_tracked)
+                                             _group_is_already_tracked,
+                                             _preview_import_conflict)
 from backend.implementations.comicinfo import comicinfo_to_filename_data
 
 
@@ -19,6 +20,27 @@ def file_data(series='Example', year=2020, issue_number=1.0):
 
 
 class ExistingImportFiltering(unittest.TestCase):
+    def test_existing_target_filename_is_an_import_conflict(self):
+        filepath = '/imports/Example 001.cbz'
+        volume = SimpleNamespace(vd=SimpleNamespace(folder='/library/Example'))
+
+        with patch(
+            'backend.features.library_import.Library.get_volume',
+            return_value=volume,
+        ), patch(
+            'backend.features.library_import.exists',
+            return_value=True,
+        ):
+            conflict = _preview_import_conflict({filepath: file_data()}, 12)
+
+        self.assertEqual(conflict, {
+            'message': (
+                'A file with this name is already in the Kapowarr volume '
+                'folder. It will not be imported.'
+            ),
+            'destination': '/library/Example/Example 001.cbz',
+        })
+
     def test_library_import_keeps_filename_series_year(self):
         fallback = file_data(series='Worlds Finest', year=2013)
         result = comicinfo_to_filename_data(

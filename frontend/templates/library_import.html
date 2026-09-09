@@ -74,7 +74,7 @@
 			<li>Volumes already in your Kapowarr library are checked before a new ComicVine search, which makes adding more issues to an existing series more reliable.</li>
 			<li>Review matches carefully. ComicVine lists standard volumes, collected editions, one-shots, hardcovers, and other releases separately.</li>
 			<li>Import in batches of no more than 50 new volumes to avoid ComicVine rate limits.</li>
-			<li>Files are not allowed to be directly in the root folder. They have to be in a sub-folder.</li>
+			<li>You can scan comic files directly in a root folder or in any unmanaged sub-folder. Kapowarr-managed volume folders are excluded.</li>
 			<li>If each issue has a separate sub-folder, enable 'Apply limit to parent folder' so that the limit is correctly applied.</li>
 		</ul>
 		</details>
@@ -154,6 +154,11 @@
 				id="import-rename-button"
 				title="Add volumes, move files into automatically generated volume folder (named following the settings), rename files. If the volume is already added, move the file into volume folder and rename."
 			>Import and Rename</button>
+		</div>
+		<div id="import-conflict-notice" class="hidden" role="alert">
+			<strong>Some files were not imported</strong>
+			<p>Rescan the root folders before importing anything else.</p>
+			<ul></ul>
 		</div>
 		<div class="table-container icon-text-color">
 			<table aria-label="File list">
