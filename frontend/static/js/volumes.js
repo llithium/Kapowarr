@@ -100,8 +100,8 @@ class LibraryEntry {
 			`${downloaded_count}/${total_count}`;
 
 		this.list_entry.querySelector('.list-prog-container').title = total_count > 0
-			? `${downloaded_count} of ${total_count} monitored issues downloaded`
-			: 'No monitored issues';
+			? `${downloaded_count} of ${total_count} issues downloaded`
+			: 'No issues';
 
 		list_bar.style.width =
 		table_bar.style.width =
@@ -191,8 +191,8 @@ function populateLibrary(volumes, api_key) {
 
 		// Progress Bar
 		library_entry.setProgressBar(
-			volume.issues_downloaded_monitored,
-			volume.issue_count_monitored
+			volume.issues_downloaded,
+			volume.issue_count
 		);
 
 		// Add to view
