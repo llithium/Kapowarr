@@ -65,8 +65,8 @@
 {% block main %}
 <main>
 	<div id="start-window">
-		<h1>Import an existing library</h1>
-		<p class="intro">Scan organized comic folders, review the matches, then choose what to import.</p>
+		<h1>Set up an import scan</h1>
+		<p class="intro">Choose where to look. Kapowarr will find comic files, suggest matches, and let you review everything before moving a file.</p>
 		<details>
 			<summary>Before you scan</summary>
 		<ul>
@@ -78,62 +78,48 @@
 			<li>If each issue has a separate sub-folder, enable 'Apply limit to parent folder' so that the limit is correctly applied.</li>
 		</ul>
 		</details>
-		<table class="fold-table">
-			<tbody>
-				<tr>
-					<td><label for="limit-input">Max folders scanned</label></td>
-					<td>
-						<select id="limit-input">
-							<option value="1">1</option>
-							<option value="5">5</option>
-							<option value="20" selected>20</option>
-							<option value="100">100</option>
-							<option value="500">500</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td><label for="folder-input">Apply limit to parent folder</label></td>
-					<td>
-						<select id="folder-input">
-							<option value="true">Yes</option>
-							<option value="false" selected>No</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td><label for="lang-input">Only match english volumes</label></td>
-					<td>
-						<select id="lang-input">
-							<option value="true" selected>Yes</option>
-							<option value="false">No</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td><label for="target-input">Folder(s) to scan</label></td>
-					<td>
-						<select id="target-input">
-							<option value="true">All root folders</option>
-							<option value="false">Specific folder(s)</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td colspan="2">
-						<p class="error hidden" id="folder-filter-error">*Input has to be a folder (pattern) and all matches have to be a root folder or a sub-folder of one</p>
-						<input type="text" id="folder-filter-input" placeholder="Folder(s) to scan (glob patterns supported)">
-					</td>
-				</tr>
-			</tbody>
-		</table>
-		<button id="run-import-button">Scan</button>
+		<section class="scan-setup" aria-labelledby="scan-scope-heading">
+			<div class="scan-option primary-scan-option">
+				<div>
+					<h2 id="scan-scope-heading">Where should Kapowarr look?</h2>
+					<p>Managed volume folders are skipped. Files in root folders and unmanaged subfolders are included.</p>
+				</div>
+				<label for="target-input">Scan location</label>
+				<select id="target-input">
+					<option value="true">All root folders (recommended)</option>
+					<option value="false">Choose a folder or pattern</option>
+				</select>
+				<div class="folder-filter">
+					<p class="error hidden" id="folder-filter-error">Enter a folder or pattern inside a configured root folder.</p>
+					<label for="folder-filter-input">Folder or pattern</label>
+					<input type="text" id="folder-filter-input" placeholder="Example: /comics/Star Wars*">
+				</div>
+			</div>
+			<details class="scan-options">
+				<summary>Scan options</summary>
+				<div class="scan-options-content">
+					<div class="scan-option">
+						<div><label for="limit-input">How much should this scan include?</label><p>Smaller scans finish sooner and use fewer ComicVine lookups.</p></div>
+						<select id="limit-input"><option value="1">1 folder</option><option value="5">5 folders</option><option value="20" selected>20 folders (recommended)</option><option value="100">100 folders</option><option value="500">500 folders</option></select>
+					</div>
+					<div class="scan-option">
+						<div><label for="folder-input">Are issues stored one folder at a time?</label><p>Use this only when each individual issue has its own folder.</p></div>
+						<select id="folder-input"><option value="false" selected>No — count each comic folder</option><option value="true">Yes — count each parent folder</option></select>
+					</div>
+					<div class="scan-option">
+						<div><label for="lang-input">Which ComicVine releases should match?</label><p>Keep English-only enabled unless you want translated editions.</p></div>
+						<select id="lang-input"><option value="true" selected>English releases only (recommended)</option><option value="false">Any language</option></select>
+					</div>
+				</div>
+			</details>
+			<button id="run-import-button">Review matches</button>
+		</section>
 	</div>
 	<div id="loading-window" class="hidden">
 		<h2>Scanning library</h2>
 	</div>
 	<div id="no-result-window" class="hidden">
-		<h2>No comic folders found</h2>
+		<h2>No comic files found</h2>
 		<p>Check the folder selection and scan limit, then try again.</p>
 		<button class="cancel-button">Go Back</button>
 	</div>

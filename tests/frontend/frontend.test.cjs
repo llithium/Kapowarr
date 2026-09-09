@@ -336,6 +336,14 @@ test('library progress includes downloaded unmonitored issues', () => {
 	assert.doesNotMatch(source, /issues_downloaded_monitored,\s*volume\.issue_count_monitored/);
 });
 
+test('library import foregrounds scan scope and groups advanced options', () => {
+	const html = read('frontend/templates/library_import.html');
+	assert.match(html, /<h1>Set up an import scan<\/h1>/);
+	assert.match(html, /All root folders \(recommended\)/);
+	assert.match(html, /<details class="scan-options">/);
+	assert.match(html, /<button id="run-import-button">Review matches<\/button>/);
+});
+
 test('cover cards preserve the full artwork for real comic cover ratios', () => {
 	const css = read('frontend/static/css/workspace.css');
 	const coverRule = css.match(/\.list-img\s*\{[^}]+\}/)?.[0] ?? '';
