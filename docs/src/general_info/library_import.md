@@ -2,7 +2,7 @@ The 'Library Import' feature makes it possible to import an existing library of 
 
 ## Proposal
 
-When you run Library Import, it will search for files in your root folders that aren't matched to any issues yet. It will then try to find the volume that the file is for on ComicVine. This list of files and ComicVine matches is presented to you (a.k.a. Library Import proposal). You can then change the matches in case Kapowarr guessed incorrectly. You can choose to apply the changed match to only the file, or to all files for the volume.
+When you run Library Import, it scans your root folders for files that are not matched to issues yet, while excluding folders Kapowarr already manages. Files can be directly in a root folder or in an unmanaged subfolder, so you can use an inbox or add issues to a series that is already in Kapowarr. Files already inside a managed volume folder belong to Refresh & Scan instead. Kapowarr then tries to find the volume that each file is for, preferring an existing library volume before searching ComicVine. This list of files and matches is presented to you (a.k.a. Library Import proposal). You can then change the matches in case Kapowarr guessed incorrectly. You can choose to apply the changed match to only the file, or to all files for the volume.
 
 On the start screen, there are some settings that change the behaviour of Library Import:
 
@@ -21,3 +21,5 @@ Allows you to supply a specific folder in a root folder to scan, instead of all 
 ## Importing
 
 When you are happy with the proposal, you have two options: 'Import' and 'Import and Rename'. Clicking 'Import' will make Kapowarr add all the volumes and set their volume folder to the folder that the file is in. Clicking 'Import and Rename' will make Kapowarr add all the volumes and move the files into the automatically generated volume folder, after which it will rename them. If a volume is already added to the library, then clicking 'Import' will move the matched files to the volume folder. Clicking 'Import and Rename' will move the matched files to the volume folder and rename them then.
+
+Kapowarr never replaces a file during Library Import. The proposal marks files that are already represented by ComicInfo.xml or whose destination filename already exists, and leaves them unchecked. It repeats the destination check while importing, so a file created after the proposal is also kept and reported in the UI.

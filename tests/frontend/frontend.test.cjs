@@ -323,11 +323,25 @@ test('bulk actions require a selection and deletion requires confirmation', () =
 	assert.equal(calls, 0);
 });
 
-test('volumes with no monitored issues have a finite progress bar', () => {
+test('volumes with no issues have a finite progress bar', () => {
 	const { element, run } = libraryContext();
 	run("new LibraryEntry(1, 'key').setProgressBar(0, 0)");
 	assert.equal(element('#list-library .vol-1 .list-prog-bar').style.width, '0%');
-	assert.equal(element('#list-library .vol-1 .list-prog-container').title, 'No monitored issues');
+	assert.equal(element('#list-library .vol-1 .list-prog-container').title, 'No issues');
+});
+
+test('library progress includes downloaded unmonitored issues', () => {
+	const source = read('frontend/static/js/volumes.js');
+	assert.match(source, /volume\.issues_downloaded,\s*volume\.issue_count/);
+	assert.doesNotMatch(source, /issues_downloaded_monitored,\s*volume\.issue_count_monitored/);
+});
+
+test('library import foregrounds scan scope and groups advanced options', () => {
+	const html = read('frontend/templates/library_import.html');
+	assert.match(html, /<h1>Set up an import scan<\/h1>/);
+	assert.match(html, /All root folders \(recommended\)/);
+	assert.match(html, /<details class="scan-options">/);
+	assert.match(html, /<button id="run-import-button">Review matches<\/button>/);
 });
 
 test('cover cards preserve the full artwork for real comic cover ratios', () => {

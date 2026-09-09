@@ -52,17 +52,7 @@ main {
 	margin-bottom: 1rem;
 }
 
-#start-window table td {
-	padding: 1rem;
-	padding-bottom: 0rem;
-	width: 50%;
-}
-
-#start-window table td:first-child {
-	text-align: right;
-}
-
-#start-window table :where(select, input) {
+#start-window :where(select, input) {
 	min-width: 4rem;
 	height: 2rem;
 
@@ -77,18 +67,87 @@ main {
 	transition: background-color 100ms linear;
 }
 
-#start-window table :where(select, input):hover {
+#start-window :where(select, input):hover {
 	background-color: var(--hover-color);
 }
 
-#folder-filter-input {
-	width: 100%;
+.scan-setup {
+	width: min(100%, 44rem);
+	display: grid;
+	gap: 1rem;
+}
 
+.scan-option {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: .75rem 1.5rem;
+	padding: 1rem;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	background: var(--foreground-color);
+}
+
+.scan-option h2,
+.scan-option label {
+	font-size: 1rem;
+	font-weight: 600;
+}
+
+.scan-option p {
+	margin-top: .25rem;
+	color: var(--dimmed-text-color);
+	font-size: .9rem;
+	line-height: 1.4;
+}
+
+.scan-option select {
+	max-width: 17rem;
+}
+
+.primary-scan-option {
+	border-color: var(--accent-color);
+}
+
+.folder-filter {
+	grid-column: 1 / -1;
 	display: none;
 }
 
-#start-window table:has(#target-input option[value="false"]:checked) #folder-filter-input {
+.folder-filter label,
+.folder-filter input {
 	display: block;
+}
+
+.folder-filter input {
+	width: 100%;
+	margin-top: .4rem;
+}
+
+.primary-scan-option:has(#target-input option[value="false"]:checked) .folder-filter {
+	display: block;
+}
+
+.scan-options {
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	background: var(--foreground-color);
+}
+
+.scan-options summary {
+	cursor: pointer;
+	padding: .85rem 1rem;
+	font-weight: 600;
+}
+
+.scan-options-content {
+	display: grid;
+	gap: .75rem;
+	padding: 0 .75rem .75rem;
+}
+
+.scan-options .scan-option {
+	padding: .75rem;
 }
 
 #folder-filter-error {
@@ -113,6 +172,10 @@ main {
 	transition: background-color 100ms linear;
 }
 
+#run-import-button {
+	justify-self: center;
+}
+
 #run-import-button,
 #import-button {
 	border-color: var(--accent-color);
@@ -126,6 +189,17 @@ main {
 .action-container button:hover,
 #no-cv-window h2:hover {
 	background-color: var(--hover-color);
+}
+
+@media screen and (max-width: 550px) {
+	.scan-option {
+		grid-template-columns: 1fr;
+	}
+
+	.scan-option select {
+		max-width: none;
+		width: 100%;
+	}
 }
 
 #loading-window,
@@ -154,6 +228,24 @@ main {
 	flex-wrap: wrap;
 
 	padding: 1rem;
+}
+
+#import-conflict-notice {
+	max-width: 60rem;
+	margin: 0 auto 1rem;
+	border: 1px solid var(--error-color);
+	border-radius: 4px;
+	padding: .75rem 1rem;
+	color: var(--text-color);
+	background: var(--foreground-color);
+}
+
+#import-conflict-notice ul {
+	margin: .5rem 0 0 1.25rem;
+}
+
+.proposal-list > tr.import-conflict {
+	background: color-mix(in srgb, var(--error-color) 12%, transparent);
 }
 
 .table-container {

@@ -1,11 +1,12 @@
 import unittest
-from os import makedirs
+from os import makedirs, remove
 from os.path import exists, isfile, join
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 from backend.base.custom_exceptions import InvalidKeyValue, VolumeAlreadyAdded
+from backend.base.definitions import MonitorScheme
 from backend.features.library_import import (_find_existing_volume_match,
                                              _source_folder_is_shared,
                                              create_groups, import_library,
@@ -317,7 +318,47 @@ class PublicLibraryImportFlow(unittest.TestCase):
         scan.assert_called_once_with(11, filepath_filter=[moved])
         rename.assert_called_once_with(11, filepath_filter=[moved])
 
-    def test_propose_scans_temp_folder_and_returns_match(self):
+    def test_import_keeps_existing_file_and_reports_conflict(self):
+        root_folder = SimpleNamespace(folder=self.root, id=7)
+        volume = SimpleNamespace(vd=SimpleNamespace(folder=self.destination))
+        match = {'id': 796, 'filepath': self.filepath}
+        makedirs(self.destination)
+        destination = join(self.destination, 'Batman Issue 001.cbz')
+        with open(destination, 'wb') as comic:
+            comic.write(b'existing comic')
+
+        with patch(
+            'backend.features.library_import.RootFolders.get_all',
+            return_value=[root_folder]
+        ), patch(
+            'backend.features.library_import.Library.add',
+            side_effect=VolumeAlreadyAdded(796, 11)
+        ), patch(
+            'backend.features.library_import.Library.get_volume',
+            return_value=volume
+        ), patch(
+            'backend.features.library_import.scan_files'
+        ) as scan:
+            conflicts = import_library([match])
+
+        self.assertTrue(isfile(self.filepath))
+        with open(destination, 'rb') as comic:
+            self.assertEqual(comic.read(), b'existing comic')
+        self.assertEqual(conflicts, [{
+            'filepath': self.filepath,
+            'destination': destination,
+            'message': (
+                'A file with this name is already in the Kapowarr volume '
+                'folder.'
+            )
+        }])
+        scan.assert_not_called()
+
+    def test_propose_scans_file_directly_in_root_and_returns_match(self):
+        remove(self.filepath)
+        root_filepath = join(self.root, 'Batman Issue 002.cbz')
+        with open(root_filepath, 'wb') as comic:
+            comic.write(b'comic')
         file_data = {
             'series': 'Batman', 'year': None, 'volume_number': None,
             'special_version': None, 'issue_number': 1.0, 'annual': False
@@ -354,5 +395,46 @@ class PublicLibraryImportFlow(unittest.TestCase):
         ):
             result = propose_library_import()
 
-        self.assertEqual(result[0]['filepath'], self.filepath)
+        self.assertEqual(result[0]['filepath'], root_filepath)
         self.assertEqual(result[0]['cv']['id'], 796)
+
+    def test_import_moves_root_file_to_dedicated_volume_folder(self):
+        root_filepath = join(self.root, 'Batman Issue 002.cbz')
+        with open(root_filepath, 'wb') as comic:
+            comic.write(b'comic')
+
+        root_folder = SimpleNamespace(folder=self.root, id=7)
+        volume = SimpleNamespace(vd=SimpleNamespace(folder=self.destination))
+        match = {'id': 796, 'filepath': root_filepath}
+
+        with patch(
+            'backend.features.library_import.RootFolders.get_all',
+            return_value=[root_folder]
+        ), patch(
+            'backend.features.library_import.Library.add',
+            return_value=11
+        ) as add, patch(
+            'backend.features.library_import.commit'
+        ), patch(
+            'backend.features.library_import.Library.get_volume',
+            return_value=volume
+        ), patch(
+            'backend.features.library_import.scan_files'
+        ) as scan, patch(
+            'backend.features.library_import._match_unmatched_comicinfo_files'
+        ):
+            conflicts = import_library([match])
+
+        moved = join(self.destination, 'Batman Issue 002.cbz')
+        self.assertEqual(conflicts, [])
+        self.assertTrue(isfile(moved))
+        self.assertFalse(isfile(root_filepath))
+        add.assert_called_once_with(
+            comicvine_id=796,
+            root_folder_id=7,
+            monitored=False,
+            monitor_scheme=MonitorScheme.NONE,
+            monitor_new_issues=False,
+            volume_folder=None
+        )
+        scan.assert_called_once_with(11, filepath_filter=[moved])
