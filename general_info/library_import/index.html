@@ -1249,7 +1249,7 @@
 
 <p>The 'Library Import' feature makes it possible to import an existing library of media files into Kapowarr. You could have an existing library because you used a different software before, or because you downloaded media manually. In that case, Library Import makes it easy to start using Kapowarr. You can find the Library Import feature in the web-UI at Volumes -&gt; Library Import.</p>
 <h2 id="proposal">Proposal<a class="headerlink" href="#proposal" title="Permanent link">&para;</a></h2>
-<p>When you run Library Import, it will search for files in your root folders that aren't matched to any issues yet. It will then try to find the volume that the file is for on ComicVine. This list of files and ComicVine matches is presented to you (a.k.a. Library Import proposal). You can then change the matches in case Kapowarr guessed incorrectly. You can choose to apply the changed match to only the file, or to all files for the volume.</p>
+<p>When you run Library Import, it scans your root folders for files that are not matched to issues yet, while excluding folders Kapowarr already manages. Files can be directly in a root folder or in an unmanaged subfolder, so you can use an inbox or add issues to a series that is already in Kapowarr. Files already inside a managed volume folder belong to Refresh &amp; Scan instead. Kapowarr then tries to find the volume that each file is for, preferring an existing library volume before searching ComicVine. This list of files and matches is presented to you (a.k.a. Library Import proposal). You can then change the matches in case Kapowarr guessed incorrectly. You can choose to apply the changed match to only the file, or to all files for the volume.</p>
 <p>On the start screen, there are some settings that change the behaviour of Library Import:</p>
 <ul>
 <li>
@@ -1271,6 +1271,7 @@ Allows you to supply a specific folder in a root folder to scan, instead of all 
 </ul>
 <h2 id="importing">Importing<a class="headerlink" href="#importing" title="Permanent link">&para;</a></h2>
 <p>When you are happy with the proposal, you have two options: 'Import' and 'Import and Rename'. Clicking 'Import' will make Kapowarr add all the volumes and set their volume folder to the folder that the file is in. Clicking 'Import and Rename' will make Kapowarr add all the volumes and move the files into the automatically generated volume folder, after which it will rename them. If a volume is already added to the library, then clicking 'Import' will move the matched files to the volume folder. Clicking 'Import and Rename' will move the matched files to the volume folder and rename them then.</p>
+<p>Kapowarr never replaces a file during Library Import. The proposal marks files that are already represented by ComicInfo.xml or whose destination filename already exists, and leaves them unchecked. It repeats the destination check while importing, so a file created after the proposal is also kept and reported in the UI.</p>
 
 
 
@@ -1291,7 +1292,7 @@ Allows you to supply a specific folder in a root folder to scan, instead of all 
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 2, 2026 10:53:49 UTC"><span class="timeago" datetime="2026-03-02T10:53:49+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 2, 2026 10:53:49 UTC">2026-03-02</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="September 9, 2026 02:22:23 UTC"><span class="timeago" datetime="2026-09-09T02:22:23+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="September 9, 2026 02:22:23 UTC">2026-09-09</span>
   </span>
 
     
