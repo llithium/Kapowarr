@@ -112,6 +112,22 @@ def list_files(
     return files
 
 
+def filter_scannable_paths(folder: str, paths: Iterable[str]) -> List[str]:
+    """Validate a targeted scan without walking unrelated directories."""
+    extensions = {force_prefix(e.lower(), '.') for e in FileConstants.SCANNABLE_EXTENSIONS}
+    result = []
+    for path in dict.fromkeys(paths):
+        if not folder_is_inside_folder(folder, path):
+            continue
+        # Compare canonical Unicode, as folder containment does on macOS.
+        relative = relpath(normalize('NFC', abspath(path)), normalize('NFC', abspath(folder)))
+        if any(part.startswith('.') for part in relative.split(sep)):
+            continue
+        if splitext(path)[1].lower() in extensions and isfile(path):
+            result.append(path)
+    return result
+
+
 def get_archive_mimetype(filepath: str) -> Union[str, None]:
     """Find the archive type of a file based on its actual mimetype (via magic
     bytes) and return accompanying extension if found.

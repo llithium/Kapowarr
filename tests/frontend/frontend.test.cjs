@@ -363,3 +363,28 @@ test('library status and metadata text use high-contrast tokens', () => {
 	assert.match(progressRule, /color:\s*var\(--progress-text-color\)/);
 	assert.match(progressRule, /font:\s*700\s+\.75rem\/1/);
 });
+
+test('download events update retained data before either view exists', () => {
+	const { element, run } = libraryContext();
+	element('#list-library').querySelector = () => null;
+	element('#table-library').querySelector = () => null;
+	run(`libraryVolumes.set(1, {id: 1, issue_count: 3, issues_downloaded: 1});
+		updateDownloadedStatus({volume_id: 1, downloaded_issues: [2], not_downloaded_issues: []}, 'key');`);
+	assert.equal(run('libraryVolumes.get(1).issues_downloaded'), 2);
+	run("updateDownloadedStatus({volume_id: 99, downloaded_issues: [2], not_downloaded_issues: []}, 'key')");
+	assert.equal(run('libraryVolumes.size'), 1);
+});
+
+test('monitoring updates retained state with only the table rendered', async () => {
+	const { element, run } = libraryContext({
+		sendAPI: async () => ({}),
+		setIcon: (button, icon, label) => { button.textContent = label; },
+		icons: { monitored: 'yes', unmonitored: 'no' }
+	});
+	element('#list-library').querySelector = () => null;
+	run('libraryVolumes.set(1, {id: 1, monitored: true, issue_count: 3, issues_downloaded: 1})');
+	await run("new LibraryEntry(1, 'key').setMonitored(false)");
+	assert.equal(run('libraryVolumes.get(1).monitored'), false);
+	assert.equal(element('#table-library .vol-1 .table-monitored').textContent, 'Unmonitored');
+	assert.equal(element('#table-library .vol-1 .table-prog-bar').style.backgroundColor, 'var(--error-color)');
+});

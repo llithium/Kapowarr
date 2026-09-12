@@ -882,7 +882,9 @@ class Library:
     def get_public_volumes(
         cls,
         sort: LibrarySorting = LibrarySorting.TITLE,
-        filter: Union[LibraryFilter, int, None] = None
+        filter: Union[LibraryFilter, int, None] = None,
+        *,
+        _volume_ids: Union[List[int], None] = None
     ) -> List[Dict[str, Any]]:
         """Get all the volumes in the library.
 
@@ -894,6 +896,9 @@ class Library:
                 the list if not `None`.
                 Defaults to None.
 
+            _volume_ids (Union[List[int], None], optional): Restrict aggregation
+                to these IDs after title matching. None includes all volumes.
+
         Returns:
             List[Dict[str, Any]]: The list of volumes in the library.
         """
@@ -903,6 +908,13 @@ class Library:
             sql_filter = f"WHERE comicvine_id = {filter}"
         else:
             sql_filter = ''
+
+        if _volume_ids is not None:
+            if not _volume_ids:
+                return []
+            # IDs originate from SQLite; literals avoid its bound-variable limit.
+            id_filter = "id IN (" + ",".join(str(int(i)) for i in _volume_ids) + ")"
+            sql_filter += (" AND " if sql_filter else "WHERE ") + id_filter
 
         volumes = get_db().execute(f"""
             WITH
@@ -981,11 +993,12 @@ class Library:
                 volumes = []
 
         else:
-            volumes = [
-                v
-                for v in cls.get_public_volumes(sort, filter)
-                if match_title(v['title'], query, allow_contains=True)
+            matching_ids = [
+                volume_id
+                for volume_id, title in get_db().execute("SELECT id, title FROM volumes;")
+                if match_title(title, query, allow_contains=True)
             ]
+            volumes = cls.get_public_volumes(sort, filter, _volume_ids=matching_ids)
 
         return volumes
 

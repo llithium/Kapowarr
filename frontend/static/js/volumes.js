@@ -51,158 +51,109 @@ function showLibraryPage(el) {
 	hide(Object.values(library_els.pages), [el]);
 };
 
+const libraryVolumes = new Map();
+const renderedViews = new Set();
+
 class LibraryEntry {
-	constructor(id, api_key) {
+	constructor(id, api_key, elements) {
 		this.id = id;
 		this.api_key = api_key;
-		this.list_entry = library_els.views.list.querySelector(`.vol-${id}`);
-		this.table_entry = library_els.views.table.querySelector(`.vol-${id}`);
-	};
+		this.list_entry = elements ? elements.list_entry : library_els.views.list.querySelector(`.vol-${id}`);
+		this.table_entry = elements ? elements.table_entry : library_els.views.table.querySelector(`.vol-${id}`);
+	}
 
 	setMonitored(monitored) {
-		sendAPI('PUT', `/volumes/${this.id}`, this.api_key, {}, {
-			monitored: monitored
-		})
-		.then(response => {
-			const monitored_button = this.table_entry.querySelector('.table-monitored');
-			monitored_button.onclick = e => new LibraryEntry(this.id, this.api_key)
-				.setMonitored(!monitored);
-
-			if (monitored) {
-				this.list_entry.setAttribute('monitored', '');
-				setIcon(monitored_button, icons.monitored, 'Monitored');
-
-			} else {
-				this.list_entry.removeAttribute('monitored');
-				setIcon(monitored_button, icons.unmonitored, 'Unmonitored');
-			};
+		return sendAPI('PUT', `/volumes/${this.id}`, this.api_key, {}, { monitored })
+		.then(() => {
+			const volume = libraryVolumes.get(this.id);
+			if (!volume) return;
+			volume.monitored = monitored;
+			const entry = new LibraryEntry(this.id, this.api_key);
+			entry.updateMonitored(monitored);
+			entry.setProgressBar(volume.issues_downloaded, volume.issue_count);
 		});
-	};
+	}
 
-	getProgress() {
-		return this.list_entry.querySelector('.list-prog-num').innerText
-			.split("/")
-			.map(n => parseInt(n));
-	};
+	updateMonitored(monitored) {
+		if (this.list_entry) this.list_entry.toggleAttribute('monitored', monitored);
+		if (this.table_entry) {
+			const button = this.table_entry.querySelector('.table-monitored');
+			setIcon(button, monitored ? icons.monitored : icons.unmonitored,
+				monitored ? 'Monitored' : 'Unmonitored');
+			button.onclick = () => this.setMonitored(!monitored);
+		}
+	}
 
-	setProgressBar(
-		downloaded_count,
-		total_count
-	) {
+	setProgressBar(downloaded_count, total_count) {
 		downloaded_count = Math.min(downloaded_count, total_count);
-
 		const progress = total_count > 0 ? downloaded_count / total_count * 100 : 0;
-		const list_bar = this.list_entry.querySelector('.list-prog-bar'),
-			table_bar = this.table_entry.querySelector('.table-prog-bar');
-
-		this.list_entry.querySelector('.list-prog-num').innerText =
-		this.table_entry.querySelector('.table-prog-num').innerText =
-			`${downloaded_count}/${total_count}`;
-
-		this.list_entry.querySelector('.list-prog-container').title = total_count > 0
-			? `${downloaded_count} of ${total_count} issues downloaded`
-			: 'No issues';
-
-		list_bar.style.width =
-		table_bar.style.width =
-			`${progress}%`;
-
-		if (progress === 100)
-			list_bar.style.backgroundColor =
-			table_bar.style.backgroundColor =
-				'var(--success-color)';
-
-		else if (this.list_entry.hasAttribute('monitored'))
-			list_bar.style.backgroundColor =
-			table_bar.style.backgroundColor =
-				'var(--accent-color)';
-
-		else
-			list_bar.style.backgroundColor =
-			table_bar.style.backgroundColor =
-				'var(--error-color)';
-
-		return;
-	};
-};
+		for (const [entry, prefix] of [[this.list_entry, 'list'], [this.table_entry, 'table']]) {
+			if (!entry) continue;
+			entry.querySelector(`.${prefix}-prog-num`).innerText = `${downloaded_count}/${total_count}`;
+			const bar = entry.querySelector(`.${prefix}-prog-bar`);
+			bar.style.width = `${progress}%`;
+			const monitored = libraryVolumes.get(this.id)?.monitored ?? entry.hasAttribute('monitored');
+			bar.style.backgroundColor = progress === 100 ? 'var(--success-color)'
+				: monitored ? 'var(--accent-color)' : 'var(--error-color)';
+		}
+		if (this.list_entry) this.list_entry.querySelector('.list-prog-container').title = total_count > 0
+			? `${downloaded_count} of ${total_count} issues downloaded` : 'No issues';
+	}
+}
 
 function populateLibrary(volumes, api_key) {
-	library_els.views.list.querySelectorAll('.list-entry').forEach(
-		e => e.remove()
-	);
+	libraryVolumes.clear();
+	for (const volume of volumes) libraryVolumes.set(volume.id, volume);
+	renderedViews.clear();
+	library_els.views.list.querySelectorAll('.list-entry').forEach(e => e.remove());
 	library_els.views.table.innerHTML = '';
-	const space_taker = document.querySelector('.space-taker');
+	renderLibraryView(api_key);
+}
 
-	const list_fragment = document.createDocumentFragment(),
-		table_fragment = document.createDocumentFragment();
+function renderLibraryView(api_key) {
+	const view = library_els.mass_edit.toggle.checked || library_els.view_options.view.value === 'table'
+		? 'table' : 'list';
+	if (renderedViews.has(view)) return;
+	const fragment = document.createDocumentFragment();
+	for (const volume of libraryVolumes.values()) {
+		const entry = pre_build_els[`${view}_entry`].cloneNode(true);
+		entry.ariaLabel = `View the volume ${volume.title} (${volume.year}) Volume ${volume.volume_number}`;
+		entry.classList.add(`vol-${volume.id}`);
+		const href = `${url_base}/volumes/${volume.id}`;
+		if (view === 'list') {
+			entry.href = href;
+			entry.querySelector('.list-img').src = `${url_base}/api/volumes/${volume.id}/cover?api_key=${api_key}`;
+			const title = entry.querySelector('.list-title');
+			title.innerText = title.title = `${volume.title} (${volume.year})`;
+			entry.querySelector('.list-volume').innerText = `Volume ${volume.volume_number}`;
+		} else {
+			entry.dataset.id = volume.id;
+			entry.querySelector('.table-link').href = href;
+			entry.querySelector('.table-link').innerText = volume.title;
+			entry.querySelector('.table-year').innerText = volume.year;
+			entry.querySelector('.table-volume').innerText = `Volume ${volume.volume_number}`;
+		}
+		const instance = new LibraryEntry(volume.id, api_key, {
+			list_entry: view === 'list' ? entry : null,
+			table_entry: view === 'table' ? entry : null
+		});
+		instance.updateMonitored(volume.monitored);
+		instance.setProgressBar(volume.issues_downloaded, volume.issue_count);
+		fragment.appendChild(entry);
+	}
+	if (view === 'list') library_els.views.list.insertBefore(fragment, document.querySelector('.space-taker'));
+	else library_els.views.table.appendChild(fragment);
+	renderedViews.add(view);
+	updateSelection();
+}
 
-	volumes.forEach(volume => {
-		const list_entry = pre_build_els.list_entry.cloneNode(true),
-			table_entry = pre_build_els.table_entry.cloneNode(true);
-
-		// Label
-		list_entry.ariaLabel = table_entry.ariaLabel =
-			`View the volume ${volume.title} (${volume.year}) Volume ${volume.volume_number}`;
-
-		// ID
-		list_entry.classList.add(`vol-${volume.id}`);
-		table_entry.classList.add(`vol-${volume.id}`);
-		table_entry.dataset.id = volume.id;
-
-		// Link
-		list_entry.href =
-		table_entry.querySelector('.table-link').href =
-			`${url_base}/volumes/${volume.id}`;
-
-		// Cover
-		list_entry.querySelector('.list-img').src =
-			`${url_base}/api/volumes/${volume.id}/cover?api_key=${api_key}`;
-
-		// Title
-		const list_title = list_entry.querySelector('.list-title');
-		list_title.innerText =
-		list_title.title =
-			`${volume.title} (${volume.year})`;
-		table_entry.querySelector('.table-link').innerText =
-			volume.title;
-
-		// Year
-		table_entry.querySelector('.table-year').innerText =
-			volume.year;
-
-		// Volume Number
-		list_entry.querySelector('.list-volume').innerText =
-		table_entry.querySelector('.table-volume').innerText =
-			`Volume ${volume.volume_number}`;
-
-		// Monitored
-		const library_entry = new LibraryEntry(volume.id, api_key);
-		library_entry.list_entry = list_entry;
-		library_entry.table_entry = table_entry;
-
-		const monitored_button = table_entry.querySelector('.table-monitored');
-		monitored_button.onclick = e => library_entry
-			.setMonitored(!volume.monitored);
-		if (volume.monitored) {
-			list_entry.setAttribute('monitored', '');
-			setIcon(monitored_button, icons.monitored, 'Monitored');
-		} else
-			setIcon(monitored_button, icons.unmonitored, 'Unmonitored');
-
-		// Progress Bar
-		library_entry.setProgressBar(
-			volume.issues_downloaded,
-			volume.issue_count
-		);
-
-		// Add to view
-		list_fragment.appendChild(list_entry)
-		table_fragment.appendChild(table_entry);
-	});
-
-	library_els.views.list.insertBefore(list_fragment, space_taker);
-	library_els.views.table.appendChild(table_fragment);
-};
+function updateDownloadedStatus(data, api_key) {
+	const volume = libraryVolumes.get(data.volume_id);
+	if (!volume) return;
+	volume.issues_downloaded = Math.max(0, Math.min(volume.issue_count,
+		volume.issues_downloaded + data.downloaded_issues.length - data.not_downloaded_issues.length));
+	new LibraryEntry(volume.id, api_key).setProgressBar(volume.issues_downloaded, volume.issue_count);
+}
 
 let libraryRequest = 0;
 function fetchLibrary(api_key) {
@@ -223,6 +174,7 @@ function fetchLibrary(api_key) {
 		if (request !== libraryRequest) return;
 		library_els.mass_edit.select_all.checked = false;
 		document.querySelector('#library-result-count').textContent = `${json.result.length} ${json.result.length === 1 ? 'volume' : 'volumes'}`;
+		populateLibrary(json.result, api_key);
 		if (json.result.length === 0) {
 			const filtered = Boolean(query || params.filter);
 			document.querySelector('#library-empty-title').textContent = filtered ? 'No matching comics' : 'Your collection starts here';
@@ -233,7 +185,6 @@ function fetchLibrary(api_key) {
 			document.querySelector('#library-empty-actions').classList.toggle('hidden', filtered);
 			showLibraryPage(library_els.pages.empty);
 		} else {
-			populateLibrary(json.result, api_key);
 			showLibraryPage(library_els.pages.view);
 		};
 		updateSelection();
@@ -329,8 +280,10 @@ usingApiKey()
 		setLocalStorage({'lib_sorting': library_els.view_options.sort.value});
 		fetchLibrary(api_key);
 	};
-	library_els.view_options.view.onchange =
-		e => setLocalStorage({'lib_view': library_els.view_options.view.value});
+	library_els.view_options.view.onchange = () => {
+		setLocalStorage({'lib_view': library_els.view_options.view.value});
+		renderLibraryView(api_key);
+	};
 	library_els.view_options.filter.onchange = e => {
 		setLocalStorage({'lib_filter': library_els.view_options.filter.value});
 		fetchLibrary(api_key);
@@ -340,8 +293,10 @@ usingApiKey()
 	library_els.mass_edit.cancel.onclick =
 		e => {
 			const toggle = library_els.mass_edit.toggle;
-			if (toggle.hasAttribute('checked'))
-				toggle.removeAttribute('checked');
+			if (toggle.checked) {
+				toggle.checked = false;
+				renderLibraryView(api_key);
+			}
 			else {
 				const select = document.querySelector('select[name="root_folder_id"]');
 				if (select.querySelector('option') === null) {
@@ -353,10 +308,13 @@ usingApiKey()
 							entry.innerText = rf.folder;
 							select.appendChild(entry);
 						});
-						toggle.setAttribute('checked', '');
+						toggle.checked = true;
+						renderLibraryView(api_key);
 					});
-				} else
-					toggle.setAttribute('checked', '');
+				} else {
+					toggle.checked = true;
+					renderLibraryView(api_key);
+				}
 			}
 		};
 	library_els.mass_edit.bar.querySelectorAll('.action-divider > button[data-action]').forEach(
@@ -395,15 +353,7 @@ usingApiKey()
 
 	socket_ready.then(socket => socket.on(
 		'downloaded_status',
-		data => {
-			const inst = new LibraryEntry(data.volume_id, api_key);
-			if (inst.list_entry === null)
-				return;
-			const new_progress = inst.getProgress();
-			new_progress[0] += data.downloaded_issues.length
-							- data.not_downloaded_issues.length;
-			inst.setProgressBar(new_progress[0], new_progress[1])
-		}
+		data => updateDownloadedStatus(data, api_key)
 	));
 	// Socket is init after API key so wait for that like this
 	socket_ready.then(socket => socket.on(

@@ -4,6 +4,7 @@
 The matching of files to issues in a volume
 """
 
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from os.path import basename, isdir
 from typing import Dict, List, Set, Tuple, Union
@@ -14,9 +15,9 @@ from backend.base.file_extraction import (extract_filename_data,
                                           refine_special_version)
 from backend.base.files import (create_folder, delete_empty_child_folders,
                                 delete_empty_parent_folders,
+                                filter_scannable_paths,
                                 folder_is_inside_folder, list_files)
-from backend.base.helpers import (extract_year_from_date,
-                                  filtered_iter, force_range)
+from backend.base.helpers import extract_year_from_date, force_range
 from backend.base.logging import LOGGER
 from backend.implementations.matching import file_importing_filter
 from backend.implementations.root_folders import RootFolders
@@ -67,6 +68,7 @@ def scan_files(
 
     volume_issues = volume.get_issues(_skip_files=True)
     volume_issues.sort(key=lambda i: i.calculated_issue_number)
+    issue_numbers = [i.calculated_issue_number for i in volume_issues]
     number_to_year: Dict[float, Union[int, None]] = {
         i.calculated_issue_number: extract_year_from_date(i.date)
         for i in volume_issues
@@ -106,11 +108,14 @@ def scan_files(
 
     new_issue_bindings: Set[Tuple[int, int]] = set()
     new_general_bindings: Dict[int, str] = {}
-    folder_contents = list_files(
-        folder=volume_data.folder,
-        ext=FileConstants.SCANNABLE_EXTENSIONS
+    folder_contents = (
+        filter_scannable_paths(volume_data.folder, filepath_filter)
+        if filepath_filter else list_files(
+            folder=volume_data.folder,
+            ext=FileConstants.SCANNABLE_EXTENSIONS
+        )
     )
-    for file in filtered_iter(folder_contents, set(filepath_filter)):
+    for file in folder_contents:
         if file in manually_matched_files:
             # File already manually matched to issue(s)
             manually_matched_files_found.add(
@@ -186,8 +191,9 @@ def scan_files(
 
             matching_issues = [
                 issue.id
-                for issue in volume_issues
-                if n_start <= issue.calculated_issue_number <= n_end
+                for issue in volume_issues[
+                    bisect_left(issue_numbers, n_start):bisect_right(issue_numbers, n_end)
+                ]
             ]
 
             if matching_issues:
