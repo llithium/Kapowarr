@@ -47,6 +47,17 @@ translation_regex = compile(
 headers = {'h2', 'h3', 'h4', 'h5', 'h6'}
 lists = {'ul', 'ol'}
 
+# ComicVine does not consistently populate the deck field that normally
+# identifies a series' editorial volume number. Keep verified exceptions keyed
+# by ComicVine's stable volume ID so similarly named series cannot collide.
+_comicvine_volume_number_overrides = {
+    4363: 3,   # Green Lantern (1990)
+    18216: 4,  # Green Lantern (2005)
+    26374: 3,  # Gen 13 (2002)
+    18560: 4,  # Gen 13 (2006)
+    60768: 2,  # Aphrodite IX (2013)
+}
+
 
 class _ComicVineRequestGate:
     """Serialize and pace ComicVine API calls across asyncio event loops.
@@ -206,6 +217,26 @@ def _normalise_metadata_text(value: str) -> str:
     so titles, aliases, publishers and issue titles remain stable.
     """
     return ' '.join(normalise_string(value).split())
+
+
+def _get_comicvine_volume_number(
+    comicvine_id: int,
+    deck: Union[str, None]
+) -> int:
+    """Return a volume number from a verified ID override or ComicVine deck."""
+    override = _comicvine_volume_number_overrides.get(comicvine_id)
+    if override is not None:
+        return override
+
+    volume_result = volume_regex.search(deck or '')
+    if volume_result:
+        volume_number = force_range(extract_volume_number(
+            volume_result.group(1)
+        ))[0]
+        if volume_number is not None:
+            return volume_number
+
+    return 1
 
 
 class ComicVine:
@@ -380,16 +411,10 @@ class ComicVine:
         Returns:
             VolumeMetadata: The formatted data.
         """
-        # Determine volume number
-        volume_result = volume_regex.search(volume_data['deck'] or '')
-        if volume_result:
-            volume_number = force_range(extract_volume_number(
-                volume_result.group(1)
-            ))[0]
-            if volume_number is None:
-                volume_number = 1
-        else:
-            volume_number = 1
+        volume_number = _get_comicvine_volume_number(
+            int(volume_data['id']),
+            volume_data['deck']
+        )
 
         # Determine description
         description = _clean_description(volume_data['description'])
