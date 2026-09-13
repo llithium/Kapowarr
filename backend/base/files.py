@@ -8,8 +8,8 @@ import ctypes
 from collections import deque
 from ctypes import wintypes
 from datetime import datetime
-from os import chmod, listdir, makedirs, remove, scandir, utime
-from os.path import (abspath, basename, commonpath, dirname, isdir,
+from os import chmod, listdir, makedirs, remove, rmdir, scandir, utime
+from os.path import (abspath, basename, commonpath, dirname, exists, isdir,
                      isfile, join, relpath, samefile, sep, splitext)
 from re import compile
 from shutil import chown, copy2, copytree, move, rmtree
@@ -852,6 +852,37 @@ def rename_file(
 
     # Move file into folder
     move(before, after, copy_function=__copy2)
+
+    return
+
+
+def move_folder_contents(source: str, destination: str) -> None:
+    """Merge residual folder contents into a new location without overwrites.
+
+    Registered comic files are moved separately so their database paths can be
+    updated. This carries unregistered sidecars along afterward.
+    """
+    if not isdir(source):
+        return
+
+    create_folder(destination)
+    for entry in scandir(source):
+        target = join(destination, entry.name)
+        if not exists(target):
+            rename_file(entry.path, target)
+        elif entry.is_dir(follow_symlinks=False) and isdir(target):
+            move_folder_contents(entry.path, target)
+        else:
+            LOGGER.warning(
+                'Leaving residual volume file at %s because %s already exists',
+                entry.path, target
+            )
+
+    try:
+        rmdir(source)
+    except OSError:
+        # A conflicting file or a concurrently-created sidecar remains.
+        pass
 
     return
 

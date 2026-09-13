@@ -26,7 +26,7 @@ from backend.base.files import (clean_filepath_simple, clean_filepath_smartly,
                                 clean_filestring_smartly,
                                 delete_empty_child_folders,
                                 delete_empty_parent_folders, list_files,
-                                rename_file)
+                                move_folder_contents, rename_file)
 from backend.base.helpers import (extract_year_from_date,
                                   filtered_iter, force_range)
 from backend.base.logging import LOGGER
@@ -34,6 +34,7 @@ from backend.implementations.file_processing import mass_process_files
 from backend.implementations.matching import file_importing_filter, match_title
 from backend.implementations.root_folders import RootFolders
 from backend.implementations.volumes import Issue, Volume
+from backend.internals.db import get_db
 from backend.internals.db_models import FilesDB
 from backend.internals.server import TaskStatusEvent, WebSocket
 from backend.internals.settings import Settings, System
@@ -888,6 +889,15 @@ def mass_rename(
             rename_file(before, after)
 
     FilesDB.update_filepaths(renames)
+
+    if (
+        new_volume_folder
+        and get_db().execute(
+            'SELECT 1 FROM volumes WHERE folder = ? LIMIT 1;',
+            (volume_data.folder,)
+        ).exists() is None
+    ):
+        move_folder_contents(volume_data.folder, new_volume_folder)
 
     if renames:
         delete_empty_child_folders(volume_data.folder, skip_hidden_folders=True)

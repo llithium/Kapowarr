@@ -31,7 +31,7 @@ from backend.base.files import (change_basefolder, create_folder,
                                 delete_empty_child_folders,
                                 delete_empty_parent_folders,
                                 delete_file_folder, folder_is_inside_folder,
-                                rename_file)
+                                move_folder_contents, rename_file)
 from backend.base.helpers import (PortablePool, extract_year_from_date,
                                   first_of_subarrays, to_number_cv_id)
 from backend.base.logging import LOGGER
@@ -731,7 +731,8 @@ class Volume:
 
         if not self.__volume_folder_used_by_other_volume(volume_data.folder):
             # Current volume folder is not also used by another volume,
-            # so we can delete it if empty.
+            # so carry unregistered sidecars along and delete it if empty.
+            move_folder_contents(volume_data.folder, new_folder)
             delete_empty_parent_folders(
                 volume_data.folder,
                 current_root_folder
@@ -798,6 +799,12 @@ class Volume:
         if Settings().sv.create_empty_volume_folders:
             create_folder(new_volume_folder)
 
+        folder_is_shared = self.__volume_folder_used_by_other_volume(
+            current_volume_folder
+        )
+        if not folder_is_shared:
+            move_folder_contents(current_volume_folder, new_volume_folder)
+
         # Delete old folder if possible
         if isdir(new_volume_folder) and folder_is_inside_folder(
             new_volume_folder, current_volume_folder
@@ -809,9 +816,7 @@ class Volume:
                 new_volume_folder
             )
 
-        elif not self.__volume_folder_used_by_other_volume(
-            current_volume_folder
-        ):
+        elif not folder_is_shared:
             # Current volume folder is not also used by another volume,
             # so we can delete it if empty.
             delete_empty_parent_folders(
