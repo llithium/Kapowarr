@@ -7,7 +7,7 @@ import backend.base.files as files_module
 from backend.base.custom_exceptions import ExternalClientNotFound
 from backend.base.definitions import DownloadType, FileDate, OSType
 from backend.base.files import set_file_date
-from backend.implementations.external_clients import ExternalClients
+from backend.implementations.external_client_manager import ExternalClients
 from backend.implementations.file_processing import mass_set_file_date
 
 
@@ -101,7 +101,7 @@ class BackendCleanup(unittest.TestCase):
         ''')
 
         with patch(
-            'backend.implementations.external_clients.get_db',
+        'backend.implementations.external_client_manager.get_db',
             return_value=connection
         ), patch.object(
             ExternalClients, 'get_client', side_effect=lambda client_id: client_id

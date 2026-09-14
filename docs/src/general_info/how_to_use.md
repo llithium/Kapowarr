@@ -90,7 +90,7 @@ This section covers searching for, and downloading, files for issues.
 
 The button 'Search Monitored' will make Kapowarr try to download media files for issues that aren't downloaded yet. This button only does something if the volume is monitored and at least one of its monitored issues doesn't have a file yet. It will try to find a download for as many issues as possible, but it isn't guaranteed that it will always find a matching and working download.
 
-On the library page, the button 'Search All' will trigger a 'Search Monitored' for all monitored volumes. A search is done automatically every 24 hours by default, but you can also trigger it manually.
+Kapowarr regularly checks whether new downloads are available for missing issues (through RSS Sync) and automatically downloads them if so. This only works for newly available downloads, and newly available downloads are most often for newly released issues. So if you have a volume with issues that were released some time ago, then manually trigger a Search Monitored to make Kapowarr find downloads for those old issues.
 
 ### Manual Search
 
@@ -98,6 +98,6 @@ The button 'Manual Search' will show you a list of search results for the volume
 
 ### Download Queue and Post Processing
 
-When a download is added to the queue, you can see it on the Activity -> Queue page. When a download is complete, it will enter post-download processing (a.k.a. post-processing). Entirely depending on your configuration, the file could be renamed, converted to a different format and/or be extracted (if it's an archive file with issues inside). It will always be moved from the [download folder](../settings/download.md#direct-download-temporary-folder) to its final destination inside the volume folder.
+When a download is added to the queue, you can see it on the Activity -> Queue page. When a download is complete, it will enter post-download processing (a.k.a. post-processing). Entirely depending on your configuration, the file could be renamed, converted to a different format and/or be extracted (if it's an archive file with issues inside). It will always be moved from the [download folder](../settings/download.md#download-folder) to its final destination inside the volume folder.
 
 When you view the volume after the download, you'll see that the issue now has a check mark on the right, indicating that it has been downloaded.

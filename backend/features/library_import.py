@@ -57,9 +57,16 @@ def create_groups(
     groups: Dict[int, Dict[str, FilenameData]] = {}
 
     for file, file_data in files.items():
+        # Collected editions commonly encode their issue as a volume number;
+        # group consecutive editions together instead of treating each as a
+        # distinct series. Years vary between individual issue filenames.
+        comparison_data = dict(file_data)
+        comparison_data.pop('year', None)
+        if comparison_data.get('issue_number') is None:
+            comparison_data['volume_number'] = None
         match_key = tuple(sorted(
             (key, value)
-            for key, value in file_data.items()
+            for key, value in comparison_data.items()
             if key != 'issue_number'
         ))
         group_idx = group_mapping.get(match_key)
