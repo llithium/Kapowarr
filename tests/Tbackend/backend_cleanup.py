@@ -92,17 +92,24 @@ class BackendCleanup(unittest.TestCase):
         self.addCleanup(connection.close)
         connection.executescript('''
             CREATE TABLE external_download_clients (
-                id INTEGER PRIMARY KEY, download_type INT
+                id INTEGER PRIMARY KEY, download_type INT, enabled BOOLEAN
             );
             CREATE TABLE download_queue (id INTEGER PRIMARY KEY,
                 external_client_id INT);
-            INSERT INTO external_download_clients VALUES (1, 2), (2, 2);
+            INSERT INTO external_download_clients VALUES (1, 2, 1), (2, 2, 1);
             INSERT INTO download_queue VALUES (10, 1);
         ''')
 
+        db = Mock()
+        db.execute.side_effect = lambda *args: SimpleNamespace(
+            exists=lambda: (lambda row: row[0] if row else None)(
+                connection.execute(*args).fetchone()
+            )
+        )
+
         with patch(
         'backend.implementations.external_client_manager.get_db',
-            return_value=connection
+            return_value=db
         ), patch.object(
             ExternalClients, 'get_client', side_effect=lambda client_id: client_id
         ):
