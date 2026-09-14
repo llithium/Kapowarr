@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from unicodedata import normalize
 
@@ -69,6 +70,16 @@ class HiddenSidecarFiltering(unittest.TestCase):
         )
         child = normalize('NFD', base) + '/Wonder Woman 001.cbz'
         self.assertTrue(folder_is_inside_folder(base, child))
+
+    def test_folder_comparison_confirms_case_alias_with_filesystem(self):
+        base = '/comics/Vampirella Versus Red Sonja/Volume 01 (2024)'
+        child = (
+            '/comics/Vampirella versus Red Sonja/Volume 01 (2024)/'
+            'Vampirella 001.cbr'
+        )
+        with patch('backend.base.files.samefile', return_value=True) as same:
+            self.assertTrue(folder_is_inside_folder(base, child))
+        same.assert_called_once()
 
 
 if __name__ == '__main__':

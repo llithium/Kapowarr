@@ -244,6 +244,37 @@ class LibraryImportScanErrors(unittest.TestCase):
             with self.assertRaises(InvalidKeyValue):
                 propose_library_import()
 
+    def test_managed_folder_case_alias_is_excluded(self):
+        scanned = (
+            '/comics/Vampirella versus Red Sonja/Volume 01 (2024)/'
+            'Vampirella 001.cbr'
+        )
+        stored = (
+            '/comics/Vampirella Versus Red Sonja/Volume 01 (2024)'
+        )
+        volume = SimpleNamespace(vd=SimpleNamespace(folder=stored))
+
+        with patch(
+            'backend.features.library_import.RootFolders.get_folder_list',
+            return_value=['/comics']
+        ), patch(
+            'backend.features.library_import.list_files',
+            return_value=[scanned]
+        ), patch(
+            'backend.features.library_import.FilesDB.fetch', return_value=[]
+        ), patch(
+            'backend.features.library_import.Library.get_volumes',
+            return_value=[843]
+        ), patch(
+            'backend.features.library_import.Library.get_volume',
+            return_value=volume
+        ), patch(
+            'backend.base.files.samefile', return_value=True
+        ):
+            result = propose_library_import()
+
+        self.assertEqual(result, [])
+
 
 class ImportSourceFolderHandling(unittest.TestCase):
     def test_flat_staging_folder_with_multiple_volumes_is_shared(self):

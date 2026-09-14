@@ -182,7 +182,20 @@ def folder_is_inside_folder(
     # so e.g. `Pérez` and its decomposed on-disk representation are equivalent.
     folder_path = force_suffix(normalize('NFC', abspath(folder)))
     base_path = force_suffix(normalize('NFC', abspath(base_folder)))
-    return folder_path.startswith(base_path)
+    if folder_path.startswith(base_path):
+        return True
+
+    # A case-insensitive filesystem can return the on-disk spelling from a
+    # directory scan while the database retains the spelling originally used
+    # to register the folder. Only pay for a filesystem lookup when the paths
+    # are otherwise identical, then let the filesystem confirm the alias.
+    if not folder_path.casefold().startswith(base_path.casefold()):
+        return False
+
+    try:
+        return samefile(base_path, folder_path[:len(base_path)])
+    except OSError:
+        return False
 
 
 def are_folders_colliding(
