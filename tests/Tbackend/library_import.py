@@ -320,6 +320,50 @@ class PublicLibraryImportFlow(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+    def test_already_tracked_proposal_keeps_legacy_conflict_label(self):
+        file_data = {
+            'series': 'Batman', 'year': 1940, 'volume_number': 1,
+            'special_version': None, 'issue_number': 1.0, 'annual': False
+        }
+        metadata = {
+            'series': 'Batman', 'year': 1940, 'issue_number': '1',
+            'comicvine_volume_id': 796, 'comicvine_issue_id': 9001
+        }
+        volume_data = SimpleNamespace(
+            folder=self.destination, comicvine_id=796, title='Batman',
+            alt_title=None, year=1940, volume_number=1,
+            publisher='DC Comics', site_url='https://example.invalid/796'
+        )
+        issue = SimpleNamespace(
+            comicvine_id=9001, calculated_issue_number=1.0,
+            date='1940-04-25', files=[{'filepath': '/registered/Batman.cbz'}]
+        )
+        volume = SimpleNamespace(
+            vd=volume_data, get_issues=lambda *_args, **_kwargs: [issue]
+        )
+
+        with patch(
+            'backend.features.library_import.RootFolders.get_folder_list',
+            return_value=[self.root]
+        ), patch(
+            'backend.features.library_import.FilesDB.fetch', return_value=[]
+        ), patch(
+            'backend.features.library_import.extract_filename_data',
+            return_value=file_data
+        ), patch(
+            'backend.features.library_import.read_comicinfo',
+            return_value=metadata
+        ), patch(
+            'backend.features.library_import.Library.get_volumes',
+            return_value=[11]
+        ), patch(
+            'backend.features.library_import.Library.get_volume',
+            return_value=volume
+        ):
+            result = propose_library_import()
+
+        self.assertEqual(result[0]['conflict']['label'], 'Already present')
+
     def test_import_moves_files_for_existing_volume_and_runs_rename(self):
         root_folder = SimpleNamespace(folder=self.root, id=7)
         volume = SimpleNamespace(vd=SimpleNamespace(folder=self.destination))

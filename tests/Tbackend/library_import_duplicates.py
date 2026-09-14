@@ -34,6 +34,7 @@ class ExistingImportFiltering(unittest.TestCase):
             conflict = _preview_import_conflict({filepath: file_data()}, 12)
 
         self.assertEqual(conflict, {
+            'label': 'Already present',
             'message': (
                 'A file with this name is already in the Kapowarr volume '
                 'folder. It will not be imported.'
