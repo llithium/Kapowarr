@@ -15,7 +15,7 @@ from flask import Flask
 
 from backend.base.custom_exceptions import (InvalidComicVineApiKey,
                                             TaskNotDeletable, TaskNotFound)
-from backend.base.helpers import Singleton, get_subclasses
+from backend.base.helpers import Singleton, get_schedules_next_run, get_subclasses
 from backend.base.logging import LOGGER
 from backend.features.download_queue import DownloadHandler
 from backend.features.search_full import auto_search
@@ -496,6 +496,22 @@ class SearchAll(Task):
 # =====================
 # Task handling
 # =====================
+TASK_INTERVALS = {
+    'update_all': '0 * * * *',
+    'backup_db': '0 0 * * 1',
+    'rss_sync': '0,30 * * * *'
+}
+
+
+def insert_task_intervals() -> None:
+    """Seed upstream's cron-based task schedule table on first startup."""
+    get_db().executemany(
+        'INSERT OR IGNORE INTO task_intervals VALUES (?, ?, ?);',
+        ((name, schedule, get_schedules_next_run(schedule))
+         for name, schedule in TASK_INTERVALS.items())
+    )
+
+
 # Maps action attr to class for all tasks
 # Only works for classes that directly inherit from Task
 task_library: Dict[str, Type[Task]] = {
