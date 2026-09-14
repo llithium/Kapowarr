@@ -344,6 +344,12 @@ test('library import foregrounds scan scope and groups advanced options', () => 
 	assert.match(html, /<button id="run-import-button">Review matches<\/button>/);
 });
 
+test('library import displays the specific conflict label from the scan', () => {
+	const source = read('frontend/static/js/library_import.js');
+	assert.match(source, /match_details\.innerText = result\.conflict\.label/);
+	assert.doesNotMatch(source, /match_details\.innerText = 'Already present'/);
+});
+
 test('cover cards preserve the full artwork for real comic cover ratios', () => {
 	const css = read('frontend/static/css/workspace.css');
 	const coverRule = css.match(/\.list-img\s*\{[^}]+\}/)?.[0] ?? '';
