@@ -462,7 +462,7 @@ function loadProposal(api_key) {
 				checkbox.disabled = true;
 				edit_button.disabled = true;
 				edit_button.title = result.conflict.message;
-				match_details.innerText = result.conflict.label;
+				match_details.innerText = 'Already present';
 				match_details.title = result.conflict.message;
 			} else {
 				match_details.innerText = match_text;

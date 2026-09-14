@@ -414,7 +414,6 @@ def _preview_import_conflict(
         destination = join(volume_folder, basename(filepath))
         if abspath(filepath) != abspath(destination) and exists(destination):
             return {
-                'label': 'File already exists',
                 'message': (
                     'A file with this name is already in the Kapowarr '
                     'volume folder. It will not be imported.'
@@ -689,7 +688,6 @@ def propose_library_import(
                     group_number, existing_volume_id
                 )
                 group_conflicts[group_number] = {
-                    'label': 'Already imported',
                     'message': (
                         'This ComicInfo.xml issue is already linked to the '
                         'matched Kapowarr volume. It will not be imported.'
