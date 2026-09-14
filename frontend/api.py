@@ -27,7 +27,7 @@ from backend.features.download_queue import (DownloadHandler,
                                              get_download_history)
 from backend.features.library_import import (import_library,
                                              propose_library_import)
-from backend.features.mass_edit import MassEditorActionManager
+from backend.features.mass_edit import run_mass_editor_action
 from backend.features.search_full import manual_search
 from backend.features.tasks import (TaskHandler, delete_task_history,
                                     get_task_history)
@@ -1678,7 +1678,7 @@ def api_mass_editor():
     if not isinstance(args, dict):
         raise InvalidKeyValue('args', args)
 
-    MassEditorActionManager.run_action(
+    run_mass_editor_action(
         action, volume_ids, **args
     )
     return return_api({})

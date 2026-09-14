@@ -24,6 +24,19 @@ U = TypeVar("U")
 FileConverter = Callable[[str], List[str]]
 
 
+class MassEditorAction(ABC):
+    """Base contract retained by the fork's mass-editor actions."""
+
+    identifier: str
+
+    def __init__(self, volume_ids: List[int]) -> None:
+        self.volume_ids = volume_ids
+
+    @abstractmethod
+    def run(self, **kwargs: Any) -> None:
+        ...
+
+
 # region Constants
 class Constants:
     MIN_PYTHON_VERSION = (3, 8, 0)
