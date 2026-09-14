@@ -10,8 +10,8 @@ from __future__ import annotations
 from multiprocessing import SimpleQueue
 from os import urandom
 from threading import Thread, Timer
-from typing import (TYPE_CHECKING, Any, Callable, Dict,
-                    Iterable, List, Mapping, Union)
+from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable,
+                    List, Mapping, Type, TypeVar, Union)
 
 from flask import Flask, render_template, request
 from flask.json.provider import DefaultJSONProvider
@@ -29,6 +29,7 @@ from backend.base.logging import LOGGER, setup_logging
 from backend.internals.db import (DBConnectionManager, close_db,
                                   set_db_location,
                                   setup_db_adapters_and_converters)
+from backend.internals.db_backup_import import revert_db_import
 from backend.internals.settings import Settings
 
 if TYPE_CHECKING:
@@ -591,7 +592,31 @@ class DownloadedStatusEvent(WebSocketEvent):
         }
 
 
+class StatusCountEvent(WebSocketEvent):
+    "The number of active status issues has changed"
+
+    def __init__(self, count: int) -> None:
+        """Create the event.
+
+        Args:
+            count (int): The total number of active status types.
+        """
+        self.count = count
+        return
+
+    def get_type(self) -> WebSocketEventType:
+        return WebSocketEventType.STATUS_COUNT
+
+    def get_body(self) -> Dict[str, Any]:
+        return {
+            "count": self.count
+        }
+
+
 # region StartType Handling
+StartTypeHandlerType = TypeVar("StartTypeHandlerType", bound=StartTypeHandler)
+
+
 class StartTypeHandlers:
     handlers: dict[StartType, StartTypeHandler] = {}
     timeout_thread: Union[Timer, None] = None
@@ -609,19 +634,33 @@ class StartTypeHandlers:
 
         Args:
             start_type (StartType): The start type that the handler is for.
+
+        Raises:
+            RuntimeError: A start type handler with the given start type is
+                already registered.
         """
         def wrapper(
-            handler_class: type[StartTypeHandler]
-        ) -> type[StartTypeHandler]:
+            handler_class: Type[StartTypeHandlerType]
+        ) -> Type[StartTypeHandlerType]:
+            if start_type in cls.handlers:
+                raise RuntimeError(
+                    f"Start type handler with start type {start_type.name} "
+                    "registered multiple times"
+                )
             cls.handlers[start_type] = handler_class()
             return handler_class
         return wrapper
 
     @staticmethod
     def _on_timeout_wrapper(
+        handler_description: str,
         on_timeout: Callable[[], None],
         restart_on_timeout: bool
     ) -> None:
+        LOGGER.info(
+            "Timer for %s expired",
+            handler_description
+        )
         on_timeout()
         if restart_on_timeout:
             Server().restart()
@@ -646,7 +685,11 @@ class StartTypeHandlers:
             interval=handler.timeout,
             target=cls._on_timeout_wrapper,
             name=f"StartTypeHandler.{start_type.name}",
-            args=(handler.on_timeout, handler.restart_on_timeout)
+            args=(
+                handler.description,
+                handler.on_timeout,
+                handler.restart_on_timeout
+            )
         )
         cls.timeout_thread.start()
         LOGGER.info(
@@ -665,16 +708,18 @@ class StartTypeHandlers:
         if cls.running_handler != start_type:
             return
 
-        if not (cls.timeout_thread and cls.timeout_thread.is_alive()):
+        timeout_thread = cls.timeout_thread
+        if not (timeout_thread and timeout_thread.is_alive()):
             return
+
+        timeout_thread.cancel()
+        cls.timeout_thread = None
 
         handler = cls.handlers[start_type]
         LOGGER.info(
             "Timer for %s diffused",
             handler.description
         )
-        cls.timeout_thread.cancel()
-        cls.timeout_thread = None
         cls.running_handler = None
         handler.on_diffuse()
         return
@@ -691,6 +736,21 @@ class HostingChangesHandler(StartTypeHandler):
         return
 
     def on_diffuse(self) -> None:
+        return
+
+
+@StartTypeHandlers.register_handler(StartType.RESTART_DB_CHANGES)
+class DatabaseChangesHandler(StartTypeHandler):
+    description = "database import"
+    timeout = Constants.DB_REVERT_TIME
+    restart_on_timeout = True
+
+    def on_timeout(self) -> None:
+        revert_db_import(swap=True)
+        return
+
+    def on_diffuse(self) -> None:
+        revert_db_import(swap=False)
         return
 
 

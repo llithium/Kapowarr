@@ -15,8 +15,7 @@ const library_els = {
 		filter: document.querySelector('#filter-button')
 	},
 	task_buttons: {
-		update_all: document.querySelector('#updateall-button'),
-		search_all: document.querySelector('#searchall-button')
+		update_all: document.querySelector('#updateall-button')
 	},
 	search: {
 		clear: document.querySelector('#clear-search'),
@@ -213,7 +212,7 @@ function fetchStats(api_key) {
 		library_els.stats.file_count.innerText = json.result.files;
 		library_els.stats.total_file_size.innerText =
 			json.result.total_file_size > 0
-			? convertSize(json.result.total_file_size)
+			? convertSize(json.result.total_file_size, 2)
 			: '0 MB';
 	});
 };
@@ -273,8 +272,6 @@ usingApiKey()
 			'cmd': 'update_all',
 			'allow_skipping': false
 		});
-	library_els.task_buttons.search_all.onclick =
-		e => sendAPI('POST', '/system/tasks', api_key, {}, {'cmd': 'search_all'});
 
 	library_els.view_options.sort.onchange = e => {
 		setLocalStorage({'lib_sorting': library_els.view_options.sort.value});

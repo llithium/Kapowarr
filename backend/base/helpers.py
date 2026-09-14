@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from asyncio import sleep
 from base64 import urlsafe_b64encode
-from collections import deque
+from datetime import datetime
 from functools import lru_cache
 from hashlib import pbkdf2_hmac
 from multiprocessing.pool import Pool
@@ -25,6 +25,7 @@ from urllib.parse import quote_plus, unquote
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 from bencoding import bdecode
+from cron_converter import Cron
 from multidict import CIMultiDict, CIMultiDictProxy
 from requests import RequestException, Session as RSession
 from requests.adapters import HTTPAdapter, Retry
@@ -220,54 +221,16 @@ def run_rar(args: List[str]) -> CompletedProcess[str]:
 
 
 # region Helpers
-def get_subclasses(
-    *classes: Type[T],
-    include_self: bool = False,
-    recursive: bool = True,
-    only_leafs: bool = False
-) -> List[Type[T]]:
-    """Get subclasses of the given classes.
-
-    Args:
-        *classes (Type[T]): The classes to get subclasses from.
-
-        include_self (bool, optional): Whether to include the classes themselves.
-            Defaults to False.
-
-        recursive (bool, optional): Whether to get all subclasses recursively.
-            Defaults to True.
-
-        only_leafs (bool, optional): Whether to only return leaf classes.
-            Defaults to False.
-
-    Returns:
-        List[Type[T]]: The subclasses.
-    """
-    result: List[Type[T]] = []
-    if include_self:
-        result.extend(classes)
-
-    if not recursive:
-        result.extend((
-            subclass
-            for current in classes
-            for subclass in current.__subclasses__()
-        ))
-        return result
-
-    to_do = deque(classes)
-    while to_do:
-        current = to_do.popleft()
-        subclasses = current.__subclasses__()
-        if subclasses:
-            to_do.extend(subclasses)
-            if not only_leafs and current not in classes:
-                result.append(current)
-        else:
-            result.append(current)
-
-    return result
-
+def get_subclasses(*classes, include_self=False, recursive=True, only_leafs=False):
+    """Compatibility traversal for fork modules during the upstream migration."""
+    result = list(classes) if include_self else []
+    pending = list(classes)
+    while pending:
+        children = pending.pop().__subclasses__()
+        result.extend(children)
+        if recursive:
+            pending.extend(children)
+    return [c for c in result if not only_leafs or not c.__subclasses__()]
 
 def check_filter(element: T, element_filter: Collection[T]) -> bool:
     """Check if `element` is in `element_filter`, but only if `element_filter`
@@ -356,6 +319,20 @@ def get_torrent_info(torrent: bytes) -> Dict[bytes, Any]:
         Dict[bytes, Any]: The info.
     """
     return bdecode(torrent)[b"info"] # type: ignore
+
+
+def get_schedules_next_run(cron_schedule: str) -> int:
+    """Return the next run timestamp from a cron schedule string.
+
+    Args:
+        cron_schedule (str): The cron schedule.
+
+    Returns:
+        int: The epoch timestamp of the next run.
+    """
+    return round(
+        Cron(cron_schedule).schedule(datetime.now()).next().timestamp()
+    )
 
 
 # region Sequences
@@ -526,10 +503,10 @@ def normalise_string(s: str) -> str:
 combining_marks_regex = compile(r'[\u0300-\u036f]')
 
 
-def normalise_query_string(s: str) -> str:
+def fully_normalise_string(s: str) -> str:
     """On top of the standard normalisation of `normalise_string()`, also
-    replace special characters with their ASCII version. E.g. 'æ' to 'ae' and
-    'ō' to 'o'.
+    replace special characters with their ASCII version and remove accents.
+    E.g. 'æ' to 'ae', 'ō' to 'o' and 'é' to 'e'.
 
     Args:
         s (str): Input string.
@@ -611,8 +588,42 @@ def normalise_year(s: str) -> Union[int, None]:
     return None
 
 
+SCALE_SIZES = {
+    'b': 1,
+    'kb': 1000,
+    'mb': 1000000,
+    'gb': 1000000000,
+    'tb': 1000000000000
+}
+
+
+def normalise_size(s: str) -> int:
+    """Turn a user-entered file size string into an integer for byte size.
+
+    Args:
+        s (str): The string containing the file size (e.g. "200 MB").
+
+    Returns:
+        int: The number of bytes that the file size is.
+    """
+    # We remove the i from 'GiB' as it's not
+    # agreed upon which one means what anyway
+    s = s.lower().replace('i', '').strip()
+    for unit, size in SCALE_SIZES.items():
+        if not s.endswith(unit):
+            continue
+
+        n = s.replace(unit, "").strip()
+        try:
+            return int(float(n) * size)
+        except ValueError:
+            continue
+
+    return 0
+
+
 def normalise_base_url(base_url: str) -> str:
-    """Turn user-entered base URL's into a standard format. No trailing slash,
+    """Turn a user-entered base URL into a standard format. No trailing slash,
     and `http://` prefix applied if no protocol is found.
 
     Args:
@@ -861,6 +872,58 @@ class CommaList(list):
         return ','.join(self)
 
 
+class DictKeyedDict(dict):
+    """
+    Normal dict but key is dict.
+    """
+
+    def __convert_dict(self, key: Mapping) -> str:
+        converted_key = ','.join(
+            sorted(key.keys()) + sorted(map(str, key.values()))
+        )
+        return converted_key
+
+    def __getitem__(self, key: Mapping) -> Any:
+        return super().__getitem__(
+            self.__convert_dict(key)
+        )[1]
+
+    def get(self, key: Mapping, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __setitem__(self, key: Mapping, value: Any) -> None:
+        return super().__setitem__(
+            self.__convert_dict(key),
+            (key, value)
+        )
+
+    def setdefault(self, key: Mapping, default: Any = None) -> Any:
+        if key not in self:
+            self[key] = default
+
+        return self[key]
+
+    def __contains__(self, key: object) -> bool:
+        if not isinstance(key, Mapping):
+            return False
+
+        return super().__contains__(
+            self.__convert_dict(key)
+        )
+
+    def keys(self) -> Iterator[Any]: # type: ignore
+        return (v[0] for v in super().values())
+
+    def values(self) -> Iterator[Any]: # type: ignore
+        return (v[1] for v in super().values())
+
+    def items(self) -> Iterator[Tuple[Any, Any]]: # type: ignore
+        return zip(self.keys(), self.values())
+
+
 # region Requests
 @lru_cache(1)
 def _running_urllib3_v2_and_above() -> bool:
@@ -950,9 +1013,9 @@ class Session(RSession):
         stream=None, verify=None,
         cert=None, json=None
     ):
-        ua, cf_cookies = self.fs.get_ua_cookies(url)
+        ua, cf_cookie = self.fs.get_ua_cookies(url)
         self.headers.update({"User-Agent": ua})
-        self.cookies.update(cf_cookies)
+        self.cookies.update({"cf_clearance": cf_cookie})
 
         result = super().request(
             method, url, params, data, headers,
@@ -1006,7 +1069,8 @@ class AsyncSession(ClientSession):
             timeout=ClientTimeout(
                 connect=Constants.REQUEST_TIMEOUT,
                 sock_read=Constants.REQUEST_TIMEOUT
-            )
+            ),
+            trust_env=True
         )
 
         self.fs = FlareSolverr()
@@ -1017,9 +1081,9 @@ class AsyncSession(ClientSession):
         method, url = args[0], args[1]
         sleep_time = Constants.BACKOFF_FACTOR_RETRIES
 
-        ua, cf_cookies = self.fs.get_ua_cookies(url)
+        ua, cf_cookie = self.fs.get_ua_cookies(url)
         self.headers.update({"User-Agent": ua})
-        self.cookie_jar.update_cookies(cf_cookies)
+        self.cookie_jar.update_cookies({"cf_clearance": cf_cookie})
 
         for round in range(1, Constants.TOTAL_RETRIES + 1):
             try:
@@ -1085,8 +1149,8 @@ class AsyncSession(ClientSession):
     async def get_text(
         self,
         url: str,
-        params: Union[Dict[str, Any], None] = None,
-        headers: Union[Dict[str, Any], None] = None,
+        params: Dict[str, Any] = {},
+        headers: Dict[str, Any] = {},
         quiet_fail: bool = False
     ) -> str:
         """Fetch a page and return the body.
@@ -1095,10 +1159,10 @@ class AsyncSession(ClientSession):
             url (str): The URL to fetch from.
 
             params (Dict[str, Any], optional): Any additional params.
-                Defaults to None.
+                Defaults to {}.
 
             headers (Dict[str, Any], optional): Any additional headers.
-                Defaults to None.
+                Defaults to {}.
 
             quiet_fail (bool, optional): If True, don't raise an exception
                 if the request fails. Return an empty string instead.
@@ -1111,9 +1175,7 @@ class AsyncSession(ClientSession):
             str: The body of the response.
         """
         try:
-            async with self.get(
-                url, params=params or {}, headers=headers or {}
-            ) as response:
+            async with self.get(url, params=params, headers=headers) as response:
                 return await response.text()
 
         except ClientError:
@@ -1124,8 +1186,8 @@ class AsyncSession(ClientSession):
     async def get_content(
         self,
         url: str,
-        params: Union[Dict[str, Any], None] = None,
-        headers: Union[Dict[str, Any], None] = None,
+        params: Dict[str, Any] = {},
+        headers: Dict[str, Any] = {},
         quiet_fail: bool = False
     ) -> bytes:
         """Fetch a page and return the content in bytes.
@@ -1134,10 +1196,10 @@ class AsyncSession(ClientSession):
             url (str): The URL to fetch from.
 
             params (Dict[str, Any], optional): Any additional params.
-                Defaults to None.
+                Defaults to {}.
 
             headers (Dict[str, Any], optional): Any additional headers.
-                Defaults to None.
+                Defaults to {}.
 
             quiet_fail (bool, optional): If True, don't raise an exception
                 if the request fails. Return an empty bytestring instead.
@@ -1150,9 +1212,7 @@ class AsyncSession(ClientSession):
             bytes: The content of the response.
         """
         try:
-            async with self.get(
-                url, params=params or {}, headers=headers or {}
-            ) as response:
+            async with self.get(url, params=params, headers=headers) as response:
                 return await response.content.read()
 
         except ClientError:
@@ -1283,10 +1343,10 @@ def _create_context(
     return
 
 
-def _pool_apply_func(args=(), kwds=None):
+def _pool_apply_func(args=(), kwds={}):
     func, value = args
     with context():
-        return func(*value, **(kwds or {}))
+        return func(*value, **kwds)
 
 
 def _pool_map_func(func_value):
@@ -1328,7 +1388,7 @@ class PortablePool(Pool):
         log_filepath = get_log_filepath()
         log_folder = dirname(log_filepath)
         log_file = basename(log_filepath)
-        db_folder = dirname(DBConnection.file)
+        db_folder = dirname(DBConnection.default_file)
         ws_queue = WebSocket().client_manager.queue
 
         super().__init__(
@@ -1348,24 +1408,24 @@ class PortablePool(Pool):
         self,
         func: Callable[..., U],
         args: Iterable[Any] = (),
-        kwds: Union[Mapping[str, Any], None] = None
+        kwds: Mapping[str, Any] = {}
     ) -> U:
         new_args = (func, args)
         new_func = _pool_apply_func
-        return super().apply(new_func, new_args, kwds or {})
+        return super().apply(new_func, new_args, kwds)
 
     def apply_async(
         self,
         func,
         args=(),
-        kwds=None,
+        kwds={},
         callback=None,
         error_callback=None
     ):
         new_args = (func, args)
         new_func = _pool_apply_func
         return super().apply_async(
-            new_func, new_args, kwds or {},
+            new_func, new_args, kwds,
             callback, error_callback
         )
 

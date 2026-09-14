@@ -197,6 +197,11 @@ tbody .issue-title:hover {
 	text-align: center;
 }
 
+#edit-window .window-content {
+	justify-content: flex-start;
+	overflow-x: auto;
+}
+
 #edit-window tbody {
 	vertical-align: text-top;
 }
@@ -214,7 +219,7 @@ tbody .issue-title:hover {
 }
 
 #search-result-table {
-	min-width: 500px;
+	min-width: 550px;
 }
 
 .search-entry {
@@ -243,6 +248,10 @@ tbody .issue-title:hover {
 
 .source-column {
 	width: 6rem;
+}
+
+.size-column {
+	text-wrap-mode: nowrap;
 }
 
 .search-action-column {

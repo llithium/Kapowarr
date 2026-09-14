@@ -6,13 +6,13 @@ This does not disable library management features such as Library Import, Refres
 
 ## Download Location
 
-### Direct Download Temporary Folder
+### Download Folder
 
-This is where the files being downloaded get written to before being processed and moved to the correct location.
+This is the folder that files temporarily get downloaded to before being moved to the final location.
 
 If you run Kapowarr using Docker, leave this set to the default value of `/app/temp_downloads` and instead change the value of `/path/to/download_folder` in the [Docker command](../installation/docker.md#launch-container). If you have a manual install, you can change this value to whatever you want. It is required to be outside your root folders.
 
-### Empty Temporary Download Folder
+### Empty Download Folder
 
 This isn't so much of a setting as it is a tool. It will delete all files from the download folder that aren't actively being downloaded. This can be handy if the application crashed while downloading, leading to half-downloaded 'ghost' files in the folder.  
 
@@ -39,9 +39,3 @@ Make a copy of the downloaded files and post-process those (moving, renaming, co
 ### Delete Completed Downloads
 
 Whether external downloads should be deleted from their client once they have completed. Otherwise leave them in the queue of the external download client as 'completed'.
-
-## Service preference
-
-Kapowarr has the ability to download directly from the servers of GetComics, but also to download from services like MediaFire and Mega. When a download on GetComics is found and  has multiple possible download sources, this defines which source takes priority. If the first download fails, Kapowarr will try the next service in order.
-
-If you have an account for one of these services (see [Credentials](./downloadclients.md#credentials) setting), you might want to put that one at the top, to make Kapowarr take advantage of the extra features that the account offers (extra bandwidth, higher rate limit, etc.).  
