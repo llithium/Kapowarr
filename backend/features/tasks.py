@@ -14,7 +14,8 @@ from typing import Dict, List, Literal, Tuple, Type, TypedDict, Union
 from flask import Flask
 
 from backend.base.custom_exceptions import (InvalidComicVineApiKey,
-                                            TaskNotDeletable, TaskNotFound)
+                                            InvalidKeyValue, TaskNotDeletable,
+                                            TaskNotFound)
 from backend.base.helpers import Singleton, get_schedules_next_run, get_subclasses
 from backend.base.logging import LOGGER
 from backend.features.download_queue import DownloadHandler
@@ -663,7 +664,7 @@ class TaskHandler(metaclass=Singleton):
 
             cursor = get_db()
             interval_tasks = cursor.execute(
-                "SELECT task_name, interval, next_run FROM task_intervals;"
+                "SELECT task_name, schedule, next_run FROM task_intervals;"
             ).fetchall()
             LOGGER.debug(f'Task intervals: {list(map(dict, interval_tasks))}')
             for task in interval_tasks:
@@ -677,8 +678,8 @@ class TaskHandler(metaclass=Singleton):
                         inst = task_class()
                     self.add(inst)
 
-                    # Update next_run
-                    next_run = round(current_time + task['interval'])
+                    # Update next_run from the cron schedule
+                    next_run = get_schedules_next_run(task['schedule'])
                     cursor.execute(
                         "UPDATE task_intervals SET next_run = ? WHERE task_name = ?;",
                         (next_run, task['task_name']))
@@ -698,6 +699,34 @@ class TaskHandler(metaclass=Singleton):
         self.task_interval_waiter = Timer(timedelta, self.__check_intervals)
         self.task_interval_waiter.name = "TaskIntervalThread"
         self.task_interval_waiter.start()
+        return
+
+    def update_task_schedule(
+        self,
+        task_identifier: str,
+        schedule: str
+    ) -> None:
+        """Update the cron schedule for a background task."""
+        if task_identifier not in task_library:
+            raise TaskNotFound(task_identifier)
+
+        try:
+            next_run = get_schedules_next_run(schedule)
+        except ValueError:
+            raise InvalidKeyValue('schedule', schedule)
+
+        get_db().execute(
+            """
+            UPDATE task_intervals
+            SET schedule = ?, next_run = ?
+            WHERE task_name = ?;
+            """,
+            (schedule, next_run, task_identifier)
+        )
+
+        if self.task_interval_waiter:
+            self.task_interval_waiter.cancel()
+        self.handle_intervals()
         return
 
     def stop_handle(self) -> None:
@@ -799,6 +828,32 @@ class TaskHandler(metaclass=Singleton):
         WebSocket().emit(TaskEndedEvent(task['task']))
         return
 
+    def get_task_planning(self) -> List[dict]:
+        """Get each scheduled task's next and most recent run."""
+        tasks = get_db().execute(
+            """
+            SELECT
+                i.task_name, schedule, next_run, run_at AS last_run
+            FROM task_intervals i
+            LEFT JOIN (
+                SELECT
+                    task_name,
+                    MAX(run_at) AS run_at
+                FROM task_history
+                GROUP BY task_name
+            ) h
+            ON i.task_name = h.task_name
+            ORDER BY i.task_name;
+            """
+        ).fetchalldict()
+
+        for task in tasks:
+            task['display_name'] = task_library[
+                task['task_name']
+            ].display_title
+
+        return tasks
+
 
 def get_task_history(offset: int = 0) -> List[dict]:
     """Get the task history in blocks of 50.
@@ -831,31 +886,3 @@ def delete_task_history() -> None:
     LOGGER.info(f'Deleting task history')
     get_db().execute("DELETE FROM task_history;")
     return
-
-
-def get_task_planning() -> List[dict]:
-    """Get the planning of each interval task (interval, next run and last run)
-
-    Returns:
-        List[dict]: List of interval tasks and their planning
-    """
-    tasks = get_db().execute(
-        """
-        SELECT
-            i.task_name, interval, next_run, run_at AS last_run
-        FROM task_intervals i
-        LEFT JOIN (
-            SELECT
-                task_name,
-                MAX(run_at) AS run_at
-            FROM task_history
-            GROUP BY task_name
-        ) h
-        ON i.task_name = h.task_name;
-        """
-    ).fetchalldict()
-
-    for t in tasks:
-        t['display_name'] = task_library[t['task_name']].display_title
-
-    return tasks
