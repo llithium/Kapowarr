@@ -1,7 +1,7 @@
 import sqlite3
 import unittest
 from contextlib import nullcontext
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from backend.features.tasks import TaskHandler
 
@@ -23,6 +23,14 @@ class TaskScheduling(unittest.TestCase):
             "INSERT INTO task_intervals VALUES (?, ?, ?);",
             ('update_all', '0 * * * *', 0)
         )
+        self.db.execute(
+            "INSERT INTO task_intervals VALUES (?, ?, ?);",
+            ('backup_db', '0 0 * * 1', 0)
+        )
+        self.db.execute(
+            "INSERT INTO task_intervals VALUES (?, ?, ?);",
+            ('rss_sync', '0,30 * * * *', 0)
+        )
 
     def tearDown(self) -> None:
         self.db.close()
@@ -38,8 +46,15 @@ class TaskScheduling(unittest.TestCase):
                 patch.object(handler, 'handle_intervals') as reschedule:
             handler._TaskHandler__check_intervals()
 
-        add.assert_called_once()
-        next_run.assert_called_once_with('0 * * * *')
+        self.assertEqual(add.call_count, 3)
+        self.assertEqual(
+            next_run.call_args_list,
+            [
+                call('0 * * * *'),
+                call('0 0 * * 1'),
+                call('0,30 * * * *')
+            ]
+        )
         self.assertEqual(
             self.db.execute(
                 "SELECT next_run FROM task_intervals WHERE task_name = ?;",

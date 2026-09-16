@@ -19,11 +19,13 @@ from backend.base.custom_exceptions import (InvalidComicVineApiKey,
 from backend.base.helpers import Singleton, get_schedules_next_run, get_subclasses
 from backend.base.logging import LOGGER
 from backend.features.download_queue import DownloadHandler
+from backend.features.search_discover import discover_downloads
 from backend.features.search_full import auto_search
 from backend.implementations.conversion import mass_convert
 from backend.implementations.naming import mass_rename
 from backend.implementations.volumes import Volume, refresh_and_scan
 from backend.internals.db import close_db, get_db
+from backend.internals.db_backup_import import backup_database
 from backend.internals.server import (TaskAddedEvent, TaskEndedEvent,
                                       TaskStatusEvent, WebSocket)
 from backend.internals.settings import Settings
@@ -492,6 +494,65 @@ class SearchAll(Task):
                     for result in results
                 ]
         return downloads
+
+
+class BackupDatabase(Task):
+    """Create a backup of the database."""
+
+    stop = False
+    message = ''
+    action = 'backup_db'
+    display_title = 'Database Backup'
+    category = ''
+
+    @property
+    def volume_id(self) -> None:
+        return None
+
+    @property
+    def issue_id(self) -> None:
+        return None
+
+    def __init__(self) -> None:
+        return
+
+    def run(self) -> None:
+        self.message = 'Creating database backup'
+        WebSocket().emit(TaskStatusEvent(self.message))
+        backup_database()
+        return
+
+
+class RssSync(Task):
+    """Discover new releases and queue matching downloads."""
+
+    stop = False
+    message = ''
+    action = 'rss_sync'
+    display_title = 'RSS Sync'
+    category = 'download'
+
+    @property
+    def volume_id(self) -> None:
+        return None
+
+    @property
+    def issue_id(self) -> None:
+        return None
+
+    def __init__(self) -> None:
+        return
+
+    def run(self) -> List[Tuple[str, int, Union[int, None]]]:
+        self.message = 'Performing RSS Sync'
+        WebSocket().emit(TaskStatusEvent(self.message))
+
+        results = discover_downloads()
+        return [
+            (download['link'], volume_id, None)
+            for volume_id, downloads in results.items()
+            for download in downloads
+        ]
 
 
 # =====================
