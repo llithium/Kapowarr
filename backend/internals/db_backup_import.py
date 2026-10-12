@@ -95,11 +95,14 @@ def create_database_copy(folder: str) -> str:
 
 def backup_database() -> None:
     """
-    Create a backup of the database, delete old backups that
-    surpass the backup limit and set timer for next run.
+    Create a database backup and remove copies beyond the retention limit.
+    A zero limit disables backups and preserves existing copies.
     """
     settings = Settings()
     sv = settings.get_settings()
+    if sv.db_backup_amount == 0:
+        return
+
     current_backups = get_backups()
 
     while len(current_backups) >= sv.db_backup_amount:

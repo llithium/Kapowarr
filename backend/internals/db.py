@@ -229,8 +229,6 @@ def set_db_location(
     Raises:
         NotADirectoryError: Value of `db_folder` exists but is not a folder.
     """
-    from backend.internals.settings import SettingsValues
-
     if db_folder:
         if exists(db_folder) and not isdir(db_folder):
             raise NotADirectoryError(db_folder)
@@ -245,7 +243,6 @@ def set_db_location(
     create_folder(dirname(db_file_location))
 
     DBConnection.default_file = db_file_location
-    SettingsValues.db_backup_folder = dirname(db_file_location)
 
     return
 
