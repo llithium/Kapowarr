@@ -25,7 +25,8 @@ jobs:
     # upstream sync workflow is intentionally allowed through so its PRs still
     # receive the full test matrix.
     if: ${{ github.actor != 'github-actions[bot]' || github.head_ref == 'upstream-sync' }}
-    runs-on: ubuntu-latest
+    # Keep Python 3.8/3.9 on an image with compatible setup-python builds.
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
