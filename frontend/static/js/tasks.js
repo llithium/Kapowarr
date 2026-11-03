@@ -159,7 +159,8 @@ function fillHistory(api_key) {
 
 function clearHistory(api_key) {
 	sendAPI('DELETE', '/system/tasks/history', api_key)
-	TaskEls.history.innerHTML = '';
+	.then(() => { TaskEls.history.innerHTML = ''; })
+	.catch(() => alert('Could not clear task history. Please try again.'));
 };
 
 function refreshPage(apiKey) {

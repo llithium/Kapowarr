@@ -9,7 +9,9 @@ from __future__ import annotations
 from functools import lru_cache
 from itertools import chain
 from os import utime
-from os.path import basename, dirname, getmtime, isdir, isfile, join, splitext
+from os.path import (basename, dirname, getmtime, isdir,
+                     isfile, join, lexists, relpath, splitext)
+from tempfile import TemporaryDirectory
 from typing import Dict, List, Set, Tuple, Union
 from zipfile import ZipFile
 
@@ -34,15 +36,19 @@ from backend.internals.settings import Settings, System
 # region Helpers
 def extract_files_from_folder(
     source_folder: str,
-    volume_id: int
+    volume_id: int,
+    parser_source_folder: Union[str, None] = None
 ) -> List[str]:
     """Move files out of the source folder in to the volume folder, but only if
-    they match to the volume. Otherwise they are deleted. The source folder
-    is always deleted afterwards.
+    they match to the volume. Otherwise they are deleted. A destination
+    collision returns an empty list and leaves the source folder intact;
+    successful extraction removes it afterwards.
 
     Args:
         source_folder (str): The folder to extract files out of.
         volume_id (int): The ID of the volume for which the files should be.
+        parser_source_folder (Union[str, None], optional): Logical extraction
+            path to use when parsing filenames. Defaults to the source path.
 
     Returns:
         List[str]: The filepaths of the files that were extracted.
@@ -63,7 +69,9 @@ def extract_files_from_folder(
         # extracted series name is correct, if series name is extracted from
         # foldername.
         efd = extract_filename_data(
-            file.replace(Constants.ARCHIVE_EXTRACT_FOLDER + '_', ''),
+            join(parser_source_folder or source_folder,
+                 relpath(file, source_folder)).replace(
+                     Constants.ARCHIVE_EXTRACT_FOLDER + '_', ''),
             assume_volume_number=False
         )
 
@@ -78,25 +86,24 @@ def extract_files_from_folder(
 
     LOGGER.debug(f'Relevant files: {relevant_files}')
 
-    # Move matching files to main folder and delete source folder
-    # (including non-matching files).
-    result = []
+    # Check every destination before moving anything. A collision could include
+    # the source archive itself, and must leave it intact.
+    moves = []
+    destinations = set()
     for file in relevant_files:
         if file.endswith(FileConstants.IMAGE_EXTENSIONS):
-            dest = join(
-                volume_data.folder,
-                basename(dirname(file)),
-                basename(file)
-            )
-
+            dest = join(volume_data.folder, basename(dirname(file)), basename(file))
         else:
-            dest = join(
-                volume_data.folder,
-                basename(file)
-            )
-
+            dest = join(volume_data.folder, basename(file))
         dest = splitext(dest)[0] + splitext(set_detected_extension(file))[1]
+        if lexists(dest) or dest in destinations:
+            LOGGER.warning("Cannot extract %s: destination already exists: %s", file, dest)
+            return []
+        destinations.add(dest)
+        moves.append((file, dest))
 
+    result = []
+    for file, dest in moves:
         rename_file(file, dest)
         result.append(dest)
 
@@ -311,31 +318,37 @@ def zip_to_rar(file: str) -> List[str]:
         return [file]
 
     volume_folder = Volume(volume_id).vd.folder
-    archive_folder = generate_archive_folder(volume_folder, file)
-
-    with ZipFile(file, 'r') as zip:
-        zip.extractall(archive_folder)
-
-    result = run_rar([
-        'a', # Add files to archive
-        '-ep', # Exclude paths from names
-        '-inul', # Disable all messages
-        splitext(file)[0], # Ext-less target filename of created archive
-        archive_folder # Source folder
-    ])
-
     target_file = splitext(file)[0] + '.rar'
-    if result.returncode != 0 or not isfile(target_file):
-        LOGGER.error(f"Failed to rar up files: Error {result.returncode}")
-        if isfile(target_file):
-            delete_file_folder(target_file)
+    if lexists(target_file):
+        LOGGER.warning("Cannot convert %s: destination already exists: %s", file, target_file)
         return [file]
 
-    delete_file_folder(archive_folder)
-    delete_file_folder(file)
-    delete_empty_parent_folders(dirname(file), volume_folder)
+    with TemporaryDirectory(prefix=".kapowarr-extract-", dir=volume_folder) as staging:
+        archive_folder = join(staging, basename(generate_archive_folder(volume_folder, file)))
 
-    return [target_file]
+        with ZipFile(file, 'r') as zip:
+            zip.extractall(archive_folder)
+
+        result = run_rar([
+            'a', # Add files to archive
+            '-ep', # Exclude paths from names
+            '-inul', # Disable all messages
+            splitext(file)[0], # Ext-less target filename of created archive
+            archive_folder # Source folder
+        ])
+
+        target_file = splitext(file)[0] + '.rar'
+        if result.returncode != 0 or not isfile(target_file):
+            LOGGER.error(f"Failed to rar up files: Error {result.returncode}")
+            if isfile(target_file):
+                delete_file_folder(target_file)
+            return [file]
+
+        delete_file_folder(archive_folder)
+        delete_file_folder(file)
+        delete_empty_parent_folders(dirname(file), volume_folder)
+
+        return [target_file]
 
 
 @ConvertersManager.register_converter("zip", "cbr", supports_32bit=False)
@@ -356,27 +369,33 @@ def zip_to_folder(file: str) -> List[str]:
         return [file]
 
     volume_folder = Volume(volume_id).vd.folder
-    archive_folder = generate_archive_folder(volume_folder, file)
+    with TemporaryDirectory(prefix=".kapowarr-extract-", dir=volume_folder) as staging:
+        archive_folder = join(staging, basename(generate_archive_folder(volume_folder, file)))
 
-    with ZipFile(file, 'r') as zip:
-        zip.extractall(archive_folder)
+        with ZipFile(file, 'r') as zip:
+            zip.extractall(archive_folder)
 
-    resulting_files = extract_files_from_folder(
-        archive_folder,
-        volume_id
-    )
-
-    if resulting_files:
-        scan_files(volume_id, filepath_filter=resulting_files)
-        resulting_files = mass_rename(
+        resulting_files = extract_files_from_folder(
+            archive_folder,
             volume_id,
-            filepath_filter=resulting_files
+            parser_source_folder=join(volume_folder, basename(archive_folder))
         )
 
-    delete_file_folder(file)
-    delete_empty_parent_folders(dirname(file), volume_folder)
+        if resulting_files:
+            scan_files(volume_id, filepath_filter=resulting_files)
+            resulting_files = mass_rename(
+                volume_id,
+                filepath_filter=resulting_files,
+                rename_volume_folder=False
+            )
 
-    return resulting_files
+        if not resulting_files:
+            return [file]
+
+        delete_file_folder(file)
+        delete_empty_parent_folders(dirname(file), volume_folder)
+
+        return resulting_files
 
 
 # region CBZ
@@ -429,39 +448,45 @@ def rar_to_zip(file: str) -> List[str]:
         return [file]
 
     volume_folder = Volume(volume_id).vd.folder
-    archive_folder = generate_archive_folder(volume_folder, file)
-    create_folder(archive_folder)
-
-    result = run_rar([
-        'x', # Extract files with full path
-        '-inul', # Disable all messages
-        file, # Source archive file
-        archive_folder # Target folder to extract into
-    ])
-
-    if result.returncode != 0 or not list_files(archive_folder):
-        LOGGER.error(f"Failed to unrar files: Error {result.returncode}")
-        if isdir(archive_folder):
-            delete_file_folder(archive_folder)
+    target_file = splitext(file)[0] + '.zip'
+    if lexists(target_file):
+        LOGGER.warning("Cannot convert %s: destination already exists: %s", file, target_file)
         return [file]
 
-    # Files that are put in a ZIP file have to have a minimum last
-    # modification time.
-    for f in list_files(archive_folder):
-        if getmtime(f) <= Constants.ZIP_MIN_MOD_TIME:
-            utime(
-                f,
-                (Constants.ZIP_MIN_MOD_TIME, Constants.ZIP_MIN_MOD_TIME)
-            )
+    with TemporaryDirectory(prefix=".kapowarr-extract-", dir=volume_folder) as staging:
+        archive_folder = join(staging, basename(generate_archive_folder(volume_folder, file)))
+        create_folder(archive_folder)
 
-    target_file = splitext(file)[0] + '.zip'
-    create_zip_archive(archive_folder, target_file)
+        result = run_rar([
+            'x', # Extract files with full path
+            '-inul', # Disable all messages
+            file, # Source archive file
+            archive_folder # Target folder to extract into
+        ])
 
-    delete_file_folder(archive_folder)
-    delete_file_folder(file)
-    delete_empty_parent_folders(dirname(file), volume_folder)
+        if result.returncode != 0 or not list_files(archive_folder):
+            LOGGER.error(f"Failed to unrar files: Error {result.returncode}")
+            if isdir(archive_folder):
+                delete_file_folder(archive_folder)
+            return [file]
 
-    return [target_file]
+        # Files that are put in a ZIP file have to have a minimum last
+        # modification time.
+        for f in list_files(archive_folder):
+            if getmtime(f) <= Constants.ZIP_MIN_MOD_TIME:
+                utime(
+                    f,
+                    (Constants.ZIP_MIN_MOD_TIME, Constants.ZIP_MIN_MOD_TIME)
+                )
+
+        target_file = splitext(file)[0] + '.zip'
+        create_zip_archive(archive_folder, target_file)
+
+        delete_file_folder(archive_folder)
+        delete_file_folder(file)
+        delete_empty_parent_folders(dirname(file), volume_folder)
+
+        return [target_file]
 
 
 @ConvertersManager.register_converter("rar", "cbz", supports_32bit=False)
@@ -482,32 +507,46 @@ def rar_to_folder(file: str) -> List[str]:
         return [file]
 
     volume_folder = Volume(volume_id).vd.folder
-    archive_folder = generate_archive_folder(volume_folder, file)
-    create_folder(archive_folder)
+    with TemporaryDirectory(prefix=".kapowarr-extract-", dir=volume_folder) as staging:
+        archive_folder = join(staging, basename(generate_archive_folder(volume_folder, file)))
+        create_folder(archive_folder)
 
-    run_rar([
-        'x', # Extract files with full path
-        '-inul', # Disable all messages
-        file, # Source archive file
-        archive_folder # Target folder to extract into
-    ])
+        result = run_rar([
+            'x', # Extract files with full path
+            '-inul', # Disable all messages
+            file, # Source archive file
+            archive_folder # Target folder to extract into
+        ])
 
-    resulting_files = extract_files_from_folder(
-        archive_folder,
-        volume_id
-    )
+        if result.returncode != 0 or not list_files(archive_folder):
+            LOGGER.error(f"Failed to unrar files: Error {result.returncode}")
+            if isdir(archive_folder):
+                delete_file_folder(archive_folder)
+            return [file]
 
-    if resulting_files:
+        resulting_files = extract_files_from_folder(
+            archive_folder,
+            volume_id,
+            parser_source_folder=join(volume_folder, basename(archive_folder))
+        )
+
+        if not resulting_files:
+            return [file]
+
         scan_files(volume_id, filepath_filter=resulting_files)
         resulting_files = mass_rename(
             volume_id,
-            filepath_filter=resulting_files
+            filepath_filter=resulting_files,
+            rename_volume_folder=False
         )
 
-    delete_file_folder(file)
-    delete_empty_parent_folders(dirname(file), volume_folder)
+        if not resulting_files:
+            return [file]
 
-    return resulting_files
+        delete_file_folder(file)
+        delete_empty_parent_folders(dirname(file), volume_folder)
+
+        return resulting_files
 
 
 # region CBR
@@ -536,6 +575,6 @@ def cbr_to_cbz(file: str) -> List[str]:
     return cbz_file
 
 
-@ConvertersManager.register_converter("cbr", "folder")
+@ConvertersManager.register_converter("cbr", "folder", supports_32bit=False)
 def cbr_to_folder(file: str) -> List[str]:
     return rar_to_folder(file)

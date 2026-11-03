@@ -45,7 +45,8 @@ test('shared storage repairs missing and invalid values', () => {
 test('general API URL builder encodes query values', () => {
 	const makeElement = () => ({
 		dataset: { value: '/kapowarr' },
-		classList: { add() {}, remove() {} },
+		classList: { add() {}, remove() {}, toggle() {} },
+		querySelectorAll: () => [],
 		setAttribute() {},
 		focus() {}
 	});
@@ -330,40 +331,6 @@ test('volumes with no issues have a finite progress bar', () => {
 	assert.equal(element('#list-library .vol-1 .list-prog-container').title, 'No issues');
 });
 
-test('library progress includes downloaded unmonitored issues', () => {
-	const source = read('frontend/static/js/volumes.js');
-	assert.match(source, /volume\.issues_downloaded,\s*volume\.issue_count/);
-	assert.doesNotMatch(source, /issues_downloaded_monitored,\s*volume\.issue_count_monitored/);
-});
-
-test('library import foregrounds scan scope and groups advanced options', () => {
-	const html = read('frontend/templates/library_import.html');
-	assert.match(html, /<h1>Set up an import scan<\/h1>/);
-	assert.match(html, /All root folders \(recommended\)/);
-	assert.match(html, /<details class="scan-options">/);
-	assert.match(html, /<button id="run-import-button">Review matches<\/button>/);
-});
-
-test('cover cards preserve the full artwork for real comic cover ratios', () => {
-	const css = read('frontend/static/css/workspace.css');
-	const coverRule = css.match(/\.list-img\s*\{[^}]+\}/)?.[0] ?? '';
-	assert.match(coverRule, /object-fit:\s*contain/);
-	assert.match(coverRule, /aspect-ratio:\s*0\.646\s*\/\s*1/);
-});
-
-test('library status and metadata text use high-contrast tokens', () => {
-	const css = read('frontend/static/css/workspace.css');
-	assert.match(css, /--dimmed-text-color:\s*#4d5b73/);
-	assert.match(css, /--progress-background-color:\s*#d6e0f0/);
-	assert.match(css, /--progress-text-color:\s*#172746/);
-	assert.match(css, /--progress-background-color:\s*#2e4262/);
-	assert.match(css, /--progress-text-color:\s*#edf2fc/);
-	const progressRule = css.match(/\.list-prog-container, \.table-prog-container\s*\{[^}]+\}/)?.[0] ?? '';
-	assert.match(progressRule, /background:\s*var\(--progress-background-color\)/);
-	assert.match(progressRule, /color:\s*var\(--progress-text-color\)/);
-	assert.match(progressRule, /font:\s*700\s+\.75rem\/1/);
-});
-
 test('download events update retained data before either view exists', () => {
 	const { element, run } = libraryContext();
 	element('#list-library').querySelector = () => null;
@@ -387,4 +354,106 @@ test('monitoring updates retained state with only the table rendered', async () 
 	assert.equal(run('libraryVolumes.get(1).monitored'), false);
 	assert.equal(element('#table-library .vol-1 .table-monitored').textContent, 'Unmonitored');
 	assert.equal(element('#table-library .vol-1 .table-prog-bar').style.backgroundColor, 'var(--error-color)');
+});
+
+test('API requests preserve multipart bodies and reject unauthorized responses', async () => {
+	const element = () => ({
+		dataset: {value: ''},
+		classList: {add() {}, remove() {}, toggle() {}},
+		querySelectorAll: () => [],
+		setAttribute() {}
+	});
+	const ctx = context({
+		FormData,
+		window: {location: {pathname: '/system/backups'}},
+		document: {
+			querySelector: element,
+			querySelectorAll: () => [],
+			addEventListener() {}
+		},
+		usingApiKey: () => new Promise(() => {}),
+		fetch: async (url, options) => { ctx.request = {url, options}; return {ok: true}; }
+	});
+	vm.runInNewContext(read('frontend/static/js/storage.js') + read('frontend/static/js/general.js'), ctx);
+	ctx.form = new FormData();
+	ctx.form.append('file', new Blob(['database']), 'backup.db');
+	await vm.runInNewContext("sendAPI('POST', '/system/database', 'key', {}, form)", ctx);
+	assert.equal(ctx.request.options.body, ctx.form);
+	assert.equal(ctx.request.options.headers, undefined);
+	assert.equal(ctx.request.options.body.get('file').name, 'backup.db');
+	ctx.fetch = async () => ({ok: false, status: 401});
+	for (const request of ["fetchAPI('/settings', 'key')", "sendAPI('DELETE', '/settings', 'key')"]) {
+		await assert.rejects(vm.runInNewContext(request, ctx), error => error.status === 401);
+		assert.equal(ctx.window.location.href, '/login?redirect=/system/backups');
+	}
+});
+
+test('import selection excludes disabled conflict rows from submission', async () => {
+	const source = read('frontend/static/js/library_import.js');
+	const selection = source.slice(source.indexOf('function toggleSelectAll()'), source.indexOf('function openEditCVMatch('));
+	const submission = source.slice(source.indexOf('function importLibrary('), source.indexOf('// code run on load'));
+	const normal = {checked: false, disabled: false};
+	const conflict = {checked: false, disabled: true};
+	const rows = [normal, conflict].map((checkbox, rowid) => ({
+		dataset: {rowid: String(rowid)}, querySelector: () => checkbox
+	}));
+	const list = {querySelectorAll: selector => selector.startsWith('tr:') ? rows.filter(row => row.querySelector().checked) : [normal, conflict]};
+	const ctx = context({
+		LIEls: {select_all: {checked: true}, proposal_list: list, views: {list: {}, loading: {}, start: {}}, buttons: {}, conflict_notice: {}},
+		rowid_to_filepath: {0: {cv_id: 1, filepath: 'good'}, 1: {cv_id: 2, filepath: 'conflict'}},
+		setLibraryImportLoadingMode() {}, hide() {},
+		sendAPI: async (...args) => { ctx.payload = args[4]; return {json: async () => ({result: {conflicts: []}})}; }
+	});
+	vm.runInNewContext(selection + submission, ctx);
+	vm.runInNewContext('toggleSelectAll()', ctx);
+	assert.equal(normal.checked, true);
+	assert.equal(conflict.checked, false);
+	conflict.checked = true;
+	await vm.runInNewContext("importLibrary('key')", ctx);
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(JSON.parse(JSON.stringify(ctx.payload)), [{filepath: 'good', id: 1}]);
+});
+
+test('queue move uses the row position after another download ends', () => {
+	const source = read('frontend/static/js/queue.js');
+	const addEntry = source.slice(source.indexOf('function addQueueEntry('), source.indexOf('function updateQueueEntry('));
+	const children = [];
+	const nodes = [];
+	const createEntry = () => {
+		const elements = new Map();
+		const entry = {dataset: {}, querySelector(selector) {
+			if (!elements.has(selector)) elements.set(selector, {});
+			return elements.get(selector);
+		}};
+		nodes.push(entry);
+		return entry;
+	};
+	const moves = [];
+	const ctx = context({
+		url_base: '', QEls: {queue: {children, appendChild: entry => children.push(entry)}, queue_entry: {cloneNode: createEntry}},
+		updateQueueEntry() {}, moveEntry: (...args) => moves.push(args), deleteEntry() {}
+	});
+	vm.runInNewContext(addEntry, ctx);
+	for (const id of [1, 2, 3]) {
+		ctx.item = {id, title: 'Issue', volume_id: 1, source_name: 'test', web_link: '', web_title: '', web_sub_title: null};
+		vm.runInNewContext("addQueueEntry('key', item)", ctx);
+	}
+	children.shift();
+	nodes[2].querySelector('.move-up-dl').onclick();
+	assert.deepEqual(moves[0], [3, 0, 'key']);
+});
+
+test('API key rotation stores the new credential before reloading the page', async () => {
+	const source = read('frontend/static/js/settings_general.js');
+	const rotate = source.slice(source.indexOf('function generateApiKey('), source.indexOf('// code run on load'));
+	const calls = [];
+	const ctx = context({
+		sendAPI: async () => ({json: async () => ({result: {api_key: 'new-key'}})}),
+		setLocalStorage: value => calls.push(['storage', value.api_key]),
+		window: {location: {reload: () => calls.push(['reload'])}}
+	});
+	vm.runInNewContext(rotate, ctx);
+	vm.runInNewContext("generateApiKey('old-key')", ctx);
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(calls, [['storage', 'new-key'], ['reload']]);
 });

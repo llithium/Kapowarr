@@ -53,14 +53,14 @@ function loadBackups(apiKey) {
             entry.appendChild(actions)
 
             const downloadBackup = document.createElement("button")
-			downloadBackup.innerHTML = icons.download
+			downloadBackup.innerHTML = `<img src="${url_base}/static/img/download.svg" alt="">`
             downloadBackup.title = "Download database backup"
 			downloadBackup.onclick = () =>
 				window.location.href = `${url_base}/api/system/database/backups/${backup.index}?api_key=${apiKey}`
             actions.appendChild(downloadBackup)
 
             const importBackup = document.createElement("button")
-			importBackup.innerHTML = icons.upload
+			importBackup.innerHTML = `<img src="${url_base}/static/img/upload.svg" alt="">`
             importBackup.title = "Import database backup"
 			importBackup.onclick = () => openDatabaseImport(backup.index)
             actions.appendChild(importBackup)
@@ -107,7 +107,7 @@ function openDatabaseUpload() {
 }
 
 function submitDatabaseUpload(apiKey) {
-	if (!backupEls.uploadDb.file.files)
+	if (!backupEls.uploadDb.file.files?.length)
 		return
 
 	const formData = new FormData()
@@ -121,17 +121,16 @@ function submitDatabaseUpload(apiKey) {
 		() => window.location.reload(),
 		1000
 	))
-	.catch(e => {
-		e.json().then(json => {
-			if (json.error === "InvalidDatabaseFile") {
-				backupEls.uploadDb.file.value = ''
-				backupEls.uploadDb.submit.innerText = "Import"
-				backupEls.uploadDb.error.innerText = invalidDbReasonMap[json.result.reason] || json.result.reason
-				hide([], [backupEls.uploadDb.error])
-			}
-			else
-				console.log(e)
-		})
+	.catch(async e => {
+		const json = await apiError(e)
+		backupEls.uploadDb.submit.innerText = "Import"
+		if (json.error === "InvalidDatabaseFile") {
+			backupEls.uploadDb.file.value = ''
+			backupEls.uploadDb.error.innerText = invalidDbReasonMap[json.result?.reason] || 'Invalid database file.'
+		} else {
+			backupEls.uploadDb.error.innerText = 'Could not import the database. Please try again.'
+		}
+		hide([], [backupEls.uploadDb.error])
 	})
 }
 

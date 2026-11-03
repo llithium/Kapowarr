@@ -72,7 +72,7 @@ class StatusHandlers(metaclass=Singleton):
             )
         else:
             # New subtype: get expiry from handler's subtypes
-            expires_at = self._get_expires_at(handler, subtype, timestamp)
+            expires_at = handler.get_expiry(subtype, timestamp)
             get_db().execute("""
                 INSERT OR REPLACE INTO status(
                     status_type, subtype, timestamp, expires_at
@@ -215,24 +215,6 @@ class StatusHandlers(metaclass=Singleton):
         self._emit_count()
         return
 
-    def _get_expires_at(
-        self,
-        handler: StatusHandler,
-        subtype: str,
-        timestamp: int
-    ) -> Union[int, None]:
-        """Get the expiry timestamp for a subtype of a status type.
-
-        Args:
-            handler (StatusHandler): The handler.
-            subtype (str): The subtype.
-            timestamp (int): The report timestamp.
-
-        Returns:
-            Union[int, None]: The expiry timestamp or None.
-        """
-        return handler.get_expiry(subtype, timestamp)
-
     def _emit_count(self) -> None:
         """Emit a WebSocket event with the current status count."""
         count = self.get_count()
@@ -241,55 +223,30 @@ class StatusHandlers(metaclass=Singleton):
 
 
 # region Handlers
-@StatusHandlers.register_handler(StatusType.CV_RATE_LIMIT)
-class CVRateLimitStatus(StatusHandler):
-    """Status handler for ComicVine API rate limit.
+class _StoredStatus(StatusHandler):
+    """Status entries that persist until cleared."""
 
-    ComicVine uses a rolling 200 request-per-resource-per-hour window,
-    but the API provides no headers or fields indicating remaining
-    requests or reset timing. Entries expire after one hour from the
-    first rejection. The timer does not reset on subsequent rejections.
-    """
-
-    EXPIRY_SECONDS = 3600
-
-    def get_expiry(self, subtype: str, timestamp: int) -> int:
-        return timestamp + self.EXPIRY_SECONDS
+    def get_expiry(self, subtype: str, timestamp: int) -> Union[int, None]:
+        return None
 
     def report(self, subtype: str, timestamp: int) -> None:
-        already_reported = subtype in self._subtypes
-
         self._subtypes[subtype] = timestamp
-        if not already_reported:
-            self._schedule_timer(subtype, self.EXPIRY_SECONDS)
-
-        return
 
     def restore(
-        self,
-        subtype: str,
-        timestamp: int,
-        remaining: Union[int, None]
+        self, subtype: str, timestamp: int, remaining: Union[int, None]
     ) -> None:
         self._subtypes[subtype] = timestamp
-        if remaining is not None:
-            self._schedule_timer(subtype, remaining)
-        return
 
     def clear(self, subtype: Union[str, None] = None) -> None:
         if subtype is not None:
             self._subtypes.pop(subtype, None)
-            self._cancel_timer(subtype)
         else:
             self._subtypes.clear()
-            for t in list(self._timers):
-                self._cancel_timer(t)
-        return
 
     def problem_reported(self, subtype: Union[str, None] = None) -> bool:
         if subtype is not None:
             return subtype in self._subtypes
-        return len(self._subtypes) > 0
+        return bool(self._subtypes)
 
     def get_display(self) -> StatusData:
         return {
@@ -297,52 +254,69 @@ class CVRateLimitStatus(StatusHandler):
             "display_subtypes": list(self._subtypes)
         }
 
-    def _schedule_timer(self, subtype: str, seconds: int) -> None:
-        """Schedule an expiry timer for a subtype.
 
-        Args:
-            subtype (str): The subtype.
-            seconds (int): Seconds until expiry.
-        """
+class _TimedStatus(_StoredStatus):
+    """Status entries with one fixed expiry timer per subtype."""
+
+    def report(self, subtype: str, timestamp: int) -> None:
+        already_reported = self.problem_reported(subtype)
+        super().report(subtype, timestamp)
+        if not already_reported:
+            expiry = self.get_expiry(subtype, timestamp)
+            if expiry is not None:
+                self._schedule_timer(subtype, expiry - timestamp)
+
+    def restore(
+        self, subtype: str, timestamp: int, remaining: Union[int, None]
+    ) -> None:
+        super().restore(subtype, timestamp, remaining)
+        if remaining is not None:
+            self._schedule_timer(subtype, remaining)
+
+    def clear(self, subtype: Union[str, None] = None) -> None:
+        super().clear(subtype)
+        if subtype is not None:
+            self._cancel_timer(subtype)
+        else:
+            for entry in list(self._timers):
+                self._cancel_timer(entry)
+
+    def _schedule_timer(self, subtype: str, seconds: int) -> None:
         if subtype in self._timers:
             return
-
         timer = Server().get_db_timer_thread(
-            interval=seconds,
+            interval=max(1, seconds),
             target=self._on_expiry,
             name=f"StatusExpiry.{self.status_type.value}.{subtype}",
             args=(subtype,)
         )
         timer.daemon = True
-        timer.start()
         self._timers[subtype] = timer
-        return
+        timer.start()
 
     def _cancel_timer(self, subtype: str) -> None:
-        """Cancel an expiry timer.
-
-        Args:
-            subtype (str): The subtype.
-        """
         timer = self._timers.pop(subtype, None)
         if timer is not None:
             timer.cancel()
-        return
 
     def _on_expiry(self, subtype: str) -> None:
-        """Called when a timer fires.
-
-        Args:
-            subtype (str): The subtype that expired.
-        """
         self._timers.pop(subtype, None)
-        StatusHandlers().clear(StatusType.CV_RATE_LIMIT, subtype)
-        return
+        StatusHandlers().clear(self.status_type, subtype)
+
+
+@StatusHandlers.register_handler(StatusType.CV_RATE_LIMIT)
+class CVRateLimitStatus(_TimedStatus):
+    """ComicVine rate limits expire one hour after the first rejection."""
+
+    EXPIRY_SECONDS = 3600
+
+    def get_expiry(self, subtype: str, timestamp: int) -> int:
+        return timestamp + self.EXPIRY_SECONDS
 
 
 @StatusHandlers.register_handler(StatusType.DOWNLOAD_SERVICE_RATE_LIMIT)
-class DownloadServiceRateLimitStatus(StatusHandler):
-    """Status handler for download service daily rate limits."""
+class DownloadServiceRateLimitStatus(_TimedStatus):
+    """Download service rate limits expire at the next local midnight."""
 
     def get_expiry(self, subtype: str, timestamp: int) -> int:
         next_midnight = (
@@ -352,147 +326,15 @@ class DownloadServiceRateLimitStatus(StatusHandler):
         )
         return int(next_midnight.timestamp())
 
-    def report(self, subtype: str, timestamp: int) -> None:
-        already_reported = subtype in self._subtypes
-
-        self._subtypes[subtype] = timestamp
-        if not already_reported:
-            remaining = self.get_expiry(subtype, timestamp) - timestamp
-            self._schedule_timer(subtype, remaining)
-
-        return
-
-    def restore(
-        self,
-        subtype: str,
-        timestamp: int,
-        remaining: Union[int, None]
-    ) -> None:
-        self._subtypes[subtype] = timestamp
-        if remaining is not None:
-            self._schedule_timer(subtype, remaining)
-        return
-
-    def clear(self, subtype: Union[str, None] = None) -> None:
-        if subtype is not None:
-            self._subtypes.pop(subtype, None)
-            self._cancel_timer(subtype)
-        else:
-            self._subtypes.clear()
-            for t in list(self._timers):
-                self._cancel_timer(t)
-        return
-
-    def problem_reported(self, subtype: Union[str, None] = None) -> bool:
-        if subtype is not None:
-            return subtype in self._subtypes
-        return len(self._subtypes) > 0
-
-    def get_display(self) -> StatusData:
-        return {
-            "type": self.status_type.value,
-            "display_subtypes": list(self._subtypes)
-        }
-
-    def _schedule_timer(self, subtype: str, seconds: int) -> None:
-        if subtype in self._timers:
-            return
-
-        timer = Server().get_db_timer_thread(
-            interval=max(1, seconds),
-            target=self._on_expiry,
-            name=f"StatusExpiry.{self.status_type.value}.{subtype}",
-            args=(subtype,)
-        )
-        timer.daemon = True
-        timer.start()
-        self._timers[subtype] = timer
-        return
-
-    def _cancel_timer(self, subtype: str) -> None:
-        timer = self._timers.pop(subtype, None)
-        if timer is not None:
-            timer.cancel()
-        return
-
-    def _on_expiry(self, subtype: str) -> None:
-        self._timers.pop(subtype, None)
-        StatusHandlers().clear(StatusType.DOWNLOAD_SERVICE_RATE_LIMIT, subtype)
-        return
-
 
 @StatusHandlers.register_handler(StatusType.ROOT_FOLDER_ALMOST_FULL)
-class RootFolderAlmostFullStatus(StatusHandler):
-    def get_expiry(self, subtype: str, timestamp: int) -> Union[int, None]:
-        return None
-
-    def report(self, subtype: str, timestamp: int) -> None:
-        self._subtypes[subtype] = timestamp
-        return
-
-    def restore(
-        self,
-        subtype: str,
-        timestamp: int,
-        remaining: Union[int, None]
-    ) -> None:
-        self._subtypes[subtype] = timestamp
-        return
-
-    def clear(self, subtype: Union[str, None] = None) -> None:
-        if subtype is not None:
-            self._subtypes.pop(subtype, None)
-        else:
-            self._subtypes.clear()
-        return
-
-    def problem_reported(self, subtype: Union[str, None] = None) -> bool:
-        if subtype is not None:
-            return subtype in self._subtypes
-        return len(self._subtypes) > 0
-
-    def get_display(self) -> StatusData:
-        return {
-            "type": self.status_type.value,
-            "display_subtypes": list(self._subtypes)
-        }
+class RootFolderAlmostFullStatus(_StoredStatus):
+    pass
 
 
 @StatusHandlers.register_handler(StatusType.ROOT_FOLDER_FULL)
-class RootFolderFullStatus(StatusHandler):
-    def get_expiry(self, subtype: str, timestamp: int) -> Union[int, None]:
-        return None
-
-    def report(self, subtype: str, timestamp: int) -> None:
-        self._subtypes[subtype] = timestamp
-        return
-
-    def restore(
-        self,
-        subtype: str,
-        timestamp: int,
-        remaining: Union[int, None]
-    ) -> None:
-        self._subtypes[subtype] = timestamp
-        return
-
-    def clear(self, subtype: Union[str, None] = None) -> None:
-        if subtype is not None:
-            self._subtypes.pop(subtype, None)
-        else:
-            self._subtypes.clear()
-        return
-
-    def problem_reported(self, subtype: Union[str, None] = None) -> bool:
-        if subtype is not None:
-            return subtype in self._subtypes
-        return len(self._subtypes) > 0
-
-    def get_display(self) -> StatusData:
-        return {
-            "type": self.status_type.value,
-            "display_subtypes": list(self._subtypes)
-        }
+class RootFolderFullStatus(_StoredStatus):
+    pass
 
 
 @StatusHandlers.register_handler(StatusType.CF_CHALLENGE_WITH_NO_FS)

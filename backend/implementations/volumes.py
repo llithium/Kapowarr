@@ -598,22 +598,6 @@ class Volume:
 
         return
 
-    def update_cover(self, cover: bytes) -> None:
-        """Change the cover of the volume.
-
-        Args:
-            cover (bytes): The new cover image.
-        """
-        get_db().execute(
-            """
-            UPDATE volumes_covers
-            SET cover = ?
-            WHERE volume_id = ?;
-            """,
-            (cover, self.id)
-        )
-        return
-
     def apply_monitor_scheme(self, monitoring_scheme: MonitorScheme) -> None:
         """Apply a monitoring scheme to the issues of the volume.
 

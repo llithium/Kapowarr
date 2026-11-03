@@ -130,6 +130,7 @@ dmypy.json
 
 # Database
 db/
+*.import-cache*
 
 # VS code
 *.code-workspace
@@ -152,6 +153,7 @@ LICENSE
 
 # Tests
 tests/
+test-data/
 
 # Downloads
 temp_downloads/*

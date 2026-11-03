@@ -2,18 +2,12 @@
 
 from dataclasses import _MISSING_TYPE, asdict, dataclass, field
 from functools import lru_cache
-
-try:
-    from grp import getgrgid, getgrnam
-except ImportError:
-    getgrgid = None
-    getgrnam = None
-
 from logging import INFO
 from os import urandom
 from os.path import abspath, dirname, isdir, join, sep
 from secrets import token_bytes
-from typing import Any, Dict, Mapping
+from typing import (TYPE_CHECKING, Any, Callable, Dict,
+                    Mapping, Optional, get_type_hints)
 
 from backend.base.custom_exceptions import (ClientNotWorking,
                                             CredentialInvalid,
@@ -33,6 +27,18 @@ from backend.base.helpers import (CommaList, Singleton, build_proxy_url,
 from backend.base.logging import LOGGER, set_log_level
 from backend.internals.db import DBConnection, commit, get_db
 from backend.internals.db_migration import DatabaseMigrationHandler
+
+if TYPE_CHECKING:
+    from grp import struct_group
+
+getgrgid: Optional[Callable[[int], 'struct_group']]
+getgrnam: Optional[Callable[[str], 'struct_group']]
+
+try:
+    from grp import getgrgid, getgrnam
+except ImportError:
+    getgrgid = None
+    getgrnam = None
 
 
 class System:
@@ -57,7 +63,7 @@ def get_about_data() -> Dict[str, Any]:
         "version": get_version_from_pyproject(folder_path("pyproject.toml")),
         "python_version": get_python_version(),
         "database_version": DatabaseMigrationHandler.latest_db_version(),
-        "database_location": DBConnection.file,
+        "database_location": DBConnection.default_file,
         "data_folder": folder_path(),
         "os": System.os_type.value,
         "runs_64bit": System.runs_64bit
@@ -170,12 +176,7 @@ class SettingsValues(PublicSettingsValues):
     backup_url_base: str = ''
 
 
-task_intervals = {
-    # If there are tasks that should be run at the same time,
-    # but per se after each other, put them in that order in the dict.
-    'update_all': 3600, # every hour
-    'search_all': 86400 # every day
-}
+_SETTINGS_TYPES = get_type_hints(SettingsValues)
 
 
 class Settings(metaclass=Singleton):
@@ -210,7 +211,7 @@ class Settings(metaclass=Singleton):
         # Database type for value is BLOB,
         # so manually convert types
         for key, value in db_values.items():
-            key_type = SettingsValues.__dataclass_fields__[key].type
+            key_type = _SETTINGS_TYPES[key]
             if key_type is bool:
                 db_values[key] = bool(value)
 
@@ -309,7 +310,7 @@ class Settings(metaclass=Singleton):
 
         self.clear_cache()
 
-        LOGGER.info(f'Settings changed: {formatted_data}')
+        LOGGER.info('Settings changed: %s', ', '.join(sorted(formatted_data)))
 
         return
 
@@ -357,7 +358,7 @@ class Settings(metaclass=Singleton):
         self.update({"api_key": api_key}, from_public=False)
         self.clear_cache()
 
-        LOGGER.info(f'Setting api key regenerated: {api_key}')
+        LOGGER.info('Setting api key regenerated')
         return
 
     def backup_hosting_settings(self) -> None:
@@ -410,25 +411,25 @@ class Settings(metaclass=Singleton):
             # Request generation of new key instead of setting value
             raise InvalidSettingModification(key, 'POST /settings/api_key')
 
-        key_data = KeyCollection.__dataclass_fields__[key]
+        key_type = _SETTINGS_TYPES[key]
 
         # Convert type to special type
-        if key_data.type is CommaList and isinstance(value, list):
+        if key_type is CommaList and isinstance(value, list):
             if not all(isinstance(e, str) for e in value):
                 raise InvalidKeyValue(key, value)
 
             # Convert list to CommaList
             value = CommaList(value)
 
-        elif issubclass(key_data.type, BaseEnum):
+        elif issubclass(key_type, BaseEnum):
             # Convert string to Enum value
             try:
-                value = key_data.type(value)
+                value = key_type(value)
             except ValueError:
                 raise InvalidKeyValue(key, value)
 
         # Confirm data type of submitted value
-        if not isinstance(value, key_data.type):
+        if not isinstance(value, key_type):
             raise InvalidKeyValue(key, value)
 
         # Do key-specific checks and formatting
@@ -539,7 +540,7 @@ class Settings(metaclass=Singleton):
             if value:
                 if not (
                     System.os_type != OSType.WINDOWS
-                    and getgrgid is not None # type: ignore
+                    and getgrgid is not None
                     and getgrnam is not None
                 ):
                     raise InvalidKeyValue(key, value)
@@ -564,16 +565,16 @@ class Settings(metaclass=Singleton):
             converted_value = value
 
         elif key == 'service_preference':
-            available = [
+            available_sources = [
                 s.value
                 for s in GCDownloadSource._member_map_.values()
             ]
 
             for entry in value:
-                if entry not in available:
+                if entry not in available_sources:
                     raise InvalidKeyValue(key, value)
 
-            for entry in available:
+            for entry in available_sources:
                 if entry not in value:
                     raise InvalidKeyValue(key, value)
 

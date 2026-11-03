@@ -24,6 +24,8 @@ from backend.internals.settings import Settings
 
 @DownloadClients.register_client(DownloadClientIdentifier.TORRENT)
 class TorrentDownload(ExternalDownload, BaseDirectDownload):
+    _original_files: List[str]
+
     @property
     def external_client(self) -> ExternalDownloadClient:
         return self._external_client

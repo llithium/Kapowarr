@@ -104,7 +104,7 @@ function loadStatus(apiKey) {
 			
 			const actions = document.createElement("td")
 			const clear = document.createElement("button")
-			clear.innerHTML = icons.clear
+			clear.innerHTML = `<img src="${url_base}/static/img/delete.svg" alt="">`
 			clear.title = "Clear"
 			clear.onclick = () => {
 				sendAPI("DELETE", "/system/status", apiKey, {

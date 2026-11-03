@@ -30,6 +30,9 @@ DOWNLOAD_CHUNK_SIZE = 4194304 # 4MB Chunks
 
 
 class BaseDirectDownload(Download):
+    _id: Union[int, None]
+    _download_thread: Union[Thread, None]
+
     @property
     def id(self) -> int:
         return self._id # type: ignore
@@ -154,7 +157,7 @@ class BaseDirectDownload(Download):
         settings = Settings().sv
         volume = Volume(volume_id)
 
-        self.__r = None
+        self.__r: Union[Response, None] = None
         self._download_link = download_link
         self._volume_id = volume_id
         self._issue_id = None
@@ -291,6 +294,8 @@ class BaseDirectDownload(Download):
                 tries_left -= 1
                 if not self._supports_range_header:
                     size_downloaded = 0
+                    f.seek(0)
+                    f.truncate()
 
                 with self._fetch_pure_link(start_byte=size_downloaded) as r:
                     self.__r = r

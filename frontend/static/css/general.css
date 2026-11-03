@@ -318,13 +318,9 @@ header {
 	display: none;
 }
 
-nav, .sub-nav {
+nav {
 	display: flex;
 	flex-direction: column;
-}
-
-nav > a:not(.current-nav) + div.sub-nav:not(:has(a.current-nav)) {
-	display: none;
 }
 
 nav a {
@@ -353,13 +349,7 @@ nav svg {
 	aspect-ratio: 1/1;
 }
 
-.sub-nav a {
-	padding-left: 2.8rem;
-	font-size: .8rem;
-}
-
-.current-nav,
-.current-section {
+.current-nav {
 	color: var(--accent-color);
 	border-left-color: var(--accent-color);
 	background: rgb(255 255 255 / 7%);
@@ -370,21 +360,6 @@ nav svg {
 	padding: 1rem;
 	color: var(--nav-color);
 	font-size: .8rem;
-}
-
-#system-issues-badge {
-	display: inline-flex;
-	justify-content: center;
-	align-items: center;
-	min-width: 1.2rem;
-	height: 1.2rem;
-	padding: 0 .3rem;
-	margin-left: .3rem;
-	border-radius: 2px;
-	background-color: var(--accent-color);
-	color: var(--nav-background-color);
-	font-size: .7rem;
-	font-weight: 700;
 }
 
 /*  */

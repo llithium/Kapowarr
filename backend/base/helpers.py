@@ -18,8 +18,8 @@ from re import compile
 from subprocess import run
 from sys import base_exec_prefix, executable, maxsize, platform, version_info
 from threading import current_thread
-from typing import (TYPE_CHECKING, Any, Callable, Collection, Dict, Iterable,
-                    Iterator, List, Mapping, Sequence, Tuple, Union)
+from typing import (TYPE_CHECKING, Any, Callable, Collection, Dict,
+                    Iterable, Iterator, List, Sequence, Tuple, Union)
 from unicodedata import normalize
 from urllib.parse import quote_plus, unquote
 
@@ -231,6 +231,7 @@ def get_subclasses(*classes, include_self=False, recursive=True, only_leafs=Fals
         if recursive:
             pending.extend(children)
     return [c for c in result if not only_leafs or not c.__subclasses__()]
+
 
 def check_filter(element: T, element_filter: Collection[T]) -> bool:
     """Check if `element` is in `element_filter`, but only if `element_filter`
@@ -872,58 +873,6 @@ class CommaList(list):
         return ','.join(self)
 
 
-class DictKeyedDict(dict):
-    """
-    Normal dict but key is dict.
-    """
-
-    def __convert_dict(self, key: Mapping) -> str:
-        converted_key = ','.join(
-            sorted(key.keys()) + sorted(map(str, key.values()))
-        )
-        return converted_key
-
-    def __getitem__(self, key: Mapping) -> Any:
-        return super().__getitem__(
-            self.__convert_dict(key)
-        )[1]
-
-    def get(self, key: Mapping, default: Any = None) -> Any:
-        try:
-            return self[key]
-        except KeyError:
-            return default
-
-    def __setitem__(self, key: Mapping, value: Any) -> None:
-        return super().__setitem__(
-            self.__convert_dict(key),
-            (key, value)
-        )
-
-    def setdefault(self, key: Mapping, default: Any = None) -> Any:
-        if key not in self:
-            self[key] = default
-
-        return self[key]
-
-    def __contains__(self, key: object) -> bool:
-        if not isinstance(key, Mapping):
-            return False
-
-        return super().__contains__(
-            self.__convert_dict(key)
-        )
-
-    def keys(self) -> Iterator[Any]: # type: ignore
-        return (v[0] for v in super().values())
-
-    def values(self) -> Iterator[Any]: # type: ignore
-        return (v[1] for v in super().values())
-
-    def items(self) -> Iterator[Tuple[Any, Any]]: # type: ignore
-        return zip(self.keys(), self.values())
-
-
 # region Requests
 @lru_cache(1)
 def _running_urllib3_v2_and_above() -> bool:
@@ -1278,28 +1227,23 @@ def test_proxy_url(url: str, ignored_addresses: CommaList) -> None:
     Returns:
         None: Connection successful.
     """
-    # I recognise that technically this is a race condition where new requests
-    # that are ran or sessions that are created while this function is running
-    # will use the given proxy URL even though it's not validated. The
-    # probability is small enough that in my opinion it's fine. We can pass the
-    # proxies in an argument value, but not the NO_PROXY value. So we are forced
-    # to use the environment variables to test properly.
-
-    old_proxy_url = environ.get('HTTP_PROXY', '')
-    old_no_proxy = CommaList(environ.get('NO_PROXY', ''))
-
-    apply_proxy(url, ignored_addresses)
-
-    with Session() as session:
-        try:
-            response = session.get(Constants.PROXY_TEST_URL)
-            if response.status_code == 407:
-                raise CredentialInvalid()
-
-        except RequestException:
-            raise ClientNotWorking(BrokenClientReason.CONNECTION_ERROR)
-
-    apply_proxy(old_proxy_url, old_no_proxy)
+    keys = ('HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY')
+    previous = {key: environ.get(key) for key in keys}
+    try:
+        apply_proxy(url, ignored_addresses)
+        with Session() as session:
+            try:
+                response = session.get(Constants.PROXY_TEST_URL)
+                if response.status_code == 407:
+                    raise CredentialInvalid()
+            except RequestException:
+                raise ClientNotWorking(BrokenClientReason.CONNECTION_ERROR)
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                environ.pop(key, None)
+            else:
+                environ[key] = value
     return
 
 
@@ -1343,10 +1287,10 @@ def _create_context(
     return
 
 
-def _pool_apply_func(args=(), kwds={}):
-    func, value = args
+def _pool_apply_func(func_value):
+    func, value = func_value
     with context():
-        return func(*value, **kwds)
+        return func(*value)
 
 
 def _pool_map_func(func_value):
@@ -1360,7 +1304,7 @@ def _pool_starmap_func(func, *args):
         return func(*args)
 
 
-class PortablePool(Pool):
+class PortablePool:
     """
     A multiprocessing pool where the processes run in a proper environment.
     Logging, the database and the websocket are set up, and everything
@@ -1391,7 +1335,7 @@ class PortablePool(Pool):
         db_folder = dirname(DBConnection.default_file)
         ws_queue = WebSocket().client_manager.queue
 
-        super().__init__(
+        self._pool = Pool(
             processes=processes,
             initializer=_create_context,
             initargs=(
@@ -1404,50 +1348,12 @@ class PortablePool(Pool):
         )
         return
 
-    def apply(
-        self,
-        func: Callable[..., U],
-        args: Iterable[Any] = (),
-        kwds: Mapping[str, Any] = {}
-    ) -> U:
-        new_args = (func, args)
-        new_func = _pool_apply_func
-        return super().apply(new_func, new_args, kwds)
+    def __enter__(self) -> PortablePool:
+        self._pool.__enter__()
+        return self
 
-    def apply_async(
-        self,
-        func,
-        args=(),
-        kwds={},
-        callback=None,
-        error_callback=None
-    ):
-        new_args = (func, args)
-        new_func = _pool_apply_func
-        return super().apply_async(
-            new_func, new_args, kwds,
-            callback, error_callback
-        )
-
-    def map(
-        self,
-        func: Callable[[T], U],
-        iterable: Iterable[T],
-        chunksize: Union[int, None] = None
-    ) -> List[U]:
-        new_iterable = ((func, i) for i in iterable)
-        new_func = _pool_map_func
-        return super().map(new_func, new_iterable, chunksize)
-
-    def imap(
-        self,
-        func: Callable[[T], U],
-        iterable: Iterable[T],
-        chunksize: Union[int, None] = 1
-    ) -> IMapIterator[U]:
-        new_iterable = ((func, i) for i in iterable)
-        new_func = _pool_map_func
-        return super().imap(new_func, new_iterable, chunksize)
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self._pool.__exit__(exc_type, exc_value, traceback)
 
     def imap_unordered(
         self,
@@ -1457,25 +1363,7 @@ class PortablePool(Pool):
     ) -> IMapIterator[U]:
         new_iterable = ((func, i) for i in iterable)
         new_func = _pool_map_func
-        return super().imap_unordered(new_func, new_iterable, chunksize)
-
-    def map_async(
-        self,
-        func,
-        iterable,
-        chunksize=None,
-        callback=None,
-        error_callback=None
-    ):
-        new_iterable = ((func, i) for i in iterable)
-        new_func = _pool_map_func
-        return super().map_async(
-            new_func,
-            new_iterable,
-            chunksize,
-            callback,
-            error_callback
-        )
+        return self._pool.imap_unordered(new_func, new_iterable, chunksize)
 
     def starmap(
         self,
@@ -1485,7 +1373,7 @@ class PortablePool(Pool):
     ) -> List[U]:
         new_iterable = ((func, *i) for i in iterable)
         new_func = _pool_starmap_func
-        return super().starmap(new_func, new_iterable, chunksize)
+        return self._pool.starmap(new_func, new_iterable, chunksize)
 
     def istarmap_unordered(
         self,
@@ -1496,22 +1384,4 @@ class PortablePool(Pool):
         "A combination of starmap and imap_unordered."
         new_iterable = ((func, i) for i in iterable)
         new_func = _pool_apply_func
-        return super().imap_unordered(new_func, new_iterable, chunksize)
-
-    def starmap_async(
-        self,
-        func,
-        iterable,
-        chunksize=None,
-        callback=None,
-        error_callback=None
-    ):
-        new_iterable = ((func, *i) for i in iterable)
-        new_func = _pool_starmap_func
-        return super().starmap_async(
-            new_func,
-            new_iterable,
-            chunksize,
-            callback,
-            error_callback
-        )
+        return self._pool.imap_unordered(new_func, new_iterable, chunksize)

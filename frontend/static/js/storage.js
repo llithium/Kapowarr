@@ -5,10 +5,7 @@ const default_values = {
 	theme: 'light',
 	translated_filter: 'all',
 	api_key: null,
-	last_login: 0,
-	monitor_new_volume: false,
-	monitor_new_issues: false,
-	monitoring_scheme: 'none'
+	last_login: 0
 };
 
 function readLocalStorage() {

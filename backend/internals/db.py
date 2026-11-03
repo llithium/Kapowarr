@@ -118,8 +118,6 @@ class DBConnectionManager(type):
 
 class DBConnection(Connection, metaclass=DBConnectionManager):
     default_file = ''
-    # Compatibility with fork-owned cache code and its isolated database tests.
-    file = ''
 
     def __init__(
         self, *,
@@ -140,7 +138,7 @@ class DBConnection(Connection, metaclass=DBConnectionManager):
                 Defaults to Constants.DB_TIMEOUT.
         """
         self.closed = False
-        self.db_file = db_file or self.file or self.default_file
+        self.db_file = db_file or self.default_file
 
         LOGGER.debug(f'Creating connection {self}')
         super().__init__(
@@ -293,29 +291,34 @@ def iter_commit(iterable: Iterable[T]) -> Iterator[T]:
 
 
 def close_db(e: Union[BaseException, None] = None) -> None:
-    """Close database cursor, commit database and close database.
+    """Close cursors and finish the request transaction.
+
+    Successful contexts commit; exceptional contexts roll back. Waitress keeps
+    its thread-owned connection until the worker exits.
 
     Args:
         e (Union[BaseException, None], optional): Error. Defaults to None.
     """
-    if not hasattr(g, 'cursors'):
-        return
-
-    try:
-        cursors = g.cursors
-        for cursors in g.cursors.values():
-            db: DBConnection = cursors[0].connection
-            for c in cursors:
-                c.close()
-            db.commit()
+    cursor_groups = g.pop('cursors', {})
+    for cursors in cursor_groups.values():
+        db: DBConnection = cursors[0].connection
+        if db.closed:
+            continue
+        try:
+            for cursor in cursors:
+                cursor.close()
+            if e is None:
+                db.commit()
+            else:
+                db.rollback()
+        except ProgrammingError:
+            LOGGER.exception('Unable to finish database context')
+        finally:
             if not current_thread().name.startswith('waitress-'):
-                DBConnectionManager.close_connection_of_thread()
-        delattr(g, 'cursors')
-
-    except ProgrammingError:
-        pass
-
-    return
+                if DBConnectionManager.instances.get(current_thread_id()) is db:
+                    DBConnectionManager.close_connection_of_thread()
+                else:
+                    db.close()
 
 
 def setup_db_adapters_and_converters() -> None:

@@ -34,17 +34,17 @@ async function fetchAPI(endpoint, api_key, params={}, json_return=true) {
 		if (response.status === 401) {
 			setLocalStorage({api_key: null})
 			window.location.href = `${url_base}/login?redirect=${window.location.pathname}`;
-		} else {
-			return Promise.reject(response);
 		};
+		return Promise.reject(response);
 	});
 };
 
 async function sendAPI(method, endpoint, api_key, params={}, body={}) {
+	const multipart = body instanceof FormData;
 	return fetch(buildAPIUrl(endpoint, api_key, params), {
-		'method': method,
-		'headers': {'Content-Type': 'application/json'},
-		'body': JSON.stringify(body)
+		method,
+		...(multipart ? {} : {headers: {'Content-Type': 'application/json'}}),
+		body: multipart ? body : JSON.stringify(body)
 	})
 	.then(response => {
 		if (!response.ok) return Promise.reject(response);
@@ -54,10 +54,13 @@ async function sendAPI(method, endpoint, api_key, params={}, body={}) {
 		if (response.status === 401) {
 			setLocalStorage({api_key: null})
 			window.location.href = `${url_base}/login?redirect=${window.location.pathname}`;
-		} else {
-			return Promise.reject(response);
 		};
+		return Promise.reject(response);
 	});
+};
+
+async function apiError(error) {
+	try { return await error.json(); } catch (_) { return {}; }
 };
 
 function buildAPIUrl(endpoint, api_key, params={}) {
@@ -83,6 +86,7 @@ const images = {
 // Tasks
 //
 const task_to_button = {};
+const active_tasks = new Set();
 function mapButtons(id) {
 	if (window.location.pathname === (url_base + '/')) {
 		task_to_button['search_all'] = {
@@ -140,6 +144,9 @@ function mapButtons(id) {
 			};
 		});
 	};
+	active_tasks.forEach(task => {
+		if (task_to_button[task]?.button) spinButton(task);
+	});
 };
 
 function buildTaskString(task) {
@@ -194,10 +201,12 @@ function fillTaskQueue(api_key) {
 		return response.json();
 	})
 	.then(json => {
-		setTaskMessage(json.result[0].message);
+		setTaskMessage(json.result[0]?.message || '');
+		active_tasks.clear();
 		json.result.forEach(task => {
 			const task_string = buildTaskString(task);
-			if (task_string in task_to_button)
+			active_tasks.add(task_string);
+			if (task_to_button[task_string]?.button)
 				spinButton(task_string);
 		});
 	})
@@ -212,7 +221,8 @@ function fillTaskQueue(api_key) {
 
 function handleTaskAdded(data) {
 	const task_string = buildTaskString(data);
-	if (task_string in task_to_button)
+	active_tasks.add(task_string);
+	if (task_to_button[task_string]?.button)
 		spinButton(task_string);
 };
 
@@ -220,7 +230,8 @@ function handleTaskRemoved(data) {
 	setTaskMessage('');
 
 	const task_string = buildTaskString(data);
-	if (task_string in task_to_button)
+	active_tasks.delete(task_string);
+	if (task_to_button[task_string]?.button)
 		unspinButton(task_string);
 };
 
@@ -253,27 +264,19 @@ const sizes = {
 	'GB': 1000000000,
 	'TB': 1000000000000
 };
-function convertSize(size) {
+function convertSize(size, precision=2) {
 	if (size === null || size <= 0)
 		return 'Unknown';
 
 	for (const [term, division_size] of Object.entries(sizes)) {
 		let resulting_size = size / division_size
 		if (0 <= resulting_size && resulting_size <= 1000) {
-			size = twoDigits(
-				Math.round(
-					(size / division_size * 100)
-				) / 100
-			) + ' ' + term;
+			size = (size / division_size).toLocaleString('en', {minimumFractionDigits: precision, maximumFractionDigits: precision}) + ' ' + term;
 			return size;
 		};
 	};
 
-	size = (
-		Math.round(
-			(size / sizes.TB * 100)
-		) / 100
-	).toString() + ' TB';
+	size = (size / sizes.TB).toLocaleString('en', {minimumFractionDigits: precision, maximumFractionDigits: precision}) + ' TB';
 
 	return size;
 };
@@ -294,12 +297,16 @@ mapButtons(volume_id);
 
 let socket;
 setupLocalStorage();
-if (getLocalStorage('theme')['theme'] === 'dark')
-	document.querySelector(':root').classList.add('dark-mode');
+function setupTheme() {
+	document.querySelector(':root').classList.toggle(
+		'dark-mode', getLocalStorage('theme').theme === 'dark'
+	);
+};
+setupTheme();
 
 const socket_ready = usingApiKey()
 .then(api_key => {
-	setTimeout(() => fillTaskQueue(api_key), 200);
+	fillTaskQueue(api_key);
 	socket = connectToWebSocket(api_key);
 	return socket;
 });
@@ -318,11 +325,9 @@ nav_toggle.onclick = () => {
 	nav_toggle.setAttribute('aria-expanded', is_open.toString());
 };
 nav_scrim.onclick = closeNavigation;
-if (typeof nav_bar.querySelectorAll === 'function') {
-	nav_bar.querySelectorAll('a').forEach(link => {
-		link.addEventListener('click', closeNavigation);
-	});
-};
+nav_bar.querySelectorAll('a').forEach(link => {
+	link.addEventListener('click', closeNavigation);
+});
 
 document.addEventListener('click', event => {
 	if (

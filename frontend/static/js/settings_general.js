@@ -74,7 +74,7 @@ function saveSettings(api_key) {
 	})
 	.catch(async e => {
 		document.querySelector("#save-button p").innerText = 'Failed';
-		const json = await e.json();
+		const json = await apiError(e);
 		if (
 			json.error === "InvalidKeyValue"
 			&& json.result.key === "comicvine_api_key"
@@ -116,7 +116,7 @@ function generateApiKey(api_key) {
 	.then(response => response.json())
 	.then(json => {
 		setLocalStorage({'api_key': json.result.api_key});
-		document.querySelector('#api-input').innerText = json.result.api_key;
+		window.location.reload();
 	});
 };
 

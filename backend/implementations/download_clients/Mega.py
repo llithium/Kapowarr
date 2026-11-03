@@ -1135,18 +1135,6 @@ class MegaDownload(BaseDirectDownload):
     _mega_class: Type[MegaABC] = Mega
 
     @property
-    def size(self) -> int:
-        return self._mega.size
-
-    @property
-    def progress(self) -> float:
-        return self._mega.progress
-
-    @property
-    def speed(self) -> float:
-        return self._mega.speed
-
-    @property
     def _size(self) -> int:
         return self._mega.size
 

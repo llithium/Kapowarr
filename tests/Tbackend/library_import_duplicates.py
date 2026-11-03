@@ -5,7 +5,6 @@ from unittest.mock import patch
 from backend.features.library_import import (_find_existing_volume_match,
                                              _group_is_already_tracked,
                                              _preview_import_conflict)
-from backend.implementations.comicinfo import comicinfo_to_filename_data
 
 
 def file_data(series='Example', year=2020, issue_number=1.0):
@@ -41,15 +40,6 @@ class ExistingImportFiltering(unittest.TestCase):
             ),
             'destination': '/library/Example/Example 001.cbz',
         })
-
-    def test_library_import_keeps_filename_series_year(self):
-        fallback = file_data(series='Worlds Finest', year=2013)
-        result = comicinfo_to_filename_data(
-            {'series': "Worlds' Finest", 'year': 2014},
-            fallback,
-            for_library_import=True,
-        )
-        self.assertEqual(result['year'], 2013)
 
     def test_direct_issue_already_with_file_is_skipped(self):
         filepath = '/comics/Example/Example 001.cbz'

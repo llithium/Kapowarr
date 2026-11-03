@@ -76,9 +76,13 @@ def _main(
     from backend.base.logging import LOGGER, setup_logging
     from backend.features.download_queue import DownloadHandler
     from backend.features.tasks import TaskHandler
+    from backend.implementations.external_client_manager import ExternalClients
+    from backend.implementations.indexer_client_manager import IndexerClients
+    from backend.implementations.query_builder_manager import QueryBuilders
     from backend.internals.db import set_db_location, setup_db
     from backend.internals.server import Server, StartTypeHandlers
     from backend.internals.settings import Settings
+    from backend.internals.status import StatusHandlers
 
     set_start_method('spawn')
     try:
@@ -101,6 +105,9 @@ def _main(
     with SERVER.app.app_context():
         StartTypeHandlers.start_timer(start_type)
         setup_db()
+        IndexerClients.trigger_client_registration()
+        QueryBuilders.trigger_builder_registration()
+        ExternalClients.trigger_client_registration()
 
         s = Settings()
 
@@ -141,6 +148,7 @@ def _main(
             if proxy_url:
                 apply_proxy(proxy_url, settings.proxy_ignored_addresses)
 
+        StatusHandlers().load_from_db()
         download_handler = DownloadHandler()
         download_handler.load_downloads()
         task_handler = TaskHandler()
@@ -157,6 +165,7 @@ def _main(
     finally:
         download_handler.stop_handle()
         task_handler.stop_handle()
+        ExternalClients.disconnect_clients()
 
         if restart_type is not None:
             LOGGER.info('Restarting Kapowarr')

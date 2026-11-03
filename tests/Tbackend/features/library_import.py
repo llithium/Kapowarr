@@ -9,11 +9,11 @@ from backend.features.library_import import create_groups
 class CreateGroupsTests(unittest.TestCase):
     def test_groups_ignore_year_for_same_volume(self):
         files: Dict[str, FilenameData] = {
-            'Iron Man Volume 1 Issue 2': extract_filename_data(
-                'Iron Man Volume 1 Issue 2'
+            'Iron Man Volume 1 Issue 2 (2025)': extract_filename_data(
+                'Iron Man Volume 1 Issue 2 (2025)'
             ),
-            'Iron Man Volume 1 Issue 3': extract_filename_data(
-                'Iron Man Volume 1 Issue 3'
+            'Iron Man Volume 1 Issue 3 (2026)': extract_filename_data(
+                'Iron Man Volume 1 Issue 3 (2026)'
             )
         }
 
@@ -50,7 +50,7 @@ class CreateGroupsTests(unittest.TestCase):
             "Iron Man Volume 3"
         })
 
-    def test_groups_require_sequential_years_and_issue_numbers(self):
+    def test_groups_allow_gaps_in_issue_numbers_and_different_years(self):
         files: Dict[str, FilenameData] = {
             'Iron Man Volume 1 Issue 2 (2025)': extract_filename_data(
                 'Iron Man Volume 1 Issue 2 (2025)'

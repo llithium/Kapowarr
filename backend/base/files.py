@@ -12,7 +12,7 @@ from os import chmod, listdir, makedirs, remove, rmdir, scandir, utime
 from os.path import (abspath, basename, commonpath, dirname, exists, isdir,
                      isfile, join, relpath, samefile, sep, splitext)
 from re import compile
-from shutil import chown, copy2, copytree, move, rmtree
+from shutil import chown, copyfile, copystat, copytree, move, rmtree
 from typing import Dict, Iterable, List, Sequence, Union
 from unicodedata import normalize
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -833,28 +833,17 @@ def copy(
     Returns:
         str: The destination.
     """
+    # Keep content and metadata errors separate: move() removes the source as
+    # soon as this callback returns successfully.
+    if isdir(dst):
+        dst = join(dst, basename(src))
+    result = copyfile(src, dst, follow_symlinks=follow_symlinks)
     try:
-        return copy2(src, dst, follow_symlinks=follow_symlinks)
-
-    except PermissionError as pe:
-        if pe.errno == 1:
-            # Issue 117
-            # NFS file system doesn't allow/support chmod.
-            # This is done after the file is already copied. So just accept that
-            # it isn't possible to change the permissions. Continue like normal.
-            return dst
-
-        raise
-
-    except OSError as oe:
-        if oe.errno == 524:
-            # Issue 229
-            # NFS file system doesn't allow/support setting extended attributes.
-            # This is done after the file is already copied. So just accept that
-            # it isn't possible to set them. Continue like normal.
-            return dst
-
-        raise
+        copystat(src, result, follow_symlinks=follow_symlinks)
+    except OSError as error:
+        if error.errno not in (1, 524):
+            raise
+    return result
 
 
 def rename_file(

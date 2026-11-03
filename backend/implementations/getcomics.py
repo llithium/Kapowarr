@@ -18,11 +18,10 @@ from backend.base.custom_exceptions import (DownloadLimitReached,
                                             EnqueuingDownloadFailure,
                                             IssueNotFound, LinkBroken)
 from backend.base.definitions import (GC_DOWNLOAD_SOURCE_TERMS,
-                                      BlocklistReason, Constants, Download,
-                                      DownloadGroup,
+                                      BlocklistReason, Download, DownloadGroup,
+                                      DownloadService,
                                       EnqueuingDownloadFailureReason,
-                                      GCDownloadSource, SearchResultData,
-                                      SpecialVersion)
+                                      GCDownloadSource, SpecialVersion)
 from backend.base.file_extraction import (extract_filename_data,
                                           refine_special_version)
 from backend.base.helpers import (AsyncSession, check_overlapping_issues,
@@ -53,60 +52,6 @@ mediafire_dd_regex = compile(
 
 
 # region Scraping
-def _get_max_page(
-    soup: BeautifulSoup
-) -> int:
-    """From a GC search result page, extract the total page count.
-
-    Args:
-        soup (BeautifulSoup): The soup of the GC search result page.
-
-    Returns:
-        int: The number of pages. E.g. `10` means 10 pages of search results.
-    """
-    page_links = soup.find_all(["a", "span"], {"class": "page-numbers"})
-
-    if not page_links:
-        return 1
-
-    return int(
-        page_links[-1]
-        .get_text(strip=True)
-        .replace(',', '')
-        .replace('.', '')
-    )
-
-
-def _get_articles(
-    soup: BeautifulSoup
-) -> List[Tuple[str, str]]:
-    """From a GC search result page, extract article (single search result)
-    data.
-
-    Args:
-        soup (BeautifulSoup): The soup of the GC search result page.
-
-    Returns:
-        List[Tuple[str, str]]: The data of the articles. First string of the
-        tuple is the link, second string is the title.
-    """
-    result: List[Tuple[str, str]] = []
-    for article in soup.find_all("article", {"class": "post"}):
-        title_el = article.find("h1", {"class": "post-title"})
-        if not title_el:
-            continue
-
-        anchor = title_el.find('a')
-        if not anchor:
-            continue
-
-        link: str = first_of_range(anchor.get('href') or '')
-        title = title_el.get_text(strip=True)
-        result.append((link, title))
-
-    return result
-
-
 def _get_title(
     soup: BeautifulSoup
 ) -> Union[str, None]:
@@ -609,7 +554,7 @@ async def __purify_download_group(
                     web_title=web_title,
                     web_sub_title=group['web_sub_title'],
                     download_link=link,
-                    source=source,
+                    download_service=DownloadService(source.value),
                     volume_id=volume_id,
                     issue_id=issue_id,
                     reason=BlocklistReason.LINK_BROKEN
@@ -625,7 +570,7 @@ async def __purify_download_group(
                     download_link=pure_link,
                     volume_id=volume_id,
                     covered_issues=group["info"]["issue_number"],
-                    source_type=source, # type: ignore
+                    download_service=DownloadService(source.value),
                     source_name=source.value,
                     web_link=web_link,
                     web_title=web_title,
@@ -640,7 +585,7 @@ async def __purify_download_group(
                     web_title=web_title,
                     web_sub_title=group['web_sub_title'],
                     download_link=pure_link,
-                    source=source,
+                    download_service=DownloadService(source.value),
                     volume_id=volume_id,
                     issue_id=issue_id,
                     reason=BlocklistReason.LINK_BROKEN
@@ -728,80 +673,6 @@ async def _test_paths(
         raise EnqueuingDownloadFailure(
             EnqueuingDownloadFailureReason.NO_WORKING_LINKS
         )
-
-
-# region Searching
-async def search_getcomics(
-    session: AsyncSession,
-    query: str
-) -> List[SearchResultData]:
-    """Give the search results from GC for the query.
-
-    Args:
-        session (AsyncSession): The session to make the requests with.
-        query (str): The query to use.
-
-    Returns:
-        List[SearchResultData]: The search results.
-    """
-    # Fetch first page and determine max pages
-    first_page = await session.get_text(
-        Constants.GC_SITE_URL,
-        params={"s": query},
-        quiet_fail=True
-    )
-    if not first_page:
-        return []
-
-    first_soup = BeautifulSoup(first_page, "html.parser")
-    max_page = min(
-        _get_max_page(first_soup),
-        10
-    )
-
-    # Fetch pages beyond first concurrently
-    other_tasks = [
-        session.get_text(
-            f"{Constants.GC_SITE_URL}/page/{page}",
-            params={"s": query},
-            quiet_fail=True
-        )
-        for page in range(2, max_page + 1)
-    ]
-
-    if Settings().sv.flaresolverr_base_url:
-        # FlareSolverr available, run at full speed
-        other_htmls = await gather(*other_tasks)
-    else:
-        # FlareSolverr not available, run at sequencial speed
-        other_htmls = [
-            await task
-            for task in other_tasks
-        ]
-
-    other_soups = [
-        BeautifulSoup(html, "html.parser")
-        for html in other_htmls
-        if html
-    ]
-
-    # Process the search results on each page
-    formatted_results: List[SearchResultData] = [
-        {
-            **extract_filename_data(
-                article[1],
-                assume_volume_number=False,
-                fix_year=True
-            ),
-            "link": article[0],
-            "display_title": article[1],
-            "source": Constants.GC_SOURCE_TERM
-        }
-        for soup in (first_soup, *other_soups)
-        for article in _get_articles(soup)
-    ]
-
-    return formatted_results
 
 
 # region Processing
