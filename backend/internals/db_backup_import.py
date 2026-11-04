@@ -13,7 +13,7 @@ from backend.base.custom_exceptions import (DatabaseFileNotFound,
                                             InvalidDatabaseFile)
 from backend.base.definitions import (Constants, DatabaseBackupEntry,
                                       InvalidDatabaseReason, StartType)
-from backend.base.files import copy, folder_path, list_files, rename_file
+from backend.base.files import copy, list_files, rename_file
 from backend.base.logging import LOGGER
 from backend.internals.db import DBConnection, get_db
 from backend.internals.db_migration import DatabaseMigrationHandler
@@ -272,7 +272,7 @@ def import_db_backup(
     backup = get_backup(index)
     dest = copy(
         backup["filepath"],
-        folder_path("db", "Kapowarr_upload.db")
+        join(dirname(DBConnection.default_file), "Kapowarr_upload.db")
     )
 
     import_db(dest, copy_hosting_settings)

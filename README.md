@@ -29,6 +29,9 @@ Featured on [Noted](https://noted.lol/kapowarr/).
 
 ## Installation, support and documentation
 
+- This fork includes a [self-contained macOS app](docs/src/installation/macos_app.md)
+  for Apple Silicon Macs, with automated ZIP and DMG builds.
+
 - For instructions on how to install Kapowarr, see the [installation documentation](https://casvt.github.io/Kapowarr/installation/installation/)
 - For support, a [Discord server](https://discord.gg/5gWtW3ekgZ) and [subreddit](https://www.reddit.com/r/kapowarr/) are available, or [make an issue](https://github.com/Casvt/Kapowarr/issues)
 - For the planning of features or their progress, check the [project board](https://github.com/users/Casvt/projects/5)

@@ -20,6 +20,42 @@ function context(overrides = {}) {
 	};
 }
 
+test('desktop browser lifetime follows page close and back-forward restoration', () => {
+	const listeners = new Map();
+	const connections = [];
+	const retries = new Map();
+	class BrowserSocket {
+		constructor(url, protocol) {
+			assert.equal(url, 'ws://127.0.0.1:1234/');
+			assert.equal(protocol, 'session-token');
+			connections.push(this);
+		}
+		close() { this.closed = true; }
+	}
+	vm.runInNewContext(read('frontend/static/js/desktop.js'), {
+		document: { currentScript: { dataset: {
+			sessionUrl: 'ws://127.0.0.1:1234/', sessionProtocol: 'session-token'
+		} } },
+		window: { addEventListener: (event, callback) => listeners.set(event, callback) },
+		WebSocket: BrowserSocket,
+		setTimeout: (callback) => { const id = retries.size + 1; retries.set(id, callback); return id; },
+		clearTimeout: (id) => retries.delete(id)
+	});
+	assert.equal(connections.length, 1);
+	listeners.get('pagehide')();
+	assert.equal(connections[0].closed, true);
+	listeners.get('pageshow')();
+	assert.equal(connections.length, 2);
+	connections[0].onclose(); // A delayed event from the page's previous connection.
+	assert.equal(retries.size, 0);
+	connections[1].onclose();
+	assert.equal(retries.size, 1);
+	[...retries.values()][0]();
+	assert.equal(connections.length, 3);
+	listeners.get('pagehide')();
+	assert.equal(connections[2].closed, true);
+});
+
 test('shared storage repairs missing and invalid values', () => {
 	const ctx = context();
 	vm.runInNewContext(read('frontend/static/js/storage.js'), ctx);
@@ -456,4 +492,42 @@ test('API key rotation stores the new credential before reloading the page', asy
 	vm.runInNewContext("generateApiKey('old-key')", ctx);
 	await new Promise(resolve => setImmediate(resolve));
 	assert.deepEqual(calls, [['storage', 'new-key'], ['reload']]);
+});
+
+test('General settings load and save the Mac browser-close preference', async () => {
+	const source = read('frontend/static/js/settings_general.js');
+	const functions = source.slice(0, source.indexOf('function generateApiKey('));
+	for (const isMacApp of [true, false]) {
+		const elements = new Map();
+		const querySelector = selector => {
+			if (!isMacApp && selector === '#quit-on-browser-close-input') return null;
+			if (!elements.has(selector)) elements.set(selector, {
+				value: '', checked: true, classList: {remove() {}}
+			});
+			return elements.get(selector);
+		};
+		let saved;
+		const ctx = context({
+			document: {querySelector},
+			getLocalStorage: () => ({theme: 'light'}),
+			fetchAPI: async () => ({result: {
+				quit_on_browser_close: false, proxy_ignored_addresses: []
+			}}),
+			sendAPI: async (...args) => {
+				saved = args[4];
+				return {json: async () => ({result: {}})};
+			}
+		});
+		vm.runInNewContext(functions, ctx);
+		vm.runInNewContext("fillSettings('key')", ctx);
+		await new Promise(resolve => setImmediate(resolve));
+		if (isMacApp) {
+			const checkbox = querySelector('#quit-on-browser-close-input');
+			assert.equal(checkbox.checked, false);
+			checkbox.checked = true;
+		}
+		vm.runInNewContext("saveSettings('key')", ctx);
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(saved.quit_on_browser_close, isMacApp ? true : undefined);
+	}
 });

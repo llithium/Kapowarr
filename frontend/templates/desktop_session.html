@@ -1,0 +1,5 @@
+{% if config.get('DESKTOP_SESSION_URL') %}
+<script src="{{ url_for('static', filename='js/desktop.js') }}"
+    data-session-url="{{ config['DESKTOP_SESSION_URL'] }}"
+    data-session-protocol="{{ config['DESKTOP_SESSION_PROTOCOL'] }}"></script>
+{% endif %}

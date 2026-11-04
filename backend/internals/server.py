@@ -8,7 +8,7 @@ Also handling startup types and the websocket.
 from __future__ import annotations
 
 from multiprocessing import SimpleQueue
-from os import urandom
+from os import environ, urandom
 from threading import Thread, Timer
 from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable,
                     List, Mapping, Type, TypeVar, Union)
@@ -17,8 +17,10 @@ from flask import Flask, render_template, request
 from flask.json.provider import DefaultJSONProvider
 from flask_socketio import SocketIO
 from socketio import PubSubManager
+from waitress import wasyncore
 from waitress.server import create_server
 from waitress.task import ThreadedTaskDispatcher as TTD
+from waitress.trigger import trigger
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 from backend.base.definitions import (Constants, StartType, StartTypeHandler,
@@ -94,6 +96,8 @@ class Server(metaclass=Singleton):
             static_url_path='/static'
         )
         app.config['SECRET_KEY'] = urandom(32)
+        app.config['DESKTOP_SESSION_URL'] = environ.get('KAPOWARR_BROWSER_SESSION_URL')
+        app.config['DESKTOP_SESSION_PROTOCOL'] = environ.get('KAPOWARR_BROWSER_SESSION_PROTOCOL')
 
         json_provider = DefaultJSONProvider(app)
         json_provider.sort_keys = False
@@ -181,13 +185,16 @@ class Server(metaclass=Singleton):
         dispatcher = ThreadedTaskDispatcher()
         dispatcher.set_thread_count(Constants.HOSTING_THREADS)
 
+        self.__server_map: Dict[int, Any] = {}
         self.server = create_server(
             self.app,
+            map=self.__server_map,
             _dispatcher=dispatcher,
             host=host,
             port=port,
             threads=Constants.HOSTING_THREADS
         )
+        self.__shutdown_trigger = trigger(map=self.__server_map)
 
         LOGGER.info(f'Kapowarr running on http://{host}:{port}{self.url_base}')
         self.server.run()
@@ -200,8 +207,14 @@ class Server(metaclass=Singleton):
             return
 
         self.server.task_dispatcher.shutdown()
-        self.server.close()
-        self.server._map.clear() # type: ignore
+
+        def close_server() -> None:
+            wasyncore.close_all(self.__server_map)
+
+        # Close descriptors in Waitress's event-loop thread. Closing them from
+        # this timer thread can interrupt poll() with EBADF and lose a restart.
+        # Own the trigger: Waitress's MultiSocketServer has none of its own.
+        self.__shutdown_trigger.pull_trigger(close_server)
         return
 
     def shutdown(self) -> None:
