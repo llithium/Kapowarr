@@ -85,6 +85,8 @@ class PublicSettingsValues:
     port: int = 5656
     url_base: str = ''
 
+    quit_on_browser_close: bool = True
+
     proxy_type: ProxyType = ProxyType.NONE
     proxy_host: str = ''
     proxy_port: int = 8080

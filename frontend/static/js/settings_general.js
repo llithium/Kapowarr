@@ -1,6 +1,8 @@
 function fillSettings(api_key) {
 	fetchAPI('/settings', api_key)
 	.then(json => {
+		const quitOnClose = document.querySelector('#quit-on-browser-close-input');
+		if (quitOnClose) quitOnClose.checked = json.result.quit_on_browser_close;
 		document.querySelector('#bind-address-input').value = json.result.host;
 		document.querySelector('#port-input').value = json.result.port;
 		document.querySelector('#url-base-input').value = json.result.url_base;
@@ -60,6 +62,9 @@ function saveSettings(api_key) {
 		'db_backup_amount': parseInt(document.querySelector("#db-backup-count-input").value)
 	};
 	
+	const quitOnClose = document.querySelector('#quit-on-browser-close-input');
+	if (quitOnClose) data.quit_on_browser_close = quitOnClose.checked;
+
 	const auth_toggle = document.querySelector('#auth-toggle');
 	if (auth_toggle.value === 'username-password')
 		data.auth_username = document.querySelector('#username-input').value;

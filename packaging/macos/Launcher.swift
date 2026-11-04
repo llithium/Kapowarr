@@ -27,10 +27,9 @@ final class ServerController {
         }
     }
 
-    func serverURL() throws -> URL {
+    private func savedSettings() throws -> [String: String] {
         let database = data.appendingPathComponent("Kapowarr.db")
-        var port = "5656"
-        var base = ""
+        var settings: [String: String] = [:]
         if FileManager.default.fileExists(atPath: database.path) {
             var db: OpaquePointer?
             guard sqlite3_open_v2(database.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
@@ -40,19 +39,34 @@ final class ServerController {
             defer { sqlite3_close(db) }
             sqlite3_busy_timeout(db, 2000)
             var statement: OpaquePointer?
-            let query = "SELECT key, value FROM config WHERE key IN ('port', 'url_base')"
-            if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
-                defer { sqlite3_finalize(statement) }
-                while sqlite3_step(statement) == SQLITE_ROW {
-                    guard let keyText = sqlite3_column_text(statement, 0),
-                          let valueText = sqlite3_column_text(statement, 1) else { continue }
-                    let key = String(cString: keyText)
-                    let value = String(cString: valueText)
-                    if key == "port" { port = value }
-                    if key == "url_base" { base = value }
+            let query = "SELECT key, value FROM config WHERE key IN ('port', 'url_base', 'quit_on_browser_close')"
+            guard sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK else {
+                throw LauncherError(message: "Cannot read Kapowarr's saved settings.")
+            }
+            defer { sqlite3_finalize(statement) }
+            var result = sqlite3_step(statement)
+            while result == SQLITE_ROW {
+                if let keyText = sqlite3_column_text(statement, 0),
+                   let valueText = sqlite3_column_text(statement, 1) {
+                    settings[String(cString: keyText)] = String(cString: valueText)
                 }
+                result = sqlite3_step(statement)
+            }
+            guard result == SQLITE_DONE else {
+                throw LauncherError(message: "Cannot read Kapowarr's saved settings. Try closing its browser tabs again.")
             }
         }
+        return settings
+    }
+
+    func quitOnBrowserClose() throws -> Bool {
+        try savedSettings()["quit_on_browser_close"] != "0"
+    }
+
+    func serverURL() throws -> URL {
+        let settings = try savedSettings()
+        let port = settings["port"] ?? "5656"
+        let base = settings["url_base"] ?? ""
         guard let number = Int(port), (1...65535).contains(number),
               let url = URL(string: "http://127.0.0.1:\(number)\(base)/") else {
             throw LauncherError(message: "Kapowarr's saved port or URL base is invalid.")
@@ -282,30 +296,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         server.onExit = { [weak self] code in
             guard let self, !self.stopping else { return }
             if code != 0 { self.showError("Kapowarr stopped unexpectedly. Open View Logs for details.") }
-            NSApp.terminate(nil)
+            self.quit()
         }
         do {
             let session = try BrowserSession()
             browserSession = session
-            session.onLastTabClosed = { NSApp.terminate(nil) }
+            session.onLastTabClosed = { [weak self] in
+                guard let self else { return }
+                do {
+                    if try self.server.quitOnBrowserClose() { self.quit() }
+                } catch {
+                    self.showError(error.localizedDescription)
+                }
+            }
             session.onFailure = { [weak self] error in
                 self?.showError(error.localizedDescription)
-                NSApp.terminate(nil)
+                self?.quit()
             }
             session.start { [weak self, weak session] in
                 guard let self, let session else { return }
                 do {
                     try self.server.start(browserSession: session)
+                    if CommandLine.arguments.contains("--browser-session-app-test") {
+                        print("SERVER_PID=\(self.server.process!.processIdentifier)")
+                        fflush(stdout)
+                    }
                     self.timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.checkServer() }
                     self.checkServer()
                 } catch {
                     self.showError(error.localizedDescription)
-                    NSApp.terminate(nil)
+                    self.quit()
                 }
             }
         } catch {
             showError(error.localizedDescription)
-            NSApp.terminate(nil)
+            quit()
         }
     }
 
@@ -322,7 +347,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.status.title = "Kapowarr is running"
                     if self.starting {
                         self.starting = false
-                        NSWorkspace.shared.open(url)
+                        if !CommandLine.arguments.contains("--browser-session-app-test") {
+                            NSWorkspace.shared.open(url)
+                        }
                     }
                 } else if self.starting && Date() > self.deadline {
                     self.starting = false
@@ -341,7 +368,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func downloadUpdates() {
         NSWorkspace.shared.open(URL(string: "https://github.com/llithium/Kapowarr/releases")!)
     }
-    @objc func quit() { NSApp.terminate(nil) }
+    @objc func quit() {
+        // AppKit's deferred termination runs a nested event loop. Enter it
+        // outside a main-dispatch callback so shutdown replies can run there.
+        NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
+    }
 
     func showError(_ message: String) {
         NSApp.activate(ignoringOtherApps: true)

@@ -3,14 +3,17 @@
 
 import argparse
 import html
+import json
 import os
 import re
+import selectors
 import signal
 import socket
 import sqlite3
 import subprocess
 import tempfile
 import time
+import urllib.request
 from pathlib import Path
 
 import websocket
@@ -33,7 +36,7 @@ def main() -> None:
                 ('port', port), ('downloads_enabled', False)
             ])
         process = subprocess.Popen(
-            [str(launcher), '--smoke-test', '--browser-session', '45'],
+            [str(launcher), '--browser-session-app-test'],
             env={'HOME': str(Path.home()), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin',
                  'KAPOWARR_DATA_DIR': folder},
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
@@ -42,6 +45,9 @@ def main() -> None:
         clients = []
         try:
             assert process.stdout is not None
+            with selectors.DefaultSelector() as output:
+                output.register(process.stdout, selectors.EVENT_READ)
+                assert output.select(timeout=15), 'Launcher did not report startup.'
             line = process.stdout.readline().strip()
             assert line.startswith('SERVER_PID='), line
             backend_pid = int(line.split('=', 1)[1])
@@ -51,6 +57,21 @@ def main() -> None:
             session_url = re.search(r'data-session-url="([^"]+)"', page)
             protocol = re.search(r'data-session-protocol="([^"]+)"', page)
             assert session_url and protocol, 'Browser close is not connected to the app lifetime.'
+            with sqlite3.connect(data / 'Kapowarr.db') as connection:
+                api_key = connection.execute("SELECT value FROM config WHERE key='api_key'").fetchone()[0]
+            settings_url = f'{url}/api/settings?api_key={api_key}'
+
+            def set_quit_on_close(enabled):
+                request = urllib.request.Request(
+                    settings_url, method='PUT',
+                    data=json.dumps({'quit_on_browser_close': enabled}).encode(),
+                    headers={'Content-Type': 'application/json'}
+                )
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    assert json.load(response)['result']['quit_on_browser_close'] is enabled
+
+            assert json.loads(fetch(settings_url))['result']['quit_on_browser_close'] is True
+            assert b'quit-on-browser-close-input' in fetch(url + '/settings/general')
 
             def connect():
                 client = websocket.create_connection(
@@ -70,7 +91,13 @@ def main() -> None:
             replacement = connect()
             time.sleep(6)
             assert process.poll() is None, 'Reloading or navigating stopped the app.'
+            set_quit_on_close(False)
             replacement.close()
+            time.sleep(6)
+            assert process.poll() is None, 'The disabled setting still quit the app.'
+            final = connect()
+            set_quit_on_close(True)
+            final.close()
             process.communicate(timeout=12)
             assert process.returncode == 0, process.returncode
             deadline = time.monotonic() + 2
@@ -82,7 +109,7 @@ def main() -> None:
                 time.sleep(0.1)
             else:
                 raise AssertionError('Server or worker processes survived the last tab closing.')
-            print('Multiple tabs and navigation stay running; last-tab close stops the app and every worker.')
+            print('Multiple tabs, navigation, and the disabled setting stay running; enabling last-tab quit stops the app and every worker.')
         finally:
             for client in clients:
                 client.close()

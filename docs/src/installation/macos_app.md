@@ -18,6 +18,10 @@ grace period. Reloading or moving between pages keeps the app running. If you
 have several Kapowarr tabs open, it runs until the last one closes. You can also
 use **Quit Kapowarr** to stop it directly.
 
+In **Settings → General → Mac App**, turn off **Quit when browser tabs close**
+to keep Kapowarr running in the menu bar after closing its tabs. The setting is
+enabled by default and takes effect when you save; restarting is not required.
+
 Opening the app again opens the interface for the running instance. The launcher
 rejects a second server using the same data folder and reports a port conflict
 if another service is already listening on Kapowarr's saved port.
@@ -71,7 +75,9 @@ path without Homebrew or installed Python. It checks the bundled interpreter,
 spawned workers, client registration, web assets, archive extraction, database
 export, server restart, duplicate-launch protection, and shutdown. The browser
 lifetime check also verifies multiple tabs, navigation, and cleanup of the
-entire server process group when the last tab closes.
+entire server process group when the last tab closes. It exercises the actual
+Mac app lifecycle and checks that changing the browser-close setting takes
+effect without restarting.
 
 For a Developer ID build, set `MACOS_SIGNING_IDENTITY` to an identity in your
 keychain. Set `MACOS_NOTARY_PROFILE` to a `notarytool` keychain profile to submit

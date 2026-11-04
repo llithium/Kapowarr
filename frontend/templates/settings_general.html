@@ -23,6 +23,18 @@
 	</section>
 	<div class="settings-container">
 		<form id="settings-form">
+			{% if config.get('DESKTOP_SESSION_URL') %}
+			<h2>Mac App</h2>
+			<table class="fold-table">
+				<tr>
+					<th><label for="quit-on-browser-close-input">Quit when browser tabs close</label></th>
+					<td>
+						<input type="checkbox" id="quit-on-browser-close-input">
+						<p>Stop Kapowarr and its background processes five seconds after the last Kapowarr tab closes. Turn off to keep it running in the menu bar.</p>
+					</td>
+				</tr>
+			</table>
+			{% endif %}
 			<h2>Host</h2>
 			<p>Changing hosting settings will immediately restart Kapowarr. Access the web-ui within 60 seconds for the changes to stay, or they will be reverted.</p>
 			<table class="fold-table">

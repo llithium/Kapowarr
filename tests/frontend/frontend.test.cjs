@@ -493,3 +493,41 @@ test('API key rotation stores the new credential before reloading the page', asy
 	await new Promise(resolve => setImmediate(resolve));
 	assert.deepEqual(calls, [['storage', 'new-key'], ['reload']]);
 });
+
+test('General settings load and save the Mac browser-close preference', async () => {
+	const source = read('frontend/static/js/settings_general.js');
+	const functions = source.slice(0, source.indexOf('function generateApiKey('));
+	for (const isMacApp of [true, false]) {
+		const elements = new Map();
+		const querySelector = selector => {
+			if (!isMacApp && selector === '#quit-on-browser-close-input') return null;
+			if (!elements.has(selector)) elements.set(selector, {
+				value: '', checked: true, classList: {remove() {}}
+			});
+			return elements.get(selector);
+		};
+		let saved;
+		const ctx = context({
+			document: {querySelector},
+			getLocalStorage: () => ({theme: 'light'}),
+			fetchAPI: async () => ({result: {
+				quit_on_browser_close: false, proxy_ignored_addresses: []
+			}}),
+			sendAPI: async (...args) => {
+				saved = args[4];
+				return {json: async () => ({result: {}})};
+			}
+		});
+		vm.runInNewContext(functions, ctx);
+		vm.runInNewContext("fillSettings('key')", ctx);
+		await new Promise(resolve => setImmediate(resolve));
+		if (isMacApp) {
+			const checkbox = querySelector('#quit-on-browser-close-input');
+			assert.equal(checkbox.checked, false);
+			checkbox.checked = true;
+		}
+		vm.runInNewContext("saveSettings('key')", ctx);
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(saved.quit_on_browser_close, isMacApp ? true : undefined);
+	}
+});
