@@ -128,6 +128,12 @@ def main() -> None:
             connection.executemany('INSERT OR REPLACE INTO config VALUES (?, ?)', [
                 ('port', port), ('downloads_enabled', False), ('download_folder', str(downloads))
             ])
+        # A stopped backend leaves a WAL-mode database without sidecar files.
+        # The native launcher must read it before any backend opens it again.
+        connection.execute('PRAGMA journal_mode = WAL')
+        connection.close()
+        assert not Path(str(database) + '-wal').exists()
+        assert not Path(str(database) + '-shm').exists()
         environment['KAPOWARR_DATA_DIR'] = str(data)
         process = subprocess.Popen(
             [str(launcher), '--smoke-test', '18'], env=environment,
@@ -176,7 +182,7 @@ def main() -> None:
             with socket.socket() as listener:
                 listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 listener.bind(('127.0.0.1', port))
-            print('App startup, web assets, database export, restart, duplicate protection, and clean shutdown passed.')
+            print('App startup from a closed WAL database, web assets, database export, restart, duplicate protection, and clean shutdown passed.')
         except Exception:
             log = data / 'logs/launcher.log'
             if log.exists():

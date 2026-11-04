@@ -32,16 +32,19 @@ final class ServerController {
         var settings: [String: String] = [:]
         if FileManager.default.fileExists(atPath: database.path) {
             var db: OpaquePointer?
-            guard sqlite3_open_v2(database.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
+            // A WAL reader may need to recreate its sidecar files after the
+            // backend stops. Allow that without creating a missing database.
+            guard sqlite3_open_v2(database.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK else {
+                let detail = String(cString: sqlite3_errmsg(db))
                 if let db { sqlite3_close(db) }
-                throw LauncherError(message: "Cannot read the Kapowarr database at \(database.path).")
+                throw LauncherError(message: "Cannot read the Kapowarr database at \(database.path): \(detail).")
             }
             defer { sqlite3_close(db) }
             sqlite3_busy_timeout(db, 2000)
             var statement: OpaquePointer?
             let query = "SELECT key, value FROM config WHERE key IN ('port', 'url_base', 'quit_on_browser_close')"
             guard sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK else {
-                throw LauncherError(message: "Cannot read Kapowarr's saved settings.")
+                throw LauncherError(message: "Cannot read Kapowarr's saved settings: \(String(cString: sqlite3_errmsg(db))).")
             }
             defer { sqlite3_finalize(statement) }
             var result = sqlite3_step(statement)
@@ -53,7 +56,7 @@ final class ServerController {
                 result = sqlite3_step(statement)
             }
             guard result == SQLITE_DONE else {
-                throw LauncherError(message: "Cannot read Kapowarr's saved settings. Try closing its browser tabs again.")
+                throw LauncherError(message: "Cannot read Kapowarr's saved settings: \(String(cString: sqlite3_errmsg(db))). Try closing its browser tabs again.")
             }
         }
         return settings
