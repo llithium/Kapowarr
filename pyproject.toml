@@ -10,6 +10,7 @@ license = {file = "LICENSE"}
 requires-python = ">= 3.8"
 
 [tool.mypy]
+exclude = ['^build/', '^dist/']
 warn_unused_configs = true
 sqlite_cache = true
 cache_fine_grained = true

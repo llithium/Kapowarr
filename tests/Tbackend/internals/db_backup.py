@@ -1,6 +1,7 @@
 import sqlite3
 import unittest
 from contextlib import ExitStack
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -11,8 +12,10 @@ from backend.base.custom_exceptions import FolderNotFound, InvalidKeyValue
 from backend.internals.db import (DBConnection, DBConnectionManager, get_db,
                                   set_db_location,
                                   setup_db_adapters_and_converters)
-from backend.internals.db_backup_import import backup_database, get_backups
+from backend.internals.db_backup_import import (backup_database, get_backups,
+                                                import_db_backup)
 from backend.internals.settings import Settings
+from frontend.api import api
 
 
 class DatabaseBackups(unittest.TestCase):
@@ -23,7 +26,9 @@ class DatabaseBackups(unittest.TestCase):
         stack.enter_context(patch.object(DBConnection, 'default_file', ''))
         stack.enter_context(patch.object(DBConnectionManager, 'instances', {}))
         stack.enter_context(patch.object(Settings, '_instances', {}))
-        stack.enter_context(Flask(__name__).app_context())
+        self.app = Flask(__name__)
+        self.app.register_blueprint(api, url_prefix='/api')
+        stack.enter_context(self.app.app_context())
         self.addCleanup(DBConnectionManager.close_connection_of_thread)
         self.addCleanup(Settings.get_settings.cache_clear)
         self.addCleanup(Settings.get_public_settings.cache_clear)
@@ -34,6 +39,37 @@ class DatabaseBackups(unittest.TestCase):
         get_db().execute("INSERT INTO example VALUES ('preserved');")
         get_db().connection.commit()
         self.settings = Settings()
+
+    def test_download_and_upload_stage_beside_the_configured_database(self):
+        backup_database()
+        backup = Path(get_backups()[0]['filepath'])
+        backup_content = backup.read_bytes()
+        client = self.app.test_client()
+        with patch('frontend.api.extract_key'), patch('frontend.api.StartTypeHandlers.diffuse_timer'):
+            response = client.get('/api/system/database')
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.data.startswith(b'SQLite format 3'))
+            content = response.data
+            response.close()
+            self.assertEqual(backup.read_bytes(), backup_content)
+            with patch('frontend.api.import_db') as import_database:
+                response = client.post('/api/system/database', data={
+                    'file': (BytesIO(content), 'backup.db'),
+                    'copy_hosting_settings': 'true'
+                })
+                self.assertEqual(response.status_code, 200)
+                staged = self.folder / 'Kapowarr_upload.db'
+                import_database.assert_called_once_with(str(staged), True)
+                with sqlite3.connect(staged) as database:
+                    self.assertEqual(database.execute('SELECT value FROM example').fetchone(), ('preserved',))
+
+    def test_restore_stages_the_backup_beside_the_current_database(self):
+        backup_database()
+        with patch('backend.internals.db_backup_import.import_db') as import_database:
+            import_db_backup(0, True)
+            staged = self.folder / 'Kapowarr_upload.db'
+            self.assertTrue(staged.is_file())
+            import_database.assert_called_once_with(str(staged), True)
 
     def test_scheduled_backup_creates_readable_copy_in_data_folder(self):
         backup_database()

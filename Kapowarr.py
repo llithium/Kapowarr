@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import sys
 from argparse import ArgumentParser
 from atexit import register
 from multiprocessing import set_start_method
@@ -94,7 +95,7 @@ def _main(
     LOGGER.info('Starting up Kapowarr')
 
     if not check_min_python_version(*Constants.MIN_PYTHON_VERSION):
-        exit(1)
+        sys.exit(1)
 
     try:
         set_db_location(db_folder)
@@ -167,11 +168,11 @@ def _main(
         task_handler.stop_handle()
         ExternalClients.disconnect_clients()
 
-        if restart_type is not None:
-            LOGGER.info('Restarting Kapowarr')
-            exit(restart_type.value)
+    if restart_type is not None:
+        LOGGER.info('Restarting Kapowarr')
+        sys.exit(restart_type.value)
 
-        exit(0)
+    sys.exit(0)
 
 
 def _stop_sub_process(proc: Popen) -> None:
@@ -225,7 +226,9 @@ def _run_sub_process(
         print("ERROR: Python executable not found")
         return 1
 
-    comm = [py_exe, "-u", __file__] + argv[1:]
+    # A frozen executable already contains the entry point and interpreter.
+    comm = [py_exe] if getattr(sys, 'frozen', False) else [py_exe, '-u', __file__]
+    comm += argv[1:]
     proc = Popen(
         comm,
         env=env
@@ -336,4 +339,4 @@ if __name__ == "__main__":
 
     else:
         rc = Kapowarr()
-        exit(rc)
+        sys.exit(rc)

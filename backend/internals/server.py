@@ -200,8 +200,14 @@ class Server(metaclass=Singleton):
             return
 
         self.server.task_dispatcher.shutdown()
-        self.server.close()
-        self.server._map.clear() # type: ignore
+
+        def close_server() -> None:
+            self.server.close()
+            self.server._map.clear() # type: ignore
+
+        # Close descriptors in Waitress's event-loop thread. Closing them from
+        # this timer thread can interrupt poll() with EBADF and lose a restart.
+        self.server.trigger.pull_trigger(close_server)
         return
 
     def shutdown(self) -> None:

@@ -53,8 +53,8 @@ class DatabaseUploadTests(unittest.TestCase):
         app = Flask(__name__)
         app.register_blueprint(api, url_prefix='/api')
         with TemporaryDirectory() as directory:
-            destination = Path(directory) / 'upload.db'
-            with patch('frontend.api.folder_path', return_value=str(destination)), \
+            destination = Path(directory) / 'Kapowarr_upload.db'
+            with patch('frontend.api.DBConnection.default_file', str(Path(directory) / 'Kapowarr.db')), \
                 patch('frontend.api.import_db') as import_db, \
                 patch('frontend.api.extract_key'), \
                 patch('frontend.api.StartTypeHandlers.diffuse_timer'):

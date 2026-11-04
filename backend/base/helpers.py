@@ -15,7 +15,8 @@ from multiprocessing.pool import Pool
 from os import cpu_count, environ, sep
 from os.path import basename, dirname, exists, isfile, join
 from re import compile
-from subprocess import run
+from shutil import which
+from subprocess import CompletedProcess, run
 from sys import base_exec_prefix, executable, maxsize, platform, version_info
 from threading import current_thread
 from typing import (TYPE_CHECKING, Any, Callable, Collection, Dict,
@@ -41,7 +42,6 @@ from backend.base.logging import LOGGER, get_log_filepath
 if TYPE_CHECKING:
     from multiprocessing import SimpleQueue
     from multiprocessing.pool import IMapIterator
-    from subprocess import CompletedProcess
 
     from flask.ctx import AppContext
 
@@ -216,7 +216,22 @@ def run_rar(args: List[str]) -> CompletedProcess[str]:
     """
     from backend.base.files import folder_path
 
-    exe = folder_path('backend', 'lib', RAR_EXECUTABLES[get_os_type()])
+    os_type = get_os_type()
+    exe = folder_path('backend', 'lib', RAR_EXECUTABLES[os_type])
+    if os_type == OSType.MACOS:
+        # UnRAR can be redistributed separately; the RAR compressor cannot.
+        bundled_unrar = folder_path('backend', 'lib', 'unrar')
+        if args and args[0] == 'a':
+            exe = which('rar') or ''
+        else:
+            exe = bundled_unrar if isfile(bundled_unrar) else which('unrar') or ''
+        if not exe:
+            tool = 'RAR' if args and args[0] == 'a' else 'UnRAR'
+            message = f'{tool} is not installed.'
+            if tool == 'RAR':
+                message += ' Creating RAR/CBR archives requires a separate RAR installation.'
+            LOGGER.error(message)
+            return CompletedProcess(args, 1, '', message)
     return run([exe, *args], capture_output=True, text=True)
 
 
