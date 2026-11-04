@@ -15,9 +15,10 @@ import urllib.request
 from pathlib import Path
 
 
-def fetch(url: str, body=None) -> bytes:
+def fetch(url: str, body=None, method=None) -> bytes:
     payload = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+    request = urllib.request.Request(url, data=payload, method=method,
+                                     headers={'Content-Type': 'application/json'})
     return urllib.request.urlopen(request, timeout=5).read()
 
 
@@ -34,6 +35,55 @@ def wait_for(url: str, process: subprocess.Popen) -> None:
     raise RuntimeError(f'Server did not become ready: {url}')
 
 
+def verify_first_session_download_folder(server: Path, environment: dict) -> None:
+    """A first launch supplies -t; restarts must preserve a later saved choice."""
+    with tempfile.TemporaryDirectory(prefix='kapowarr-first-session-') as folder:
+        data = Path(folder)
+        initial, custom = data / 'temp_downloads', data / 'custom-downloads'
+        initial.mkdir()
+        custom.mkdir()
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            port = listener.getsockname()[1]
+        with sqlite3.connect(data / 'Kapowarr.db') as connection:
+            connection.execute('CREATE TABLE config(key PRIMARY KEY, value BLOB)')
+            connection.execute('INSERT INTO config VALUES (?, ?)', ('downloads_enabled', False))
+        log = data / 'server-output.log'
+        with log.open('w') as output:
+            process = subprocess.Popen(
+                [str(server), '-d', folder, '-l', folder, '-o', '127.0.0.1',
+                 '-p', str(port), '-t', str(initial)],
+                env={**environment, 'PYTHONUNBUFFERED': '1'},
+                stdout=output, stderr=subprocess.STDOUT, start_new_session=True
+            )
+            try:
+                url = f'http://127.0.0.1:{port}'
+                wait_for(url, process)
+                with sqlite3.connect(data / 'Kapowarr.db') as connection:
+                    key = connection.execute("SELECT value FROM config WHERE key='api_key'").fetchone()[0]
+                api = f'?api_key={key}'
+                settings_url = url + '/api/settings' + api
+                assert Path(json.loads(fetch(settings_url))['result']['download_folder']) == initial
+                fetch(settings_url, {'download_folder': str(custom)}, method='PUT')
+                fetch(url + '/api/system/power/restart' + api, {})
+                deadline = time.monotonic() + 15
+                while log.read_text().count('Starting up Kapowarr') < 2:
+                    assert process.poll() is None, 'First-session server exited during restart'
+                    assert time.monotonic() < deadline, 'First-session server did not restart'
+                    time.sleep(0.1)
+                wait_for(url, process)
+                saved = json.loads(fetch(settings_url))['result']['download_folder']
+                assert Path(saved) == custom, f'Restart overwrote the saved download folder: {saved}'
+                print('First-session restart preserves the saved download folder.')
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('app', type=Path)
@@ -45,6 +95,7 @@ def main() -> None:
     # Exclude Homebrew, installed Python, and user Python configuration.
     environment = {'HOME': str(Path.home()), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin'}
     subprocess.run([str(server), '--check-bundle'], env=environment, check=True, timeout=30)
+    verify_first_session_download_folder(server, environment)
     with tempfile.TemporaryDirectory(prefix='kapowarr-app-test-') as temporary:
         data = Path(temporary)
         fixture = Path(__file__).resolve().parents[2] / 'tests/fixtures/macos/comic.cbr'

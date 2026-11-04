@@ -311,13 +311,14 @@ if __name__ == "__main__":
         )))
 
         db_folder: Union[str, None] = args.DatabaseFolder
-        td_folder: Union[str, None] = args.TempDownloadFolder
+        td_folder: Union[str, None] = None
         log_folder: Union[str, None] = args.LogFolder
         log_file: Union[str, None] = args.LogFile
         host: Union[str, None] = None
         port: Union[int, None] = None
         url_base: Union[str, None] = None
         if st == StartType.STARTUP:
+            td_folder = args.TempDownloadFolder
             host = args.Host
             port = args.Port
             url_base = args.UrlBase
