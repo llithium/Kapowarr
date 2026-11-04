@@ -1355,6 +1355,17 @@ class PortablePool:
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         self._pool.__exit__(exc_type, exc_value, traceback)
 
+    def map(
+        self,
+        func: Callable[[T], U],
+        iterable: Iterable[T],
+        chunksize: Union[int, None] = None
+    ) -> List[U]:
+        """Map values in input order inside each worker's application context."""
+        return self._pool.map(
+            _pool_map_func, ((func, value) for value in iterable), chunksize
+        )
+
     def imap_unordered(
         self,
         func: Callable[[T], U],
