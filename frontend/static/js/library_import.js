@@ -480,25 +480,23 @@ function loadProposal(api_key) {
 		else
 			hide([LIEls.views.loading], [LIEls.views.no_result]);
 	})
-	.catch(e => {
-		e.json().then(j => {
-			if (j.error === 'InvalidComicVineApiKey')
-				hide([LIEls.views.loading], [LIEls.views.no_cv]);
-			else if (j.error === 'InvalidKeyValue')
-				hide(
-					[LIEls.views.loading],
-					[LIEls.views.start, document.querySelector('#folder-filter-error')]
-				);
-			else
-				console.log(j);
-		});
+	.catch(async e => {
+		const j = await apiError(e);
+		if (j.error === 'InvalidComicVineApiKey')
+			hide([LIEls.views.loading], [LIEls.views.no_cv]);
+		else if (j.error === 'InvalidKeyValue')
+			hide([LIEls.views.loading], [LIEls.views.start, document.querySelector('#folder-filter-error')]);
+		else {
+			hide([LIEls.views.loading], [LIEls.views.start]);
+			alert('Could not scan the library. Please try again.');
+		}
 	});
 };
 
 function toggleSelectAll() {
 	const checked = LIEls.select_all.checked;
 	LIEls.proposal_list.querySelectorAll('input[type="checkbox"]').forEach(
-		e => e.checked = checked
+		e => { if (!e.disabled) e.checked = checked; }
 	);
 };
 
@@ -597,7 +595,7 @@ function importLibrary(api_key, rename=false) {
 	const data = [...LIEls.proposal_list.querySelectorAll(
 		'tr:has(input[type="checkbox"]:checked)'
 	)]
-		.filter(i => rowid_to_filepath[i.dataset.rowid].cv_id !== null)
+		.filter(i => !i.querySelector('input[type="checkbox"]').disabled && rowid_to_filepath[i.dataset.rowid].cv_id !== null)
 		.map(e => {
 			const rowid = e.dataset.rowid;
 			return {
@@ -629,6 +627,10 @@ function importLibrary(api_key, rename=false) {
 		LIEls.buttons.import_rename.disabled = true;
 		hide([LIEls.views.loading], [LIEls.views.list]);
 		hide([], [LIEls.conflict_notice]);
+	})
+	.catch(() => {
+		hide([LIEls.views.loading], [LIEls.views.list]);
+		alert('Could not import the selected files. Please try again.');
 	});
 };
 

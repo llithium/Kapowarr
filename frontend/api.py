@@ -9,7 +9,8 @@ from typing import Any, Dict, List, Tuple, Union
 
 from flask import Blueprint, after_this_request, request, send_file
 
-from backend.base.custom_exceptions import (InvalidDatabaseFile,
+from backend.base.custom_exceptions import (EnqueuingDownloadFailure,
+                                            InvalidDatabaseFile,
                                             InvalidKeyValue, KeyNotFound)
 from backend.base.definitions import (BlocklistReason, BlocklistReasonID,
                                       CredentialData, CredentialSource,
@@ -30,7 +31,7 @@ from backend.features.library_import import (import_library,
 from backend.features.mass_edit import run_mass_editor_action
 from backend.features.search_full import manual_search
 from backend.features.tasks import (TaskHandler, delete_task_history,
-                                    get_task_history)
+                                    get_task_history, task_library)
 from backend.implementations.blocklist import (add_to_blocklist,
                                                delete_blocklist,
                                                delete_blocklist_entry,
@@ -331,7 +332,10 @@ def api_tasks():
         if not isinstance(data, dict):
             raise InvalidKeyValue(value=data)
 
-        TaskClass = TaskHandler.get_task_class(data.get('cmd', ''))
+        cmd = data.get('cmd')
+        if not isinstance(cmd, str) or cmd not in task_library:
+            raise InvalidKeyValue('cmd', cmd)
+        TaskClass = task_library[cmd]
 
         kwargs = {}
         if TaskClass.action in (
@@ -594,16 +598,22 @@ def api_settings():
         ):
             raise InvalidKeyValue('reset_keys', reset_keys)
 
+        defaults = {
+            key: settings.get_default_value(key)
+            for key in reset_keys
+            if key in (
+                'host', 'port', 'url_base', 'proxy_type', 'proxy_host',
+                'proxy_port', 'proxy_username', 'proxy_password',
+                'proxy_ignored_addresses'
+            )
+        }
         hosting_changes = any(
-            s in data
-            and data[s] is not None
-            and data[s] != getattr(settings.sv, s)
-            for s in ('host', 'port', 'url_base')
+            key in defaults and defaults[key] != getattr(settings.sv, key)
+            for key in ('host', 'port', 'url_base')
         )
         proxy_changes = any(
-            s in data
-            and data[s] != getattr(settings.sv, s)
-            for s in (
+            key in defaults and defaults[key] != getattr(settings.sv, key)
+            for key in (
                 'proxy_type', 'proxy_host', 'proxy_port',
                 'proxy_username', 'proxy_password', 'proxy_ignored_addresses'
             )
@@ -1257,13 +1267,15 @@ def api_volume_download(id: int):
     if not isinstance(data["indexer_id"], int):
         raise InvalidKeyValue("indexer_id", data["indexer_id"])
 
-    result = DownloadHandler().add(
+    result, failure = run(DownloadHandler().add(
         data["link"],
         indexer_id=data["indexer_id"],
         volume_id=id,
         issue_id=None,
         force_match=data["force_match"]
-    )
+    ))
+    if failure is not None:
+        raise EnqueuingDownloadFailure(failure)
     return return_api(result, code=201)
 
 
@@ -1304,13 +1316,15 @@ def api_issue_download(id: int):
     if not isinstance(data["indexer_id"], int):
         raise InvalidKeyValue("indexer_id", data["indexer_id"])
 
-    result = DownloadHandler().add(
+    result, failure = run(DownloadHandler().add(
         data["link"],
         indexer_id=data["indexer_id"],
         volume_id=volume_id,
         issue_id=id,
         force_match=data["force_match"]
-    )
+    ))
+    if failure is not None:
+        raise EnqueuingDownloadFailure(failure)
     return return_api(result, code=201)
 
 

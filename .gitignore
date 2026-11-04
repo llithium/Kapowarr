@@ -132,6 +132,7 @@ dmypy.json
 *.db
 *.db-shm
 *.db-wal
+*.import-cache*
 
 # vs-code
 *.code-workspace

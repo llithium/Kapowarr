@@ -242,7 +242,7 @@ function search(reset_url_params=true) {
 			else if (e.status === 509)
 				hide([SearchEls.msgs.loading], [SearchEls.msgs.rate_limited]);
 			else
-				console.log(e);
+				hide([SearchEls.msgs.loading], [SearchEls.msgs.failed]);
 		});
 	});
 };
@@ -458,8 +458,11 @@ function addVolume() {
 				SearchEls.window.submit.innerText = 'The API key of the metadata source is invalid';
 				SearchEls.window.submit.style.color = 'var(--error-color)';
 				showWindow("add-window");
-			} else
-				console.log(e);
+			} else {
+				SearchEls.window.submit.innerText = 'Could not add volume. Please try again.';
+				SearchEls.window.submit.style.color = 'var(--error-color)';
+				showWindow('add-window');
+			}
 		});
 	});
 };

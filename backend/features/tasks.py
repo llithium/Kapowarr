@@ -16,7 +16,8 @@ from flask import Flask
 from backend.base.custom_exceptions import (InvalidComicVineApiKey,
                                             InvalidKeyValue, TaskNotDeletable,
                                             TaskNotFound)
-from backend.base.helpers import Singleton, get_schedules_next_run, get_subclasses
+from backend.base.helpers import (Singleton, get_schedules_next_run,
+                                  get_subclasses)
 from backend.base.logging import LOGGER
 from backend.features.download_queue import DownloadHandler
 from backend.features.search_discover import discover_downloads
@@ -39,18 +40,12 @@ class Task(ABC):
     category: str
 
     @property
-    @abstractmethod
     def volume_id(self) -> Union[int, None]:
-        ...
+        return None
 
     @property
-    @abstractmethod
     def issue_id(self) -> Union[int, None]:
-        ...
-
-    @abstractmethod
-    def __init__(self, **kwargs) -> None:
-        ...
+        return None
 
     @abstractmethod
     def run(self) -> Union[None, List[Tuple[str, int, Union[int, None]]]]:
@@ -242,10 +237,6 @@ class AutoSearchVolume(Task):
     def volume_id(self) -> int:
         return self._volume_id
 
-    @property
-    def issue_id(self) -> None:
-        return None
-
     def __init__(self, volume_id: int) -> None:
         """Create the task
 
@@ -283,10 +274,6 @@ class RefreshAndScanVolume(Task):
     def volume_id(self) -> int:
         return self._volume_id
 
-    @property
-    def issue_id(self) -> None:
-        return None
-
     def __init__(self, volume_id: int) -> None:
         """Create the task
 
@@ -321,10 +308,6 @@ class MassRenameVolume(Task):
     @property
     def volume_id(self) -> int:
         return self._volume_id
-
-    @property
-    def issue_id(self) -> None:
-        return None
 
     def __init__(
         self,
@@ -370,10 +353,6 @@ class MassConvertVolume(Task):
     @property
     def volume_id(self) -> int:
         return self._volume_id
-
-    @property
-    def issue_id(self) -> None:
-        return None
 
     def __init__(
         self,
@@ -421,14 +400,6 @@ class UpdateAll(Task):
     display_title = 'Update All'
     category = ''
 
-    @property
-    def volume_id(self) -> None:
-        return None
-
-    @property
-    def issue_id(self) -> None:
-        return None
-
     def __init__(self, allow_skipping: bool = False) -> None:
         """Create the task
 
@@ -463,17 +434,6 @@ class SearchAll(Task):
     display_title = 'Search All'
     category = 'download'
 
-    @property
-    def volume_id(self) -> None:
-        return None
-
-    @property
-    def issue_id(self) -> None:
-        return None
-
-    def __init__(self) -> None:
-        return
-
     def run(self) -> List[Tuple[str, int, Union[int, None]]]:
         cursor = get_db(force_new=True)
         cursor.execute(
@@ -505,17 +465,6 @@ class BackupDatabase(Task):
     display_title = 'Database Backup'
     category = ''
 
-    @property
-    def volume_id(self) -> None:
-        return None
-
-    @property
-    def issue_id(self) -> None:
-        return None
-
-    def __init__(self) -> None:
-        return
-
     def run(self) -> None:
         self.message = 'Creating database backup'
         WebSocket().emit(TaskStatusEvent(self.message))
@@ -531,17 +480,6 @@ class RssSync(Task):
     action = 'rss_sync'
     display_title = 'RSS Sync'
     category = 'download'
-
-    @property
-    def volume_id(self) -> None:
-        return None
-
-    @property
-    def issue_id(self) -> None:
-        return None
-
-    def __init__(self) -> None:
-        return
 
     def run(self) -> List[Tuple[str, int, Union[int, None]]]:
         self.message = 'Performing RSS Sync'

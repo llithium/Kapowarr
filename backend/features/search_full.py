@@ -80,7 +80,7 @@ class SearchCoordinator:
         result: MatchedSearchResultData,
         issue_year: Union[int, None] = None,
         calculated_issue_number: Union[float, None] = None
-    ) -> List[int]:
+    ) -> List[float]:
         """Give a search result a rank, to sort it on.
 
         Args:
@@ -95,13 +95,13 @@ class SearchCoordinator:
                 Defaults to None.
 
         Returns:
-            List[int]: A list of numbers which determines the ranking of the result.
+            List[float]: A list of numbers which determines the ranking of the result.
         """
         title = self.volume_data.title
         volume_number = self.volume_data.volume_number
         year = self.volume_data.year
 
-        rating = []
+        rating: List[float] = []
 
         # Prefer matches (False == 0 == higher rank)
         rating.append(not result['match'])
@@ -204,12 +204,17 @@ class SearchCoordinator:
             for team in self.indexers
         ]
 
-        # Remove indexers that should stop
-        for idx, (action, _) in list(enumerate(actions)):
-            if action == SearchAction.STOP:
-                del actions[idx]
-                await self.indexers[idx]["indexer"].shutdown()
-                del self.indexers[idx]
+        # Retain matching action/indexer pairs as stopped indexers are removed.
+        active_actions = []
+        active_indexers = []
+        for action, team in zip(actions, self.indexers):
+            if action[0] == SearchAction.STOP:
+                await team["indexer"].shutdown()
+            else:
+                active_actions.append(action)
+                active_indexers.append(team)
+        actions = active_actions
+        self.indexers = active_indexers
 
         queries = [
             team["query_builder"].next_query(action, query_keys)
@@ -415,10 +420,10 @@ def choose_downloads(
 
         # Check that any other selected download doesn't already cover the issue
         for part in chosen_downloads:
-            if check_overlapping_issues(
-                part["issue_number"], # type: ignore
-                search_result["issue_number"]
-            ):
+            part_number = part["issue_number"]
+            result_number = search_result["issue_number"]
+            if (part_number is not None and result_number is not None
+                    and check_overlapping_issues(part_number, result_number)):
                 break
         else:
             chosen_downloads.append(search_result)

@@ -256,7 +256,7 @@ class BaseEnum(Enum):
         return self.value == other
 
     def __hash__(self) -> int:
-        return id(self.value)
+        return hash(self.value)
 
 
 class OSType(BaseEnum):
@@ -824,12 +824,6 @@ class FileMatch(TypedDict):
     forced_match: bool
 
 
-class QueuedTaskData(TypedDict):
-    id: int
-    task: 'Task'
-    thread: Thread
-
-
 # region Dataclasses
 @dataclass
 class BlocklistEntry:
@@ -1133,40 +1127,6 @@ class WebSocketEvent(ABC):
 
         Returns:
             Dict[str, Any]: The body.
-        """
-        ...
-
-
-class Task(ABC):
-    action: str
-
-    stop: bool
-    message: str
-    display_title: str
-
-    @property
-    @abstractmethod
-    def volume_id(self) -> Union[int, None]:
-        ...
-
-    @property
-    @abstractmethod
-    def issue_id(self) -> Union[int, None]:
-        ...
-
-    @abstractmethod
-    def __init__(self, **kwargs) -> None:
-        ...
-
-    @abstractmethod
-    def run(self) -> Union[None, List[Tuple[str, int, int, Union[int, None]]]]:
-        """Run the task
-
-        Returns:
-            Union[None, List[Tuple[str, int, Union[int, None]]]]:
-                Either `None` if the task has no result or
-                `List[Tuple[str, int, Union[int, None]]]` if the task returns
-                search results.
         """
         ...
 

@@ -20,7 +20,6 @@ class DatabaseBackups(unittest.TestCase):
         stack = ExitStack()
         self.addCleanup(stack.close)
         self.folder = Path(stack.enter_context(TemporaryDirectory()))
-        stack.enter_context(patch.object(DBConnection, 'file', ''))
         stack.enter_context(patch.object(DBConnection, 'default_file', ''))
         stack.enter_context(patch.object(DBConnectionManager, 'instances', {}))
         stack.enter_context(patch.object(Settings, '_instances', {}))

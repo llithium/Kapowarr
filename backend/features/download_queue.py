@@ -6,18 +6,18 @@ from asyncio import gather, run
 from os import listdir
 from os.path import basename, join
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Tuple, Type, Union
-
-from typing_extensions import assert_never
+from urllib.parse import urlsplit
 
 from backend.base.custom_exceptions import (ClientNotWorking,
                                             DownloadLimitReached,
                                             DownloadNotFound,
                                             DownloadUnmovable,
                                             EnqueuingDownloadFailure,
-                                            InvalidKeyValue, IssueNotFound,
-                                            LinkBroken)
+                                            IndexerNotFound, InvalidKeyValue,
+                                            IssueNotFound, LinkBroken)
 from backend.base.definitions import (BlocklistReason, Constants, Download,
-                                      DownloadSource, DownloadState,
+                                      DownloadClientIdentifier, DownloadSource,
+                                      DownloadState,
                                       EnqueuingDownloadFailureReason,
                                       ExternalDownload, SeedingHandling)
 from backend.base.files import create_folder, delete_file_folder
@@ -32,6 +32,7 @@ from backend.implementations.download_clients import (BaseDirectDownload,
                                                       TorrentDownload)
 from backend.implementations.external_client_manager import ExternalClients
 from backend.implementations.getcomics import GetComicsPage
+from backend.implementations.indexer_client_manager import IndexerClients
 from backend.implementations.volumes import Issue
 from backend.internals.db import get_db, iter_commit
 from backend.internals.server import (AddedToQueueEvent, QueueStatusEvent,
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
 # =====================
 # Download handling
 # =====================
-download_type_to_class: Dict[str, Type[Download]] = {
+download_type_to_class: Dict[DownloadClientIdentifier, Type[Download]] = {
     c.identifier: c
     for c in get_subclasses(BaseDirectDownload)
 }
@@ -77,7 +78,7 @@ class DownloadHandler(metaclass=Singleton):
 
         except DownloadLimitReached as e:
             download.stop(DownloadState.FAILED_STATE)
-            if e.source == DownloadSource.MEGA:
+            if e.service == DownloadSource.MEGA:
                 self._remove_mega(exclude_id=download.id)
 
         ws.emit(status_event)
@@ -119,6 +120,7 @@ class DownloadHandler(metaclass=Singleton):
         status_event = QueueStatusEvent(download)
         seeding_handling = self.settings.sv.seeding_handling
 
+        post_processer: Type[PostProcessor]
         if seeding_handling == SeedingHandling.COMPLETE:
             post_processer = PostProcessorTorrentsComplete
 
@@ -126,7 +128,7 @@ class DownloadHandler(metaclass=Singleton):
             post_processer = PostProcessorTorrentsCopy
 
         else:
-            assert_never(seeding_handling)
+            raise ValueError(f"Unknown seeding handling: {seeding_handling}")
 
         # When seeding_handling is 'copy', keep track of whether we already
         # copied the files
@@ -172,7 +174,7 @@ class DownloadHandler(metaclass=Singleton):
                 # Or seeding with files copied
                 # Or seeding with seeding_handling = 'complete'
                 download.sleep_event.wait(
-                    timeout=Constants.TORRENT_UPDATE_INTERVAL
+                    timeout=Constants.EXTERNAL_CLIENT_UPDATE_INTERVAL
                 )
 
         ws.emit(RemovedFromQueueEvent(download))
@@ -298,12 +300,12 @@ class DownloadHandler(metaclass=Singleton):
                     """,
                     {
                         'volume_id': download.volume_id,
-                        'client_type': download.identifier,
+                        'client_type': download.identifier.value,
                         'external_client_id': external_client_id,
                         'download_link': download.download_link,
                         'covered_issues': covered_issues,
                         'force_original_name': forced_match,
-                        'source_type': download.source_type.value,
+                        'source_type': download.download_service.value,
                         'source_name': download.source_name,
                         'web_link': download.web_link,
                         'web_title': download.web_title,
@@ -357,7 +359,9 @@ class DownloadHandler(metaclass=Singleton):
         raise DownloadNotFound(download_id)
 
     # region Adding
-    def __determine_link_type(self, link: str) -> Union[str, None]:
+    def __determine_link_type(
+        self, link: str, indexer_id: Union[int, None] = None
+    ) -> Union[str, None]:
         """Determine the service type of the link (e.g. getcomics, torrent, etc.).
 
         Args:
@@ -366,8 +370,26 @@ class DownloadHandler(metaclass=Singleton):
         Returns:
             Union[str, None]: The service type of the link or `None` if unknown.
         """
-        if link.startswith(Constants.GC_SITE_URL):
-            return 'gc'
+        parsed = urlsplit(link)
+        indexers = IndexerClients.get_all_data()
+        if indexer_id is not None:
+            indexers = [i for i in indexers if i['id'] == indexer_id]
+            if not indexers:
+                raise IndexerNotFound(indexer_id)
+        for indexer in indexers:
+            if not indexer['enabled'] or indexer['client_type'] != 'GetComics':
+                continue
+            base = urlsplit(indexer['url'])
+            base_path = base.path.rstrip('/')
+            if (
+                parsed.scheme.lower() == base.scheme.lower()
+                and parsed.netloc.lower() == base.netloc.lower()
+                and (not base_path or parsed.path == base_path
+                     or parsed.path.startswith(base_path + '/'))
+            ):
+                return 'gc'
+        if indexer_id is not None:
+            raise InvalidKeyValue('indexer_id', indexer_id)
         return None
 
     def link_in_queue(self, link: str) -> bool:
@@ -403,7 +425,8 @@ class DownloadHandler(metaclass=Singleton):
         link: str,
         volume_id: int,
         issue_id: Union[int, None] = None,
-        force_match: bool = False
+        force_match: bool = False,
+        indexer_id: Union[int, None] = None
     ) -> Tuple[List[dict], Union[EnqueuingDownloadFailureReason, None]]:
         """Add a download to the queue.
 
@@ -439,11 +462,10 @@ class DownloadHandler(metaclass=Singleton):
                 EnqueuingDownloadFailureReason.DOWNLOADS_DISABLED
             )
 
+        link_type = self.__determine_link_type(link, indexer_id)
         if self.link_in_queue(link):
             LOGGER.info('Download already in queue')
             return [], None
-
-        link_type = self.__determine_link_type(link)
         downloads: List[Download] = []
         if link_type == 'gc':
             gcp = GetComicsPage(link)
@@ -457,7 +479,7 @@ class DownloadHandler(metaclass=Singleton):
                     web_title=None,
                     web_sub_title=None,
                     download_link=None,
-                    source=None,
+                    download_service=None,
                     volume_id=volume_id,
                     issue_id=issue_id,
                     reason=BlocklistReason.LINK_BROKEN
@@ -479,7 +501,7 @@ class DownloadHandler(metaclass=Singleton):
                         web_title=gcp.title,
                         web_sub_title=None,
                         download_link=None,
-                        source=None,
+                        download_service=None,
                         volume_id=volume_id,
                         issue_id=issue_id,
                         reason=BlocklistReason.NO_WORKING_LINKS
@@ -537,6 +559,7 @@ class DownloadHandler(metaclass=Singleton):
 
         for download in iter_commit(downloads):
             LOGGER.debug(f'Download from database: {dict(download)}')
+            covered_issues: Union[float, Tuple[float, float], None]
             if download['covered_issues'] is None:
                 covered_issues = None
 
@@ -551,7 +574,7 @@ class DownloadHandler(metaclass=Singleton):
 
             kwargs = {}
             if issubclass(
-                download_type_to_class[download['client_type']],
+                download_type_to_class[DownloadClientIdentifier(download['client_type'])],
                 ExternalDownload
             ):
                 kwargs = {
@@ -561,11 +584,11 @@ class DownloadHandler(metaclass=Singleton):
                 }
 
             try:
-                dl_instance = download_type_to_class[download['client_type']](
+                dl_instance = download_type_to_class[DownloadClientIdentifier(download['client_type'])](
                     download_link=download['download_link'],
                     volume_id=download['volume_id'],
                     covered_issues=covered_issues,
-                    source_type=DownloadSource(download['source_type']),
+                    download_service=DownloadSource(download['source_type']),
                     source_name=download['source_name'],
                     web_link=download['web_link'],
                     web_title=download['web_title'],
@@ -590,7 +613,7 @@ class DownloadHandler(metaclass=Singleton):
                     web_title=download['web_title'],
                     web_sub_title=download['web_sub_title'],
                     download_link=download['download_link'],
-                    source=DownloadSource(download['source']),
+                    download_service=DownloadSource(download['source_type']),
                     volume_id=download['volume_id'],
                     issue_id=issue_id,
                     reason=BlocklistReason.LINK_BROKEN
@@ -678,7 +701,7 @@ class DownloadHandler(metaclass=Singleton):
                 web_title=download.web_title,
                 web_sub_title=download.web_sub_title,
                 download_link=download.download_link,
-                source=download.source_type,
+                download_service=download.download_service,
                 volume_id=download.volume_id,
                 issue_id=download.issue_id,
                 reason=BlocklistReason.ADDED_BY_USER

@@ -25,6 +25,14 @@ module = [
     "backend.features.tasks",
     "backend.features.library_import",
     "backend.implementations.library_import_cache",
+    "backend.features.download_queue",
+    "backend.features.post_processing",
+    "backend.features.search_full",
+    "backend.implementations.download_clients.base",
+    "backend.internals.status",
+    "backend.implementations.remote_mapping",
+    "backend.internals.db",
+    "backend.internals.settings",
 ]
 enable_error_code = [
     "arg-type", "assignment", "attr-defined", "return", "return-value",

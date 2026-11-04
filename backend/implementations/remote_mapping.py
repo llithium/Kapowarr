@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+import ntpath
+import os.path
+import posixpath
 from os.path import abspath, isdir
 from sqlite3 import IntegrityError
 from typing import List, Union, cast
@@ -9,10 +12,41 @@ from backend.base.custom_exceptions import (ExternalClientNotFound,
                                             RemoteMappingInvalid,
                                             RemoteMappingNotFound)
 from backend.base.definitions import RemoteMappingData
-from backend.base.files import are_folders_colliding, uppercase_drive_letter
+from backend.base.files import uppercase_drive_letter
 from backend.base.helpers import force_suffix
 from backend.base.logging import LOGGER
 from backend.internals.db import get_db
+
+
+def _remote_path_module(path: str):
+    """Choose path rules from the remote path, not the host operating system."""
+    if path.startswith('/') and not path.startswith('//'):
+        return posixpath
+    if ntpath.splitdrive(path)[0] or "\\" in path:
+        return ntpath
+    return posixpath
+
+
+def _format_remote_path(path: str) -> str:
+    module = _remote_path_module(path)
+    normalized = module.normpath(path)
+    if not module.isabs(normalized):
+        normalized = module.abspath(normalized)
+    return normalized.rstrip(module.sep) + module.sep
+
+
+def _matches(path: str, folder: str, module) -> bool:
+    path = module.normcase(module.normpath(path))
+    folder = module.normcase(module.normpath(folder))
+    return path == folder or path.startswith(folder.rstrip(module.sep) + module.sep)
+
+
+def _translate(path: str, source: str, target: str, source_module, target_module) -> str:
+    normalized = source_module.normpath(path)
+    relative = source_module.relpath(normalized, source_module.normpath(source))
+    if relative == '.':
+        return target_module.normpath(target)
+    return target_module.join(target, *relative.split(source_module.sep))
 
 
 def _local_folder_is_valid(
@@ -40,16 +74,11 @@ def _local_folder_is_valid(
         if external_download_client_id != entry['external_download_client_id']:
             continue
 
-        if local_path == entry['local_path']:
-            continue
-
         if entry['id'] == (skip_mapping_id or -1):
             continue
 
-        if are_folders_colliding(
-            local_path,
-            (entry['local_path'],)
-        ):
+        if (_matches(local_path, entry['local_path'], os.path)
+                or _matches(entry['local_path'], local_path, os.path)):
             return False
 
     return True
@@ -80,16 +109,14 @@ def _remote_folder_is_valid(
         if external_download_client_id != entry['external_download_client_id']:
             continue
 
-        if remote_path == entry['remote_path']:
-            continue
-
         if entry['id'] == (skip_mapping_id or -1):
             continue
 
-        if are_folders_colliding(
-            remote_path,
-            (entry['remote_path'],)
-        ):
+        module = _remote_path_module(remote_path)
+        if module is not _remote_path_module(entry['remote_path']):
+            continue
+        if (_matches(remote_path, entry['remote_path'], module)
+                or _matches(entry['remote_path'], remote_path, module)):
             return False
 
     return True
@@ -188,26 +215,21 @@ class RemoteMapping:
             if not isdir(formatted_local_path):
                 raise FolderNotFound(local_path)
 
-            if not _local_folder_is_valid(
-                data['external_download_client_id'],
-                formatted_local_path, data['id']
-            ):
-                raise RemoteMappingInvalid(local_path)
-
             data['local_path'] = formatted_local_path
 
         if remote_path:
-            formatted_remote_path = uppercase_drive_letter(
-                force_suffix(abspath(remote_path))
-            )
-
-            if not _remote_folder_is_valid(
-                data['external_download_client_id'],
-                formatted_remote_path, data['id']
-            ):
-                raise RemoteMappingInvalid(remote_path)
+            formatted_remote_path = _format_remote_path(remote_path)
 
             data['remote_path'] = formatted_remote_path
+
+        if not _local_folder_is_valid(
+            data['external_download_client_id'], data['local_path'], self.id
+        ):
+            raise RemoteMappingInvalid(data['local_path'])
+        if not _remote_folder_is_valid(
+            data['external_download_client_id'], data['remote_path'], self.id
+        ):
+            raise RemoteMappingInvalid(data['remote_path'])
 
         try:
             get_db().execute("""
@@ -289,21 +311,12 @@ class RemoteMappings:
         Returns:
             str: The translated path.
         """
-        local_to_remote = get_db().execute("""
-            SELECT local_path, remote_path
-            FROM remote_mappings
-            WHERE
-                external_download_client_id = ?
-                AND ? LIKE local_path || '%'
-            LIMIT 1;
-            """,
-            (external_download_client_id, path)
-        ).fetchone()
-
-        if not local_to_remote:
-            return path
-
-        return local_to_remote[1] + path[len(local_to_remote[0]):]
+        for mapping in cls.get_all():
+            if (mapping['external_download_client_id'] == external_download_client_id
+                    and _matches(path, mapping['local_path'], os.path)):
+                return _translate(path, mapping['local_path'], mapping['remote_path'],
+                                  os.path, _remote_path_module(mapping['remote_path']))
+        return path
 
     @classmethod
     def remote_to_local(
@@ -322,21 +335,13 @@ class RemoteMappings:
         Returns:
             str: The translated path.
         """
-        remote_to_local = get_db().execute("""
-            SELECT remote_path, local_path
-            FROM remote_mappings
-            WHERE
-                external_download_client_id = ?
-                AND ? LIKE remote_path || '%'
-            LIMIT 1;
-            """,
-            (external_download_client_id, path)
-        ).fetchone()
-
-        if not remote_to_local:
-            return path
-
-        return remote_to_local[1] + path[len(remote_to_local[0]):]
+        for mapping in cls.get_all():
+            module = _remote_path_module(mapping['remote_path'])
+            if (mapping['external_download_client_id'] == external_download_client_id
+                    and _matches(path, mapping['remote_path'], module)):
+                return _translate(path, mapping['remote_path'], mapping['local_path'],
+                                  module, os.path)
+        return path
 
     @classmethod
     def add(
@@ -371,9 +376,7 @@ class RemoteMappings:
         formatted_local_path = uppercase_drive_letter(
             force_suffix(abspath(local_path))
         )
-        formatted_remote_path = uppercase_drive_letter(
-            force_suffix(abspath(remote_path))
-        )
+        formatted_remote_path = _format_remote_path(remote_path)
 
         if not isdir(formatted_local_path):
             raise FolderNotFound(local_path)

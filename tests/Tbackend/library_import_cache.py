@@ -1,5 +1,7 @@
+import sqlite3
 import unittest
 from asyncio import run
+from contextlib import closing
 from os.path import join
 from tempfile import TemporaryDirectory
 from unittest.mock import AsyncMock, Mock, patch
@@ -10,7 +12,8 @@ from backend.implementations import library_import_cache as cache
 from backend.implementations.comicinfo import read_comicinfo
 from backend.implementations.comicinfo_cv import (_fetch_issue_volume_ids,
                                                   match_comicinfo_ids)
-from backend.internals.db import DBConnection, DBConnectionManager, get_db
+from backend.internals.db import (DBConnection, DBConnectionManager,
+                                  get_db, set_db_location)
 
 
 class LibraryImportCheckpointing(unittest.TestCase):
@@ -121,15 +124,14 @@ class LibraryImportCheckpointing(unittest.TestCase):
 class PersistentLibraryImportCache(unittest.TestCase):
     def setUp(self):
         self.temp_dir = TemporaryDirectory()
-        self.db_file = join(self.temp_dir.name, 'cache.sqlite')
-        self.previous_db_file = DBConnection.file
+        self.previous_db_file = DBConnection.default_file
         self.archive = join(self.temp_dir.name, 'Batman.cbz')
         with open(self.archive, 'wb') as archive:
             archive.write(b'archive')
 
         DBConnectionManager.close_connection_of_thread()
-        DBConnection.file = self.db_file
-        cache._schema_ready_for.clear()
+        set_db_location(self.temp_dir.name)
+        self.db_file = DBConnection.default_file
         self.app = Flask(__name__)
         self.context = self.app.app_context()
         self.context.push()
@@ -137,8 +139,7 @@ class PersistentLibraryImportCache(unittest.TestCase):
     def tearDown(self):
         self.context.pop()
         DBConnectionManager.close_connection_of_thread()
-        DBConnection.file = self.previous_db_file
-        cache._schema_ready_for.clear()
+        DBConnection.default_file = self.previous_db_file
         self.temp_dir.cleanup()
 
     def test_comicinfo_round_trip_and_file_invalidation(self):
@@ -156,20 +157,35 @@ class PersistentLibraryImportCache(unittest.TestCase):
         for invalid in ('{invalid', 'null', '[]', '{}',
                         '{"year": "not-an-int"}', '{"unexpected": true}'):
             with self.subTest(metadata_json=invalid):
-                get_db().execute(
-                    "UPDATE library_import_comicinfo_cache SET metadata_json = ?", (invalid,))
-                get_db().connection.commit()
+                with closing(sqlite3.connect(self.db_file + '.import-cache')) as connection:
+                    with connection:
+                        connection.execute(
+                            "UPDATE library_import_comicinfo_cache SET metadata_json = ?", (invalid,))
                 self.assertIsNone(cache.get_cached_comicinfo(self.archive))
 
     def test_comicinfo_parser_version_invalidates_cache(self):
         metadata = {'series': 'Batman', 'issue_number': '1'}
         cache.store_cached_comicinfo(self.archive, metadata)
-        get_db().execute(
-            "UPDATE library_import_comicinfo_cache SET parser_version = ?",
-            (cache.COMICINFO_CACHE_VERSION - 1,)
-        )
-        get_db().connection.commit()
+        with closing(sqlite3.connect(self.db_file + '.import-cache')) as connection:
+            with connection:
+                connection.execute(
+                    "UPDATE library_import_comicinfo_cache SET parser_version = ?",
+                    (cache.COMICINFO_CACHE_VERSION - 1,)
+                )
         self.assertIsNone(cache.get_cached_comicinfo(self.archive))
+
+    def test_checkpoint_survives_without_committing_application_writes(self):
+        connection = get_db().connection
+        connection.execute('CREATE TABLE pending (value TEXT)')
+        connection.commit()
+        connection.execute("INSERT INTO pending VALUES ('partial')")
+        metadata = {'series': 'Batman', 'issue_number': '1'}
+
+        cache.store_cached_comicinfo(self.archive, metadata)
+        connection.rollback()
+
+        self.assertEqual(connection.execute('SELECT * FROM pending').fetchall(), [])
+        self.assertEqual(cache.get_cached_comicinfo(self.archive), metadata)
 
     def test_issue_volume_mapping_round_trip_and_upsert(self):
         cache.store_issue_volume_ids({934000: 796})

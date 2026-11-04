@@ -414,18 +414,15 @@ function addManualSearch(link, indexer_id, force, button, api_key, issue_id=null
 		img.classList.remove('spinning');
 		img.src = `${url_base}/static/img/check.svg`;
 	})
-	.catch(e => {
-		e.json().then(json => {
-			if (json.error === "EnqueuingDownloadFailure") {
-				img.classList.remove('spinning');
-				img.src = `${url_base}/static/img/download.svg`;
-				button.classList.add('error');
-				button.title = enqueueFailureReasonMap[json.result.reason];
-			}
-			else
-				console.log(json)
-		})
-	})
+	.catch(async e => {
+		const json = await apiError(e);
+		img.classList.remove('spinning');
+		img.src = `${url_base}/static/img/download.svg`;
+		button.classList.add('error');
+		button.title = json.error === 'EnqueuingDownloadFailure'
+			? (enqueueFailureReasonMap[json.result?.reason] || 'Download failed. Please try again.')
+			: 'Download failed. Please try again.';
+	});
 };
 
 function blockManualSearch(

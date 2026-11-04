@@ -26,12 +26,12 @@ function addQueueEntry(api_key, obj) {
     if (obj.web_sub_title !== null)
         source.title += `\n\nSub Section:\n${obj.web_sub_title}`;
 
-	const index = [...QEls.queue.children].indexOf(entry);
+	const currentIndex = () => [...QEls.queue.children].indexOf(entry);
 	entry.querySelector('.move-up-dl').onclick = e => moveEntry(
-		obj.id, index - 1, api_key
+		obj.id, currentIndex() - 1, api_key
 	);
 	entry.querySelector('.move-down-dl').onclick = e => moveEntry(
-		obj.id, index + 1, api_key
+		obj.id, currentIndex() + 1, api_key
 	);
 	entry.querySelector('.remove-dl').onclick = e => deleteEntry(
         obj.id, api_key
@@ -53,11 +53,11 @@ function updateQueueEntry(obj) {
 	tr.querySelector('td:nth-child(4)').innerText =
 		convertSize(obj.size, 1);
 	tr.querySelector('td:nth-child(5)').innerText =
-		minDecimalPoints(Math.round(obj.speed / 100000) / 10, 2) + 'MB/s';
+		(Math.round(obj.speed / 100000) / 10).toFixed(2) + 'MB/s';
 	tr.querySelector('td:nth-child(6)').innerText =
 		obj.size === -1
 			? convertSize(obj.progress, 1)
-			: minDecimalPoints(Math.round(obj.progress * 10) / 10, 2) + '%';
+			: (Math.round(obj.progress * 10) / 10).toFixed(2) + '%';
 };
 
 function removeQueueEntry(id) {
@@ -83,12 +83,7 @@ function moveEntry(id, index, api_key) {
 	sendAPI('PUT', `/activity/queue/${id}`, api_key, {
 		index: index
 	}, {})
-	.then(response => {
-		if (!response.ok)
-			return;
-
-		fillQueue(api_key);
-	});
+	.then(() => fillQueue(api_key));
 }
 
 function deleteEntry(id, api_key, blocklist=false) {

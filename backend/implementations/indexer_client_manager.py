@@ -92,13 +92,10 @@ def _validate_indexer_data(
                 raise InvalidKeyValue(key.value, value)
             filtered_data[key.value] = value
 
-        elif key in required_tokens:
+        else:
             if not isinstance(value, str):
                 raise InvalidKeyValue(key.value, value)
             filtered_data[key.value] = value
-
-        else:
-            filtered_data[key.value] = None
 
     return filtered_data
 
