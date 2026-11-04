@@ -42,6 +42,8 @@ jobs:
         run: python packaging/macos/build.py
       - name: Verify bundled runtime and app lifecycle
         run: python packaging/macos/smoke_test.py dist/Kapowarr.app
+      - name: Verify browser close stops every app process
+        run: python packaging/macos/browser_lifetime_test.py dist/Kapowarr.app
       - name: Verify signature after runtime checks
         run: codesign --verify --deep --strict dist/Kapowarr.app
       - uses: actions/upload-artifact@v4

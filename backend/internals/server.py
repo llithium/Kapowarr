@@ -8,7 +8,7 @@ Also handling startup types and the websocket.
 from __future__ import annotations
 
 from multiprocessing import SimpleQueue
-from os import urandom
+from os import environ, urandom
 from threading import Thread, Timer
 from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable,
                     List, Mapping, Type, TypeVar, Union)
@@ -94,6 +94,8 @@ class Server(metaclass=Singleton):
             static_url_path='/static'
         )
         app.config['SECRET_KEY'] = urandom(32)
+        app.config['DESKTOP_SESSION_URL'] = environ.get('KAPOWARR_BROWSER_SESSION_URL')
+        app.config['DESKTOP_SESSION_PROTOCOL'] = environ.get('KAPOWARR_BROWSER_SESSION_PROTOCOL')
 
         json_provider = DefaultJSONProvider(app)
         json_provider.sort_keys = False

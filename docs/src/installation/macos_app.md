@@ -12,8 +12,11 @@ newer. Python, Python dependencies, web assets, and UnRAR are included.
 
 Kapowarr starts its local server and opens the web interface in your default
 browser. Its books icon in the menu bar provides **Open Kapowarr**, **View Logs**,
-**Download Updates**, and **Quit Kapowarr**. Closing the browser keeps the server
-running. Use **Quit Kapowarr** to stop it.
+**Download Updates**, and **Quit Kapowarr**. Closing the last Kapowarr browser tab
+quits the app and stops its server and worker processes after a five-second
+grace period. Reloading or moving between pages keeps the app running. If you
+have several Kapowarr tabs open, it runs until the last one closes. You can also
+use **Quit Kapowarr** to stop it directly.
 
 Opening the app again opens the interface for the running instance. The launcher
 rejects a second server using the same data folder and reports a port conflict
@@ -55,6 +58,7 @@ python3.12 -m venv build/macos-venv
 build/macos-venv/bin/python -m pip install -r packaging/macos/requirements.txt
 build/macos-venv/bin/python packaging/macos/build.py
 build/macos-venv/bin/python packaging/macos/smoke_test.py dist/Kapowarr.app
+build/macos-venv/bin/python packaging/macos/browser_lifetime_test.py dist/Kapowarr.app
 ```
 
 The build produces `dist/Kapowarr.app`, an app ZIP, a drag-to-Applications DMG,
@@ -65,7 +69,9 @@ The proprietary RAR compressor is not included.
 The smoke test uses a temporary database, a separate local port, and a command
 path without Homebrew or installed Python. It checks the bundled interpreter,
 spawned workers, client registration, web assets, archive extraction, database
-export, server restart, duplicate-launch protection, and shutdown.
+export, server restart, duplicate-launch protection, and shutdown. The browser
+lifetime check also verifies multiple tabs, navigation, and cleanup of the
+entire server process group when the last tab closes.
 
 For a Developer ID build, set `MACOS_SIGNING_IDENTITY` to an identity in your
 keychain. Set `MACOS_NOTARY_PROFILE` to a `notarytool` keychain profile to submit

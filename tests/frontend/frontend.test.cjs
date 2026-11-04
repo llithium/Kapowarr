@@ -20,6 +20,42 @@ function context(overrides = {}) {
 	};
 }
 
+test('desktop browser lifetime follows page close and back-forward restoration', () => {
+	const listeners = new Map();
+	const connections = [];
+	const retries = new Map();
+	class BrowserSocket {
+		constructor(url, protocol) {
+			assert.equal(url, 'ws://127.0.0.1:1234/');
+			assert.equal(protocol, 'session-token');
+			connections.push(this);
+		}
+		close() { this.closed = true; }
+	}
+	vm.runInNewContext(read('frontend/static/js/desktop.js'), {
+		document: { currentScript: { dataset: {
+			sessionUrl: 'ws://127.0.0.1:1234/', sessionProtocol: 'session-token'
+		} } },
+		window: { addEventListener: (event, callback) => listeners.set(event, callback) },
+		WebSocket: BrowserSocket,
+		setTimeout: (callback) => { const id = retries.size + 1; retries.set(id, callback); return id; },
+		clearTimeout: (id) => retries.delete(id)
+	});
+	assert.equal(connections.length, 1);
+	listeners.get('pagehide')();
+	assert.equal(connections[0].closed, true);
+	listeners.get('pageshow')();
+	assert.equal(connections.length, 2);
+	connections[0].onclose(); // A delayed event from the page's previous connection.
+	assert.equal(retries.size, 0);
+	connections[1].onclose();
+	assert.equal(retries.size, 1);
+	[...retries.values()][0]();
+	assert.equal(connections.length, 3);
+	listeners.get('pagehide')();
+	assert.equal(connections[2].closed, true);
+});
+
 test('shared storage repairs missing and invalid values', () => {
 	const ctx = context();
 	vm.runInNewContext(read('frontend/static/js/storage.js'), ctx);
