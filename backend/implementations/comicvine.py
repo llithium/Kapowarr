@@ -513,8 +513,7 @@ class ComicVine:
         volume_ids: Dict[int, int] = dict(cursor.execute(f"""
             SELECT comicvine_id, id
             FROM volumes
-            WHERE comicvine_id IN ({','.join('?' for _ in formatted_results)})
-            LIMIT 50;
+            WHERE comicvine_id IN ({','.join('?' for _ in formatted_results)});
             """,
             tuple(r["comicvine_id"] for r in formatted_results)
         ))
@@ -801,7 +800,7 @@ class ComicVine:
                 {
                     'query': query,
                     'resources': 'volume',
-                    'limit': 50,
+                    'limit': 100,
                     'field_list': self.search_field_list
                 },
                 {'results': []}
