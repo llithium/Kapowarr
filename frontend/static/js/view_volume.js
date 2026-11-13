@@ -15,12 +15,11 @@ const ViewEls = {
 	},
 	vol_data: {
 		monitor: document.querySelector('#volume-monitor'),
-		title: document.querySelector('.volume-title-monitored > h2'),
+		title: document.querySelector('.volume-title-monitored > h1'),
 		cover: document.querySelector('.volume-info > img'),
 		tags: document.querySelector('#volume-tags'),
 		path: document.querySelector('#volume-path'),
-		description: document.querySelector('#volume-description'),
-		mobile_description: document.querySelector('#volume-description-mobile')
+		description: document.querySelector('#volume-description')
 	},
 	vol_edit: {
 		monitor: document.querySelector('#monitored-input'),
@@ -57,6 +56,21 @@ const enqueueFailureReasonMap = {
 //
 // Filling data
 //
+function setVolumeMonitor(monitored) {
+	const monitor = ViewEls.vol_data.monitor;
+	setIcon(monitor, monitored ? icons.monitored : icons.unmonitored,
+		monitored ? 'Volume is monitored. Click to unmonitor.' : 'Volume is unmonitored. Click to monitor.');
+	const label = document.createElement('span');
+	label.textContent = monitored ? 'Monitored' : 'Unmonitored';
+	monitor.appendChild(label);
+};
+
+function updateIssueSummary() {
+	const rows = ViewEls.issues_list.querySelectorAll('.issue-entry');
+	const downloaded = ViewEls.issues_list.querySelectorAll('.issue-status.success');
+	document.querySelector('#issue-summary').textContent = `${downloaded.length} of ${rows.length} downloaded`;
+};
+
 class IssueEntry {
 	constructor(id, api_key, row_entry=null) {
 		this.id = id;
@@ -68,12 +82,12 @@ class IssueEntry {
 
 		this.monitored = this.entry.querySelector('.issue-monitored button');
 		this.issue_number = this.entry.querySelector('.issue-number');
-		this.title = this.entry.querySelector('.issue-title');
+		this.title = this.entry.querySelector('.issue-title-button');
 		this.date = this.entry.querySelector('.issue-date');
 		this.status = this.entry.querySelector('.issue-status');
-		this.auto_search = this.entry.querySelector('.action-column :nth-child(1)');
-		this.manual_search = this.entry.querySelector('.action-column :nth-child(2)');
-		this.convert = this.entry.querySelector('.action-column :nth-child(3)');
+		this.auto_search = this.entry.querySelector('.issue-actions-menu > button:nth-child(1)');
+		this.manual_search = this.entry.querySelector('.issue-actions-menu > button:nth-child(2)');
+		this.convert = this.entry.querySelector('.issue-actions-menu > button:nth-child(3)');
 	};
 
 	setMonitorIcon() {
@@ -87,7 +101,7 @@ class IssueEntry {
 			setIcon(
 				this.monitored,
 				icons.unmonitored,
-				'Issue is umonitored. Click to monitor.'
+				'Issue is unmonitored. Click to monitor.'
 			);
 		};
 	};
@@ -103,7 +117,7 @@ class IssueEntry {
 		});
 	};
 
-	setDownloaded(downloaded) {
+	setDownloaded(downloaded, update_summary=true) {
 		if (downloaded) {
 			// Downloaded
 			setImage(this.status, images.check, 'Issue is downloaded');
@@ -115,7 +129,18 @@ class IssueEntry {
             this.status.classList.remove('success');
             this.status.classList.add('error');
 		};
+		this.convert.disabled = !downloaded;
+		this.convert.title = downloaded ? 'Convert files for this issue' : 'No downloaded files to convert';
+		this.status.querySelector('.issue-status-label').textContent = downloaded ? 'Downloaded' : 'Missing';
+		if (update_summary) updateIssueSummary();
 	};
+};
+
+function syncIssueActionLayout() {
+	ViewEls.issues_list.querySelectorAll('.issue-actions').forEach(menu => {
+		menu.open = issue_action_media.matches;
+		menu.querySelector('.issue-actions-menu').classList.remove('opens-up');
+	});
 };
 
 function fillTable(issues, api_key) {
@@ -132,6 +157,7 @@ function fillTable(issues, api_key) {
 
 		// ARIA
 		inst.entry.ariaLabel = `Issue ${obj.issue_number}`;
+		entry.querySelector('.issue-actions summary').setAttribute('aria-label', `Actions for issue ${obj.issue_number}`);
 
 		// Monitored
 		inst.monitored.dataset.monitored = obj.monitored;
@@ -143,20 +169,22 @@ function fillTable(issues, api_key) {
 		inst.issue_number.innerText = obj.issue_number;
 
 		// Title
-		inst.title.innerText = obj.title;
+		inst.title.querySelector('.issue-title-label').innerText = obj.title;
 		inst.title.onclick = e => showIssueInfo(obj.id, api_key);
 
 		// Release date
 		inst.date.innerText = obj.date;
+		inst.title.querySelector('.issue-inline-date').innerText = obj.date;
 
 		// Download status
-		inst.setDownloaded(obj.files.length);
+		inst.setDownloaded(obj.files.length, false);
 
 		// Actions
 		inst.auto_search.onclick = e => autosearchIssue(obj.id, api_key);
 		inst.manual_search.onclick = e => showManualSearch(api_key, obj.id);
 		inst.convert.onclick = e => showConvert(api_key, obj.id);
 	};
+	syncIssueActionLayout();
 };
 
 function fillPage(data, api_key) {
@@ -174,18 +202,14 @@ function fillPage(data, api_key) {
 
 	// Cover
 	ViewEls.vol_data.cover.src = `${url_base}/api/volumes/${data.id}/cover?api_key=${api_key}`;
+	ViewEls.vol_data.cover.alt = `${data.title} cover`;
 
 	// Monitored state
 	ViewEls.vol_edit.monitor_new_issues.value = data.monitor_new_issues;
 	const monitor = ViewEls.vol_data.monitor;
 	monitor.dataset.monitored = data.monitored;
 	monitor.onclick = e => toggleMonitored(api_key);
-	if (data.monitored)
-		// Volume is monitored
-		setIcon(monitor, icons.monitored, 'Volume is monitored. Click to unmonitor.');
-	else
-		// Volume is unmonitored
-		setIcon(monitor, icons.unmonitored, 'Volume is unmonitored. Click to monitor.');
+	setVolumeMonitor(data.monitored);
 
 	// Title
 	ViewEls.vol_data.title.innerText = data.title;
@@ -200,16 +224,18 @@ function fillPage(data, api_key) {
 	const volume_number = document.createElement('p');
 	volume_number.innerText = `Volume ${data.volume_number || 1}`;
 	tags.appendChild(volume_number);
-	const special_version = document.createElement('p');
-	special_version.innerText = data.special_version?.toUpperCase() || 'Normal volume';
-	tags.appendChild(special_version);
+	if (data.special_version) {
+		const special_version = document.createElement('p');
+		special_version.innerText = data.special_version.replaceAll('-', ' ');
+		tags.appendChild(special_version);
+	}
 	const total_size = document.createElement('p');
 	total_size.innerText = data.total_size > 0 ? convertSize(data.total_size, 1) : '0 MB';
 	tags.appendChild(total_size);
 	if (data.site_url !== "") {
 		const link = document.createElement('a');
 		link.href = data.site_url;
-		link.innerText = "link";
+		link.innerText = 'Comic Vine';
 		tags.appendChild(link);
 	};
 	
@@ -219,12 +245,13 @@ function fillPage(data, api_key) {
 	path.dataset.root_folder = data.root_folder;
 	path.dataset.volume_folder = data.volume_folder;
 
-	// Descriptions
+	// Description
 	ViewEls.vol_data.description.innerHTML = data.description;
-	ViewEls.vol_data.mobile_description.innerHTML = data.description;
+
 
 	// fill issue lists
 	fillTable(data.issues, api_key);
+	updateIssueSummary();
 	fillIssueMatchTable(data.issues);
 
 	mapButtons(volume_id);
@@ -265,18 +292,7 @@ function toggleMonitored(api_key) {
 	})
 	.then(response => {
 		ViewEls.vol_data.monitor.dataset.monitored = monitored;
-		if (monitored)
-			setIcon(
-				ViewEls.vol_data.monitor,
-				icons.monitored,
-				'Volume is monitored. Click to unmonitor.'
-			);
-		else
-			setIcon(
-				ViewEls.vol_data.monitor,
-				icons.unmonitored,
-				'Volume is unmonitored. Click to monitor.'
-			);
+		setVolumeMonitor(monitored);
 	});
 };
 
@@ -947,6 +963,9 @@ function showInfoWindow(window) {
 
 // code run on load
 
+const issue_action_media = window.matchMedia('(min-width: 701px)');
+issue_action_media.addEventListener('change', syncIssueActionLayout);
+
 usingApiKey()
 .then(api_key => {
 	fetchAPI(`/volumes/${volume_id}`, api_key)
@@ -1010,3 +1029,42 @@ document.querySelector('#submit-match-issues').onclick = e => processIssueMatch(
 
 document.querySelector('#edit-form').action = 'javascript:editVolume();';
 document.querySelector('#delete-form').action = 'javascript:deleteVolume();';
+
+// Close the disclosure before opening a dialog so its summary remains the focus return target.
+ViewEls.issues_list.addEventListener('click', event => {
+	if (issue_action_media.matches) return;
+	const menu = event.target.closest('.issue-actions');
+	if (menu && event.target.closest('button')) {
+		menu.open = false;
+		menu.querySelector('summary').focus();
+	}
+}, true);
+ViewEls.issues_list.addEventListener('keydown', event => {
+	if (issue_action_media.matches) return;
+	const menu = event.target.closest('.issue-actions[open]');
+	if (menu && event.key === 'Escape') {
+		event.preventDefault();
+		event.stopPropagation();
+		menu.open = false;
+		menu.querySelector('summary').focus();
+	}
+});
+ViewEls.issues_list.addEventListener('toggle', event => {
+	const menu = event.target;
+	if (issue_action_media.matches || !menu.matches('.issue-actions') || !menu.open) return;
+	ViewEls.issues_list.querySelectorAll('.issue-actions[open]').forEach(other => {
+		if (other !== menu) other.open = false;
+	});
+	const popup = menu.querySelector('.issue-actions-menu');
+	popup.classList.remove('opens-up');
+	const rect = popup.getBoundingClientRect();
+	const pane = ViewEls.views.main.getBoundingClientRect();
+	if (rect.bottom > pane.bottom && menu.getBoundingClientRect().top - pane.top > rect.height)
+		popup.classList.add('opens-up');
+}, true);
+document.addEventListener('click', event => {
+	if (issue_action_media.matches) return;
+	ViewEls.issues_list.querySelectorAll('.issue-actions[open]').forEach(menu => {
+		if (!menu.contains(event.target)) menu.open = false;
+	});
+});

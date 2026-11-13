@@ -123,7 +123,7 @@
 	>
 		<div class="window-header">
 			<h2 id="{{ id }}-title">{{ title }}</h2>
-			{{ icon_button('', "Cancel", "cancel.svg") }}
+			{{ icon_button('', "Close", "cancel.svg") }}
 		</div>
 		<div class="window-content">
 			{{ content }}
@@ -138,7 +138,7 @@
 {% endmacro %}
 
 {% macro loading_window(id, msg) %}
-	<section id="{{ id }}" class="loading-window">
+	<section id="{{ id }}" class="loading-window" role="dialog" aria-modal="true" aria-label="{{ msg }}" tabindex="-1">
 		<p>{{ msg }}</p>
 	</section>
 {% endmacro %}

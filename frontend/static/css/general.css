@@ -588,7 +588,7 @@ main > *:not(.tool-bar-container) {
 	}
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
 	::-webkit-scrollbar {
 		width: 4px;
 		height: 4px;

@@ -1,76 +1,100 @@
 let window_trigger = null;
+const window_root = document.querySelector('.window');
+const background_inert = new Map();
+
+function openWindow() {
+	return window_root.hasAttribute('show-window')
+		? window_root.querySelector('section[show-window]') : null;
+};
+
+function windowFocusTargets(window) {
+	return [...window.querySelectorAll(
+		'a[href], button, input, select, textarea, summary, [tabindex]'
+	)].filter(el => el.tabIndex >= 0 && !el.matches(':disabled')
+		&& el.getClientRects().length > 0
+		&& getComputedStyle(el).visibility !== 'hidden');
+};
 
 function focusWindow(window) {
-	const focus_target = window.querySelector(
-		'input:not([disabled]), select:not([disabled]), button:not([disabled]), a[href]'
-	) || window;
-	focus_target.focus();
+	(windowFocusTargets(window)[0] || window).focus();
 };
 
 function showWindow(id) {
-	window_trigger = document.activeElement;
-	// Deselect all windows
+	// A loading state or a second dialog belongs to the same modal session.
+	if (!openWindow()) {
+		window_trigger = document.activeElement;
+		for (const el of document.body.children) {
+			if (el === window_root || !(el instanceof HTMLElement)) continue;
+			background_inert.set(el, el.inert);
+			el.inert = true;
+		}
+	}
 	document.querySelectorAll('.window > section').forEach(window => {
 		window.removeAttribute('show-window');
 	});
-
-	// Select the correct window
-	const selected_window = document.querySelector(`.window > section#${id}`);
+	const selected_window = document.getElementById(id);
 	selected_window.setAttribute('show-window', '');
-
-	// Show the window
-	document.querySelector('.window').setAttribute('show-window', '');
+	window_root.setAttribute('show-window', '');
 	focusWindow(selected_window);
 };
 
 function showLoadWindow(id) {
-	window_trigger = document.activeElement;
-	// Deselect all windows
-	document.querySelectorAll('.window > section').forEach(window => {
-		window.removeAttribute('show-window');
-	});
-
-	// Select the correct window
-	const loading_window = document.querySelector(`.window > section#${id}`).dataset.loading_window;
-	if (loading_window !== undefined) {
-		const selected_window = document.querySelector(`.window > section#${loading_window}`);
-		selected_window.setAttribute('show-window', '');
-		focusWindow(selected_window);
-	};
-
-	// Show the window
-	document.querySelector('.window').setAttribute('show-window', '');
+	const loading_window = document.getElementById(id).dataset.loading_window;
+	if (loading_window) showWindow(loading_window);
 };
 
 function closeWindow() {
-	document.querySelector('.window').removeAttribute('show-window');
-	if (window_trigger instanceof HTMLElement) window_trigger.focus();
+	window_root.removeAttribute('show-window');
+	for (const [el, inert] of background_inert) el.inert = inert;
+	background_inert.clear();
+	if (window_trigger instanceof HTMLElement && window_trigger.isConnected) {
+		if (window_trigger.getClientRects().length > 0) window_trigger.focus();
+		if (document.activeElement !== window_trigger) {
+			// A responsive disclosure may hide the original trigger during the dialog.
+			const disclosure = window_trigger.closest('details');
+			if (disclosure) focusWindow(disclosure);
+			else document.querySelector('main')?.focus();
+		}
+	}
+	window_trigger = null;
 };
 
-// code run on load
-
-document.querySelector('body').onkeydown = e => {
-	if (
-		e.code === "Escape"
-		&&
-		document.querySelector('.window[show-window]')
-	) {
-		e.stopImmediatePropagation();
+// Contain keyboard and programmatic focus while the background is unavailable.
+document.addEventListener('keydown', e => {
+	const window = openWindow();
+	if (!window) return;
+	if (e.key === 'Escape') {
+		e.preventDefault();
+		e.stopPropagation();
 		closeWindow();
-	};
-};
+	} else if (e.key === 'Tab') {
+		const targets = windowFocusTargets(window);
+		const first = targets[0];
+		const last = targets.at(-1);
+		if (!first) {
+			e.preventDefault();
+			window.focus();
+		} else if (document.activeElement === window
+			|| !window.contains(document.activeElement)
+			|| (e.shiftKey && document.activeElement === first)
+			|| (!e.shiftKey && document.activeElement === last)) {
+			e.preventDefault();
+			(e.shiftKey ? last : first).focus();
+		}
+	}
+}, true);
 
-document.querySelector('.window').onclick = e => {
-	e.stopImmediatePropagation();
-	closeWindow();
-};
+document.addEventListener('focusin', e => {
+	const window = openWindow();
+	if (window && !window.contains(e.target)) focusWindow(window);
+});
 
-document.querySelectorAll('.window > section').forEach(
-	el => el.onclick = e => e.stopImmediatePropagation()
-);
+window_root.onclick = e => {
+	if (e.target === window_root) closeWindow();
+};
 
 document.querySelectorAll(
-	'.window > section :where(button[title="Cancel"], button.cancel-window)'
-).forEach(e => {
-	e.onclick = f => closeWindow();
+	'.window > section :where(button[title="Close"], button.cancel-window)'
+).forEach(button => {
+	button.onclick = () => closeWindow();
 });

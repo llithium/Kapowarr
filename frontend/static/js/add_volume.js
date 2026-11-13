@@ -260,6 +260,7 @@ function clearSearch(e) {
         .querySelectorAll('button:not(.filter-bar)')
         .forEach(e => e.remove());
 	SearchEls.search_bar.input.value = '';
+	SearchEls.search_bar.input.focus();
     setURLParams();
 };
 

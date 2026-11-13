@@ -133,12 +133,12 @@ function mapButtons(id) {
 
 		document.querySelectorAll('.issue-entry').forEach(entry => {
 			task_to_button[`auto_search_issue#${id}#${entry.dataset.id}`] = {
-				'button': entry.querySelector('.action-column > button:first-child'),
+				'button': entry.querySelector('.issue-actions-menu > button:first-child'),
 				'icon': `${url_base}/static/img/search.svg`,
 				'loading_icon': `${url_base}/static/img/loading.svg`
 			};
 			task_to_button[`mass_convert_issue#${id}#${entry.dataset.id}`] = {
-				'button': entry.querySelector('.action-column > button:last-child'),
+				'button': entry.querySelector('.issue-actions-menu > button:last-child'),
 				'icon': `${url_base}/static/img/convert.svg`,
 				'loading_icon': `${url_base}/static/img/loading.svg`
 			};
@@ -179,6 +179,7 @@ function spinButton(task_string) {
 
 	icon.src = button_info.loading_icon;
 	icon.classList.add('spinning');
+	button_info.button.closest('.issue-actions')?.querySelector('summary').setAttribute('aria-busy', 'true');
 };
 
 function unspinButton(task_string) {
@@ -190,6 +191,7 @@ function unspinButton(task_string) {
 
 	icon.src = button_info.icon;
 	icon.classList.remove('spinning');
+	button_info.button.closest('.issue-actions')?.querySelector('summary').removeAttribute('aria-busy');
 };
 
 function fillTaskQueue(api_key) {
@@ -309,6 +311,10 @@ const socket_ready = usingApiKey()
 	fillTaskQueue(api_key);
 	socket = connectToWebSocket(api_key);
 	return socket;
+});
+
+document.querySelectorAll('.settings-category-picker select').forEach(select => {
+	select.addEventListener('change', () => { window.location.href = select.value; });
 });
 
 const nav_toggle = document.querySelector('#toggle-nav');
