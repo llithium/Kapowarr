@@ -47,9 +47,7 @@
 }
 
 /*
-Layout is reversed so that in the tree
-the title comes before the monitor button.
-This flows better for ARIA.
+The title comes before its monitoring control in reading order.
 */
 .volume-title-monitored {
 	display: flex;

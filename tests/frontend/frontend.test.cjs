@@ -531,3 +531,218 @@ test('General settings load and save the Mac browser-close preference', async ()
 		assert.equal(saved.quit_on_browser_close, isMacApp ? true : undefined);
 	}
 });
+
+test('cover progress explains counts while table progress stays compact', () => {
+	const { element, run } = libraryContext();
+	run("new LibraryEntry(1, 'key').setProgressBar(5, 3)");
+	assert.equal(element('#list-library .vol-1 .list-prog-num').innerText, '3 of 3 issues');
+	assert.equal(element('#table-library .vol-1 .table-prog-num').innerText, '3/3');
+	assert.equal(element('#list-library .vol-1 .list-prog-bar').style.width, '100%');
+	run("new LibraryEntry(1, 'key').setProgressBar(0, 0)");
+	assert.equal(element('#list-library .vol-1 .list-prog-num').innerText, '0 of 0 issues');
+});
+
+test('issue status labels and summary follow downloaded-status changes', () => {
+	const summary = {};
+	const rows = [1, 2].map(id => {
+		const classes = new Set();
+		const label = {};
+		const convert = {};
+		const status = {
+			classList: { add: name => classes.add(name), remove: name => classes.delete(name) },
+			querySelector: () => label
+		};
+		return {
+			id, classes, label, convert,
+			querySelector: selector => selector === '.issue-status' ? status
+				: selector === '.issue-actions-menu > button:nth-child(3)' ? convert : {}
+		};
+	});
+	const list = {
+		querySelectorAll: selector => selector === '.issue-entry'
+			? rows : rows.filter(row => row.classes.has('success'))
+	};
+	const ctx = context({
+		document: { querySelector: selector => selector === '#issues-list' ? list
+			: selector === '#issue-summary' ? summary : {} },
+		images: { check: 'check.svg', cancel: 'cancel.svg' },
+		setImage() {},
+		rows
+	});
+	vm.createContext(ctx);
+	vm.runInContext(read('frontend/static/js/view_volume.js').split('function fillTable(')[0], ctx);
+	vm.runInContext("new IssueEntry(1, 'key', rows[0]).setDownloaded(true)", ctx);
+	assert.equal(rows[0].label.textContent, 'Downloaded');
+	assert.equal(rows[0].convert.disabled, false);
+	assert.equal(summary.textContent, '1 of 2 downloaded');
+	vm.runInContext("new IssueEntry(2, 'key', rows[1]).setDownloaded(true)", ctx);
+	assert.equal(summary.textContent, '2 of 2 downloaded');
+	vm.runInContext("new IssueEntry(1, 'key', rows[0]).setDownloaded(false)", ctx);
+	assert.equal(rows[0].label.textContent, 'Missing');
+	assert.equal(rows[0].convert.disabled, true);
+	assert.equal(rows[0].convert.title, 'No downloaded files to convert');
+	assert.equal(summary.textContent, '1 of 2 downloaded');
+	rows.length = 0;
+	vm.runInContext('updateIssueSummary()', ctx);
+	assert.equal(summary.textContent, '0 of 0 downloaded');
+});
+
+function dialogContext() {
+	const listeners = new Map();
+	let document;
+	class Element {
+		constructor(id, children = []) {
+			this.id = id;
+			this.children = children;
+			this.attributes = new Set();
+			this.dataset = {};
+			this.inert = false;
+			this.tabIndex = 0;
+			this.isConnected = true;
+		}
+		setAttribute(name) { this.attributes.add(name); }
+		removeAttribute(name) { this.attributes.delete(name); }
+		hasAttribute(name) { return this.attributes.has(name); }
+		querySelectorAll() { return this.children; }
+		querySelector() { return this.children.find(el => !el.disabled && !el.hidden) || null; }
+		getClientRects() { return this.hidden ? [] : [{}]; }
+		matches() { return Boolean(this.disabled); }
+		contains(el) { return el === this || this.children.includes(el); }
+		focus() { document.activeElement = this; }
+	}
+	const trigger = new Element('edit-trigger');
+	const close = new Element('close');
+	const hidden = new Element('hidden');
+	hidden.hidden = true;
+	const update = new Element('update');
+	const edit = new Element('edit', [close, hidden, update]);
+	edit.dataset.loading_window = 'loading';
+	const loading = new Element('loading');
+	const next = new Element('next', [new Element('next-close')]);
+	const sections = [edit, loading, next];
+	const overlay = new Element('overlay', sections);
+	overlay.querySelector = () => sections.find(el => el.hasAttribute('show-window')) || null;
+	const background = new Element('background');
+	const previouslyInert = new Element('already-inert');
+	previouslyInert.inert = true;
+	const body = new Element('body', [background, previouslyInert, overlay]);
+	document = {
+		body, activeElement: trigger,
+		getElementById: id => sections.find(el => el.id === id),
+		addEventListener: (type, handler) => {
+			if (!listeners.has(type)) listeners.set(type, []);
+			listeners.get(type).push(handler);
+		},
+		querySelector: selector => {
+			if (selector === 'body') return body;
+			if (selector === '.window') return overlay;
+			if (selector === '.window[show-window]') return overlay.hasAttribute('show-window') ? overlay : null;
+			if (selector.startsWith('.window > section#')) return document.getElementById(selector.split('#')[1]);
+			return null;
+		},
+		querySelectorAll: selector => selector === '.window > section' ? sections : []
+	};
+	const ctx = vm.createContext({document, HTMLElement: Element,
+		getComputedStyle: () => ({visibility: 'visible'})});
+	vm.runInContext(read('frontend/static/js/window.js'), ctx);
+	return {
+		document, trigger, close, update, edit, loading, next, overlay, background, previouslyInert,
+		createElement: id => new Element(id),
+		run: code => vm.runInContext(code, ctx),
+		key: (key, shiftKey = false) => {
+			const event = {key, code: key, shiftKey, prevented: false,
+				preventDefault() { this.prevented = true; }, stopPropagation() {}, stopImmediatePropagation() {}};
+			body.onkeydown?.(event);
+			(listeners.get('keydown') || []).forEach(handler => handler(event));
+			return event;
+		},
+		focusOutside: () => {
+			document.activeElement = trigger;
+			(listeners.get('focusin') || []).forEach(handler => handler({target: trigger}));
+		}
+	};
+}
+
+test('modal Tab navigation wraps both ways and skips hidden controls', () => {
+	const modal = dialogContext();
+	modal.run("showWindow('edit')");
+	assert.equal(modal.document.activeElement, modal.close);
+	assert.equal(modal.key('Tab', true).prevented, true);
+	assert.equal(modal.document.activeElement, modal.update);
+	assert.equal(modal.key('Tab').prevented, true);
+	assert.equal(modal.document.activeElement, modal.close);
+	modal.focusOutside();
+	assert.equal(modal.document.activeElement, modal.close);
+});
+
+test('modal keeps background inert until Escape restores the original trigger', () => {
+	const modal = dialogContext();
+	modal.run("showWindow('edit')");
+	assert.equal(modal.background.inert, true);
+	modal.run("showLoadWindow('edit')");
+	assert.equal(modal.document.activeElement, modal.loading);
+	assert.equal(modal.key('Tab').prevented, true);
+	modal.run("showWindow('next')");
+	modal.key('Escape');
+	assert.equal(modal.overlay.hasAttribute('show-window'), false);
+	assert.equal(modal.background.inert, false);
+	assert.equal(modal.previouslyInert.inert, true);
+	assert.equal(modal.document.activeElement, modal.trigger);
+});
+
+test('clearing a library search returns focus to the query input', () => {
+	const { element, run } = libraryContext({fetchAPI: async () => ({result: []})});
+	const input = element('#search-input');
+	let focused = false;
+	input.focus = () => { focused = true; };
+	input.value = 'Aquaman';
+	run("clearSearch('key')");
+	assert.equal(input.value, '');
+	assert.equal(focused, true);
+});
+
+test('issue task progress stays announced on its closed action disclosure', () => {
+	const attributes = new Map();
+	const summary = {
+		setAttribute: (name, value) => attributes.set(name, value),
+		removeAttribute: name => attributes.delete(name)
+	};
+	const icon = {src: 'search.svg', classList: {add() {}, remove() {}}};
+	const button = {
+		querySelector: () => icon,
+		closest: () => ({querySelector: () => summary})
+	};
+	const ctx = vm.createContext({task_to_button: {
+		issue: {button, icon: 'search.svg', loading_icon: 'loading.svg'}
+	}});
+	const source = read('frontend/static/js/general.js');
+	vm.runInContext(source.slice(source.indexOf('function spinButton('), source.indexOf('function fillTaskQueue(')), ctx);
+	vm.runInContext("spinButton('issue')", ctx);
+	assert.equal(attributes.get('aria-busy'), 'true');
+	assert.equal(icon.src, 'loading.svg');
+	vm.runInContext("unspinButton('issue')", ctx);
+	assert.equal(attributes.has('aria-busy'), false);
+	assert.equal(icon.src, 'search.svg');
+});
+
+test('modal restores focus within a disclosure after responsive layout hides its trigger', () => {
+	const modal = dialogContext();
+	const replacement = modal.createElement('visible-disclosure-control');
+	modal.trigger.closest = () => ({querySelectorAll: () => [replacement]});
+	modal.run("showWindow('edit')");
+	modal.trigger.hidden = true;
+	modal.run('closeWindow()');
+	assert.equal(modal.document.activeElement, replacement);
+	assert.equal(modal.background.inert, false);
+});
+
+test('modal falls back when a closed disclosure prevents focusing its original control', () => {
+	const modal = dialogContext();
+	const summary = modal.createElement('visible-summary');
+	modal.trigger.closest = () => ({querySelectorAll: () => [summary]});
+	modal.run("showWindow('edit')");
+	// A closed native details element can retain child rectangles but reject focus.
+	modal.trigger.focus = () => {};
+	modal.run('closeWindow()');
+	assert.equal(modal.document.activeElement, summary);
+});

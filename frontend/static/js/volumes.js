@@ -88,12 +88,13 @@ class LibraryEntry {
 		const progress = total_count > 0 ? downloaded_count / total_count * 100 : 0;
 		for (const [entry, prefix] of [[this.list_entry, 'list'], [this.table_entry, 'table']]) {
 			if (!entry) continue;
-			entry.querySelector(`.${prefix}-prog-num`).innerText = `${downloaded_count}/${total_count}`;
+			entry.querySelector(`.${prefix}-prog-num`).innerText = prefix === 'list'
+				? `${downloaded_count} of ${total_count} issues` : `${downloaded_count}/${total_count}`;
 			const bar = entry.querySelector(`.${prefix}-prog-bar`);
 			bar.style.width = `${progress}%`;
 			const monitored = libraryVolumes.get(this.id)?.monitored ?? entry.hasAttribute('monitored');
 			bar.style.backgroundColor = progress === 100 ? 'var(--success-color)'
-				: monitored ? 'var(--accent-color)' : 'var(--error-color)';
+				: monitored ? (prefix === 'list' ? 'var(--progress-fill-color)' : 'var(--accent-color)') : 'var(--error-color)';
 		}
 		if (this.list_entry) this.list_entry.querySelector('.list-prog-container').title = total_count > 0
 			? `${downloaded_count} of ${total_count} issues downloaded` : 'No issues';
@@ -123,8 +124,8 @@ function renderLibraryView(api_key) {
 			entry.href = href;
 			entry.querySelector('.list-img').src = `${url_base}/api/volumes/${volume.id}/cover?api_key=${api_key}`;
 			const title = entry.querySelector('.list-title');
-			title.innerText = title.title = `${volume.title} (${volume.year})`;
-			entry.querySelector('.list-volume').innerText = `Volume ${volume.volume_number}`;
+			title.innerText = title.title = volume.title;
+			entry.querySelector('.list-volume').innerText = `${volume.year ? volume.year + ', ' : ''}Volume ${volume.volume_number}`;
 		} else {
 			entry.dataset.id = volume.id;
 			entry.querySelector('.table-link').href = href;
@@ -198,6 +199,7 @@ function searchLibrary() {
 
 function clearSearch(api_key) {
 	library_els.search.input.value = '';
+	library_els.search.input.focus();
 	fetchLibrary(api_key);
 };
 
@@ -270,6 +272,12 @@ usingApiKey()
 	library_els.task_buttons.update_all.onclick =
 		e => sendAPI('POST', '/system/tasks', api_key, {}, {
 			'cmd': 'update_all',
+			'allow_skipping': false
+		});
+
+	document.querySelector('#searchall-button').onclick =
+		e => sendAPI('POST', '/system/tasks', api_key, {}, {
+			'cmd': 'search_all',
 			'allow_skipping': false
 		});
 
@@ -381,3 +389,11 @@ library_els.mass_edit.select_all.onchange =
 		library_els.views.table.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = library_els.mass_edit.select_all.checked);
 		updateSelection();
 	};
+
+const library_tools = document.querySelector('.library-tools');
+library_tools.querySelectorAll('button').forEach(button => {
+	button.addEventListener('click', () => {
+		library_tools.open = false;
+		library_tools.querySelector('summary').focus();
+	});
+});

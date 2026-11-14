@@ -11,14 +11,14 @@
 {% block pre_build_els %}
 	<a href="" class="list-entry" aria-label="">
 		<img class="list-img" src="" alt="" loading="lazy">
-		<div class="list-prog-container">
-			<div class="list-prog-bar"></div>
-			<div class="list-prog-num"></div>
-		</div>
 		<h2 class="list-title" title=""></h2>
 		<p class="list-volume"></p>
 		<p class="list-monitored">Monitored</p>
 		<p class="list-unmonitored">Unmonitored</p>
+		<div class="list-prog-container">
+			<div class="list-prog-bar"></div>
+			<div class="list-prog-num"></div>
+		</div>
 	</a>
 {% endblock %}
 
@@ -47,8 +47,7 @@
 
 {% block main %}
 <main>
-    <div class="page-heading"><h1>Library</h1> <a class="primary-action" href="{{url_base}}/add">Add comics</a></div>
-	<input type="checkbox" id="massedit-toggle" class="hidden">
+    <div class="page-heading library-heading"><h1>Library</h1>
 	<form id="search-container" class="icon-dark-color" aria-label="Search bar">
 		<button type="submit" id="start-search" aria-label="Start search">
 			<img src="{{url_base}}/static/img/search.svg" alt="">
@@ -58,7 +57,7 @@
 			<img src="{{url_base}}/static/img/cancel.svg" alt="">
 		</button>
 	</form>
-	<section class="tool-bar-container" aria-label="Tool bar">
+		<details class="library-tools"><summary>Manage</summary>
 		<div class="tool-bar">
 			{{ icon_button(
 				"updateall-button",
@@ -68,9 +67,9 @@
 			) }}
 			{{ icon_button(
 				"searchall-button",
-				"Trigger a 'search monitored' for all volumes",
+				"Search monitored volumes and queue matching downloads",
 				"search.svg",
-				"Find missing"
+				"Auto download"
 			) }}
 			{{ icon_button(
 				"massedit-button",
@@ -79,6 +78,13 @@
 				"Select"
 			) }}
 		</div>
+		</details>
+		<a class="primary-action" href="{{url_base}}/add">Add comics</a>
+	</div>
+	<input type="checkbox" id="massedit-toggle" class="hidden">
+
+	<section class="tool-bar-container" aria-label="Tool bar">
+
 		<div class="tool-bar">
 			<select id="filter-button" aria-label="Apply a filter">
 				<option value="">All comics</option>
@@ -90,13 +96,13 @@
 				<option value="table">List</option>
 			</select>
 			<select id="sort-button" aria-label="Sort the list of volumes">
-				<option value="title">Title</option>
-				<option value="volume_number">Volume Number</option>
-				<option value="year">Year</option>
-				<option value="recently_added">Recently Added</option>
-				<option value="recently_released">Recently Released</option>
-				<option value="publisher">Publisher</option>
-                <option value="wanted">Missing issues</option>
+				<option value="title">Sort: Title</option>
+				<option value="volume_number">Sort: Volume</option>
+				<option value="year">Sort: Year</option>
+				<option value="recently_added">Sort: Newest added</option>
+				<option value="recently_released">Sort: Newest released</option>
+				<option value="publisher">Sort: Publisher</option>
+                <option value="wanted">Sort: Missing issues</option>
 			</select>
 		</div>
 	</section>
@@ -112,7 +118,8 @@
 		<p id="library-empty-description">Add a ComicVine volume or import an existing comic folder to get started.</p>
 		<button id="reset-library" class="secondary-action hidden" type="button">Clear search and filters</button>
 		<div class="empty-actions" id="library-empty-actions">
-			<a class="primary-action" href="{{url_base}}/add">Add comics</a>
+
+		<a class="primary-action" href="{{url_base}}/add">Add comics</a>
 			<a href="{{url_base}}/library-import">Import files</a>
 		</div>
 	</div>

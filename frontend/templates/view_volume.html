@@ -16,15 +16,20 @@
 			<button data-monitored="" data-id="" title=""></button>
 		</td>
 		<td class="issue-number"></td>
-		<td class="issue-title"></td>
+		<td class="issue-title"><button type="button" class="issue-title-button"><span class="issue-title-label"></span><span class="issue-inline-date"></span></button></td>
 		<td class="issue-date"></td>
 		<td class="issue-status" title="">
-			<img src="" alt="">
+			<img src="" alt=""><span class="issue-status-label"></span>
 		</td>
 		<td class="action-column" aria-label="Actions">
-			{{ icon_button('', "Auto search for this issue", "search.svg") }}
-			{{ icon_button('', "Manually search for this issue", "manual_search.svg") }}
-			{{ icon_button('', "Convert files for this issue", "convert.svg") }}
+			<details class="issue-actions">
+				<summary><span>Actions</span><img class="issue-task-indicator" src="{{url_base}}/static/img/loading.svg" alt=""></summary>
+				<div class="issue-actions-menu">
+			{{ icon_button('', "Find a matching download and add it to the queue", "search.svg", "Auto download") }}
+			{{ icon_button('', "Show matching download links so you can choose one", "manual_search.svg", "Find links") }}
+			{{ icon_button('', "Convert files for this issue", "convert.svg", "Convert") }}
+				</div>
+			</details>
 		</td>
 	</tr>
 	<tr class="search-entry">
@@ -115,7 +120,7 @@
 		<form id="edit-form">
 			<table class="fold-table">
 				<tr>
-					<th><label for="monitored-input">Monitor Volume</label></th>
+					<th><label for="monitored-input">Monitor volume</label></th>
 					<td>
 						<select id="monitored-input">
 							<option value="true">Yes</option>
@@ -124,25 +129,25 @@
 					</td>
 				</tr>
 				<tr>
-					<th><label for="monitor-issues-input">Monitor New Issues</label></th>
+					<th><label for="monitor-issues-input">Monitor new issues</label></th>
 					<td>
 						<select id="monitor-issues-input">
 							<option value="true" selected>Yes</option>
 							<option value="false">No</option>
 						</select>
-						<p>When new issues come out, automatically monitor them.</p>
+						<p>Automatically monitor future releases.</p>
 					</td>
 				</tr>
 				<tr>
-					<th><label for="monitoring-scheme-input">Monitoring Scheme</label></th>
+					<th><label for="monitoring-scheme-input">Existing issues</label></th>
 					<td>
 						<select id="monitoring-scheme-input">
-							<option value="" selected>-- Don't apply --</option>
+							<option value="" selected>Keep current settings</option>
 							<option value="all">All</option>
 							<option value="missing">Missing</option>
 							<option value="none">None</option>
 						</select>
-						<p>Apply a monitoring scheme once, on save.</p>
+						<p>Apply to existing issues when you save.</p>
 					</td>
 				</tr>
 				<tr>
@@ -155,32 +160,32 @@
 					</td>
 				</tr>
 				<tr>
-					<th><label for="volumefolder-input">Volume Folder</label></th>
+					<th><label for="volumefolder-input">Volume folder</label></th>
 					<td>
 						<input type="text" id="volumefolder-input">
-						<p>Make empty to generate the default folder</p>
+						<p>Leave empty to use the default folder.</p>
 					</td>
 				</tr>
 				<tr>
-					<th><label for="specialoverride-input">Special Version</label></th>
+					<th><label for="specialoverride-input">Edition</label></th>
 					<td>
 						<select id="specialoverride-input">
 							<option value="auto">Automatic</option>
-							<option value="">Normal Volume</option>
-							<option value="tpb">Trade Paper Back</option>
-							<option value="one-shot">One Shot</option>
-							<option value="hard-cover">Hard Cover</option>
+							<option value="">Standard</option>
+							<option value="tpb">Trade paperback</option>
+							<option value="one-shot">One-shot</option>
+							<option value="hard-cover">Hardcover</option>
 							<option value="omnibus">Omnibus</option>
-							<option value="volume-as-issue">Volume As Issue</option>
+							<option value="volume-as-issue">Volume as issue</option>
 						</select>
-						<p>Type of volume</p>
+
 					</td>
 				</tr>
 			</table>
 		</form>
 	{% endset %}
 	{% set edit_submit %}
-		<button id="submit-edit" type="submit" form="edit-form">Update</button>
+		<button id="submit-edit" type="submit" form="edit-form">Save changes</button>
 	{% endset %}
 	{{ window(False, "edit-window", "Edit volume", edit_content, edit_submit, "updating-window") }}
 
@@ -218,7 +223,7 @@
 			<tbody></tbody>
 		</table>
 	{% endset %}
-	{{ window(True, "manual-search-window", "Manual search", manual_search_content, '') }}
+	{{ window(True, "manual-search-window", "Find links", manual_search_content, '') }}
 
 	{% set issue_info_content %}
 		<div id="issue-info-selectors">
@@ -352,29 +357,31 @@
 		<h2>Loading...</h2>
 	</div>
 	<main class="hidden">
-        <div class="volume-back"><a href="{{url_base}}/">‹ Library</a></div>
-		<section class="tool-bar-container" aria-label="Tool bar">
+        <div class="volume-back"><a href="{{url_base}}/">‹ Library</a>
+<section class="tool-bar-container" aria-label="Tool bar">
 			<div class="tool-bar">
 				{{ icon_button(
 					"refresh-button",
 					"Trigger a 'refresh and scan' for the volume",
 					"refresh.svg",
-					"Refresh & Scan"
+					"Refresh"
 				) }}
 				{{ icon_button(
 					"autosearch-button",
-					"Start searching for all monitored issues in the volume",
+					"Search for monitored missing issues and queue matching downloads",
 					"search.svg",
-					"Search Monitored"
+					"Auto download"
 				) }}
 				{{ icon_button(
 					"manualsearch-button",
-					"Start a manual search for all issues in the volume",
+					"Show matching download links so you can choose one",
 					"manual_search.svg",
-					"Manual Search"
+					"Find links"
 				) }}
             </div>
-            <details class="volume-tools"><summary>Manage volume</summary><div class="tool-bar">
+
+		</section>
+<details class="volume-tools"><summary>Manage volume</summary><div class="tool-bar">
 				{{ icon_button(
 					"rename-button",
 					"Preview how the files of the volume will be renamed",
@@ -412,23 +419,28 @@
 					"Delete"
 				) }}
             </div></details>
-		</section>
+        </div>
+
 		<div id="volume-content">
 			<div class="volume-mobile-description-container">
 				<div class="volume-info">
 					<img src="" alt="">
 					<div class="volume-info-container">
 						<div class="volume-title-monitored">
-							<h2></h2>
+							<h1></h1>
 							<button id="volume-monitor"></button>
 						</div>
 						<section id="volume-tags" aria-label="Tags"></section>
 						<p id="volume-path" aria-label="Volume folder path"></p>
-						<section id="volume-description" class="description" aria-label="Description"></section>
+
 					</div>
 				</div>
-				<section id="volume-description-mobile" class="description" aria-label="Description"></section>
+				<details class="volume-description">
+					<summary>About this series</summary>
+					<section id="volume-description" class="description" aria-label="Description"></section>
+				</details>
 			</div>
+			<div class="issues-heading"><h2>Issues</h2><p id="issue-summary"></p></div>
 			<div class="issues-table-container icon-text-color">
 				<table class="issues-table" aria-label="Issue list">
 					<thead>
@@ -437,12 +449,8 @@
 							<th class="issue-number" aria-label="Issue number">#</th>
 							<th class="issue-title">Title</th>
 							<th class="issue-date">Release Date</th>
-							<th class="issue-status" aria-label="Downloaded">
-								<img src="{{url_base}}/static/img/download.svg" alt="">
-							</th>
-							<th class="action-column" aria-label="Actions">
-								<img src="{{url_base}}/static/img/settings.svg" alt="">
-							</th>
+							<th class="issue-status" aria-label="Downloaded">Status</th>
+							<th class="action-column" aria-label="Actions">Actions</th>
 						</tr>
 					</thead>
 					<tbody id="issues-list">

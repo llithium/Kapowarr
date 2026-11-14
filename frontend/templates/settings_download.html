@@ -10,17 +10,22 @@
 
 {% block main %}
 <main>
-    <div class="page-heading"><h1>Downloads</h1></div>
+    <div class="page-heading"><h1>Downloads</h1><div class="tool-bar">
+			{{ icon_button("save-button", "Save the changes made", "save.svg", "Save changes", True) }}
+		</div></div>
     <nav class="settings-tabs" aria-label="Settings categories">
     {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] %}
         <a href="{{url_base}}/settings/{{path}}" {% if request.path.endswith('/' + path) %}aria-current="page"{% endif %}>{{label}}</a>
     {% endfor %}
     </nav>
-	<section class="tool-bar-container" aria-label="Tool bar">
-		<div class="tool-bar">
-			{{ icon_button("save-button", "Save the changes made", "save.svg", "Save changes", True) }}
-		</div>
-	</section>
+    <label class="settings-category-picker">Settings
+        <select aria-label="Settings category">
+        {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] %}
+            <option value="{{url_base}}/settings/{{path}}" {% if request.path.endswith('/' + path) %}selected{% endif %}>{{label}}</option>
+        {% endfor %}
+        </select>
+    </label>
+
 	<div class="settings-container">
 		<form id="settings-form">
 			<h2>Downloads</h2>

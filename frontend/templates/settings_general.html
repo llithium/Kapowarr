@@ -10,17 +10,22 @@
 
 {% block main %}
 <main>
-    <div class="page-heading"><h1>General</h1></div>
+    <div class="page-heading"><h1>General</h1><div class="tool-bar">
+			{{ icon_button("save-button", "Save the changes made", "save.svg", "Save changes", True) }}
+		</div></div>
     <nav class="settings-tabs" aria-label="Settings categories">
     {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] %}
         <a href="{{url_base}}/settings/{{path}}" {% if request.path.endswith('/' + path) %}aria-current="page"{% endif %}>{{label}}</a>
     {% endfor %}
     </nav>
-	<section class="tool-bar-container" aria-label="Tool bar">
-		<div class="tool-bar">
-			{{ icon_button("save-button", "Save the changes made", "save.svg", "Save changes", True) }}
-		</div>
-	</section>
+    <label class="settings-category-picker">Settings
+        <select aria-label="Settings category">
+        {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] %}
+            <option value="{{url_base}}/settings/{{path}}" {% if request.path.endswith('/' + path) %}selected{% endif %}>{{label}}</option>
+        {% endfor %}
+        </select>
+    </label>
+
 	<div class="settings-container">
 		<form id="settings-form">
 			{% if config.get('DESKTOP_SESSION_URL') %}
@@ -36,7 +41,7 @@
 			</table>
 			{% endif %}
 			<h2>Host</h2>
-			<p>Changing hosting settings will immediately restart Kapowarr. Access the web-ui within 60 seconds for the changes to stay, or they will be reverted.</p>
+			<p>Changing these settings restarts Kapowarr. Reopen the web UI within 60 seconds to keep the changes.</p>
 			<table class="fold-table">
 				<tr>
 					<th><label for="bind-address-input">Bind Address</label></th>
@@ -87,11 +92,11 @@
 					</td>
 				</tr>
 				<tr>
-					<th><label>API Key</label></th>
+					<th><label for="api-input">API key</label></th>
 					<td>
 						<div id="api-container" class="icon-light-color">
 							<input type="text" id="api-input" readonly>
-							<button type="button" id="generate-api"><img src="{{url_base}}/static/img/refresh.svg" alt=""></button>
+							<button type="button" id="generate-api"><img src="{{url_base}}/static/img/refresh.svg" alt=""><span>Regenerate key</span></button>
 						</div>
 					</td>
 				</tr>

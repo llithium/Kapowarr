@@ -311,6 +311,13 @@
         <a href="{{url_base}}/settings/{{path}}" {% if request.path.endswith('/' + path) %}aria-current="page"{% endif %}>{{label}}</a>
     {% endfor %}
     </nav>
+    <label class="settings-category-picker">Settings
+        <select aria-label="Settings category">
+        {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] %}
+            <option value="{{url_base}}/settings/{{path}}" {% if request.path.endswith('/' + path) %}selected{% endif %}>{{label}}</option>
+        {% endfor %}
+        </select>
+    </label>
 	<div class="settings-container">
 		<h2>Built-in Clients</h2>
 		<div id="builtin-client-list" class="client-list">

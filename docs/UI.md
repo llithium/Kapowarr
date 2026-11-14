@@ -4,10 +4,12 @@ The workspace keeps Flask templates and the existing API. No frontend build step
 
 ## Layout
 
-- Collection, Activity, and Manage destinations remain visible in the desktop rail. On phones, the menu opens a drawer; hidden links are excluded from keyboard navigation.
+- Collection, Activity, and Manage destinations remain visible in the desktop rail. At widths up to 900px, the menu opens a drawer; hidden links are excluded from keyboard navigation.
 - Library search lives with the collection. Covers use a responsive grid; list view supports selecting multiple volumes. Search updates after a short typing pause and ignores superseded responses.
 - Volume search actions remain visible. The Manage volume disclosure contains renaming, conversion, file management, editing, and deletion.
-- Settings categories appear above each settings page. The save toolbar stays visible as the form scrolls.
+- Issue rows show status text and direct actions above 700px; phones use an issue-specific Actions menu. Auto download queues matching downloads, while Find links opens results for choosing a link.
+- Settings categories appear above each settings page, with a category picker on phones. Save changes stays visible as the form scrolls.
+- Dialogs contain keyboard focus, make the background inert, and restore focus when closed, including after resizing and loading-state transitions.
 - Empty collections, searches without matches, and failed library requests have distinct recovery paths. Bulk deletion explains whether files will be retained.
 
 ## Styling
