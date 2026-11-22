@@ -1060,16 +1060,16 @@ class AsyncSession(ClientSession):
                 )
 
                 if response.status in Constants.STATUS_FORCELIST_RETRIES:
-                    raise ClientError
+                    raise ClientError(f"HTTP {response.status}")
 
-            except ClientError:
+            except ClientError as e:
                 if round == Constants.TOTAL_RETRIES:
                     # Exhausted retries
                     raise
 
                 LOGGER.warning(
-                    "%s request failed for url %s. Retrying for round %d...",
-                    method, url, round + 1
+                    "%s request failed for url %s (%s). Retrying for round %d...",
+                    method, url, str(e) or type(e).__name__, round + 1
                 )
 
                 await sleep(sleep_time)

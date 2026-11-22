@@ -5,7 +5,21 @@ import os
 import runpy
 import sys
 
+def _use_bundled_ca_certificates() -> None:
+    """The bundled OpenSSL looks for root certificates inside the Python
+    installation the app was built with, which usually doesn't exist on the
+    machine running the app. Point it at the bundled certifi CA file instead,
+    unless the user configured one themselves."""
+    try:
+        import certifi
+    except ImportError:
+        return
+    os.environ.setdefault('SSL_CERT_FILE', certifi.where())
+
+
 if __name__ == '__main__':
+    _use_bundled_ca_certificates()
+
     # Workers must enter multiprocessing before importing the application.
     multiprocessing.freeze_support()
 
