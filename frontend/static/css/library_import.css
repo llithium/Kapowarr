@@ -530,7 +530,7 @@ kbd {
 	border-bottom: 1px solid var(--border-color);
 }
 
-.li-group-button {
+button.li-group-button {
 	width: 100%;
 	display: grid;
 	justify-content: stretch;
@@ -775,7 +775,7 @@ a.li-match-title:hover {
 	gap: 6px;
 }
 
-.li-result {
+button.li-result {
 	width: 100%;
 	display: flex;
 	justify-content: flex-start;
