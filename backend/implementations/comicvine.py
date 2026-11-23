@@ -908,7 +908,12 @@ class ComicVine:
                         'id': result['comicvine_id'],
                         'title': f"{result['title']} ({result['year']})",
                         'issue_count': result['issue_count'],
-                        'link': result['site_url']
+                        'link': result['site_url'],
+                        'series_title': result['title'],
+                        'year': result['year'],
+                        'publisher': result['publisher'],
+                        'volume_number': result['volume_number'],
+                        'cover_link': result['cover_link']
                     }
 
         return matches

@@ -531,3 +531,20 @@ main:has(.library-heading) > .tool-bar-container { justify-content: flex-end; }
 @media (min-width: 1201px) {
     .issues-table .action-column { width: 330px; }
 }
+
+/* Organizer only: hide downloads, monitoring and the queue everywhere. */
+.organizer-mode .download-ui,
+.organizer-mode #searchall-button,
+.organizer-mode #autosearch-button,
+.organizer-mode #manualsearch-button,
+.organizer-mode #volume-monitor,
+.organizer-mode .issue-actions-menu > button:nth-child(-n+2),
+.organizer-mode .list-entry .list-monitored,
+.organizer-mode .list-entry .list-unmonitored { display: none !important; }
+@media (max-width: 700px) {
+    .organizer-mode .issues-table .issue-entry { grid-template-columns: 28px minmax(0,1fr) 76px; }
+    .organizer-mode .issue-entry .issue-number { grid-column: 1; }
+    .organizer-mode .issue-entry .issue-title, .organizer-mode .issue-entry .issue-date { grid-column: 2; }
+    .organizer-mode .issue-entry .issue-status { grid-column: 3; }
+    .organizer-mode .issues-table .issue-entry .action-column { grid-column: 2 / -1; }
+}

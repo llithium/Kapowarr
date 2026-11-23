@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{% if organizer_mode %} class="organizer-mode"{% endif %}>
 <head>
 	<!-- Standard headers -->
 	<meta charset="UTF-8">
@@ -75,7 +75,7 @@
                     ('Activity', [('/activity/queue', 'Downloads', 'download.svg'), ('/activity/history', 'History', 'refresh.svg'), ('/activity/blocklist', 'Blocklist', 'blocklist.svg')]),
                     ('Manage', [('/settings', 'Settings', 'settings.svg'), ('/system/status', 'System', 'manage_files.svg'), ('/system/tasks', 'Tasks', 'refresh.svg')])
                 ] %}
-                <div class="nav-group">
+                <div class="nav-group{% if group == 'Activity' %} download-ui{% endif %}">
                     <p class="nav-group-title">{{ group }}</p>
                     {% for path, label, icon in links %}
                     {% set active = request.path == path or (path == '/' and request.path.startswith('/volumes/')) or (path == '/settings' and request.path.startswith('/settings')) %}

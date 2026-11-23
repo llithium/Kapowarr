@@ -87,6 +87,10 @@ class PublicSettingsValues:
 
     quit_on_browser_close: bool = True
 
+    # Hide the download, monitoring and queue parts of the UI for people who
+    # only use Kapowarr to import and organise files they already have.
+    organizer_mode: bool = False
+
     proxy_type: ProxyType = ProxyType.NONE
     proxy_host: str = ''
     proxy_port: int = 8080

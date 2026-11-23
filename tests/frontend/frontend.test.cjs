@@ -424,30 +424,56 @@ test('API requests preserve multipart bodies and reject unauthorized responses',
 	}
 });
 
-test('import selection excludes disabled conflict rows from submission', async () => {
+function libraryImportContext() {
 	const source = read('frontend/static/js/library_import.js');
-	const selection = source.slice(source.indexOf('function toggleSelectAll()'), source.indexOf('function openEditCVMatch('));
-	const submission = source.slice(source.indexOf('function importLibrary('), source.indexOf('// code run on load'));
-	const normal = {checked: false, disabled: false};
-	const conflict = {checked: false, disabled: true};
-	const rows = [normal, conflict].map((checkbox, rowid) => ({
-		dataset: {rowid: String(rowid)}, querySelector: () => checkbox
-	}));
-	const list = {querySelectorAll: selector => selector.startsWith('tr:') ? rows.filter(row => row.querySelector().checked) : [normal, conflict]};
-	const ctx = context({
-		LIEls: {select_all: {checked: true}, proposal_list: list, views: {list: {}, loading: {}, start: {}}, buttons: {}, conflict_notice: {}},
-		rowid_to_filepath: {0: {cv_id: 1, filepath: 'good'}, 1: {cv_id: 2, filepath: 'conflict'}},
-		setLibraryImportLoadingMode() {}, hide() {},
-		sendAPI: async (...args) => { ctx.payload = args[4]; return {json: async () => ({result: {conflicts: []}})}; }
-	});
-	vm.runInNewContext(selection + submission, ctx);
-	vm.runInNewContext('toggleSelectAll()', ctx);
-	assert.equal(normal.checked, true);
-	assert.equal(conflict.checked, false);
-	conflict.checked = true;
-	await vm.runInNewContext("importLibrary('key')", ctx);
-	await new Promise(resolve => setImmediate(resolve));
-	assert.deepEqual(JSON.parse(JSON.stringify(ctx.payload)), [{filepath: 'good', id: 1}]);
+	const logic = source.slice(source.indexOf('const READY_BUCKETS'), source.indexOf('// code run on load'));
+	const ctx = context({});
+	vm.createContext(ctx);
+	vm.runInContext(logic, ctx);
+	return code => vm.runInContext(code, ctx);
+}
+
+function importResult(group_number, filepath, cv, conflict = null) {
+	return {group_number, filepath, file_title: filepath, metadata_source: 'filename', comicinfo: null, cv, conflict};
+}
+
+test('import inbox sorts series groups into buckets by match outcome', () => {
+	const run = libraryImportContext();
+	run(`buildGroups(${JSON.stringify([
+		importResult(1, 'a1', {id: 10, match_source: 'comicinfo-id', already_added: null}),
+		importResult(1, 'a2', {id: 10, match_source: 'comicinfo-id', already_added: null}),
+		importResult(2, 'b', {id: 20, match_source: 'existing-library', already_added: 5}),
+		importResult(3, 'c', {id: 30, match_source: 'comicvine', already_added: null}),
+		importResult(4, 'd', {id: null}),
+		importResult(5, 'e', {id: 50, match_source: 'comicinfo-id'}, 'already there')
+	])})`);
+	assert.equal(run('LIState.groups.size'), 5);
+	assert.equal(run('LIState.groups.get(1).files.length'), 2);
+	assert.deepEqual(
+		run('JSON.stringify([...LIState.groups.values()].map(groupBucket))'),
+		JSON.stringify(['new', 'existing', 'guess', 'nomatch', 'skipped'])
+	);
+});
+
+test('import payload only holds ready groups, never guesses, gaps, exclusions or conflicts', () => {
+	const run = libraryImportContext();
+	run(`buildGroups(${JSON.stringify([
+		importResult(1, 'tagged', {id: 10, match_source: 'comicinfo-id'}),
+		importResult(2, 'guess', {id: 20, match_source: 'comicvine'}),
+		importResult(3, 'unmatched', {id: null}),
+		importResult(4, 'left-out', {id: 40, match_source: 'comicinfo-id'}),
+		importResult(5, 'conflict', {id: 50, match_source: 'comicinfo-id'}, 'exists')
+	])})`);
+	run('LIState.groups.get(4).excluded = true');
+	assert.deepEqual(JSON.parse(run('JSON.stringify(importPayload())')), [{filepath: 'tagged', id: 10}]);
+
+	// Accepting the guess and matching the gap by hand makes both importable.
+	run("LIState.groups.get(2).manual = true; LIState.groups.get(3).cv = {id: 30}; LIState.groups.get(3).manual = true");
+	assert.equal(run('groupBucket(LIState.groups.get(2))'), 'manual');
+	assert.deepEqual(
+		JSON.parse(run('JSON.stringify(importPayload().map(d => d.filepath))')),
+		['tagged', 'guess', 'unmatched']
+	);
 });
 
 test('queue move uses the row position after another download ends', () => {
@@ -529,6 +555,7 @@ test('General settings load and save the Mac browser-close preference', async ()
 		vm.runInNewContext("saveSettings('key')", ctx);
 		await new Promise(resolve => setImmediate(resolve));
 		assert.equal(saved.quit_on_browser_close, isMacApp ? true : undefined);
+		assert.equal(saved.organizer_mode, false);
 	}
 });
 

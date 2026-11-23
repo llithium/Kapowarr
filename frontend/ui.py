@@ -7,15 +7,24 @@ from typing import Any
 from flask import Blueprint, redirect, render_template, send_file
 
 from backend.internals.server import Server
+from backend.internals.settings import Settings
 
 ui = Blueprint('ui', __name__)
 methods = ['GET']
+
+
+def _organizer_mode() -> bool:
+    try:
+        return bool(Settings().sv.organizer_mode)
+    except Exception:
+        return False
 
 
 def render(filename: str, **kwargs: Any) -> str:
     return render_template(
         filename,
         url_base=Server.url_base,
+        organizer_mode=_organizer_mode(),
         **kwargs
     )
 

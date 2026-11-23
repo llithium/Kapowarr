@@ -52,3 +52,30 @@ class UiTemplates(unittest.TestCase):
             self.assertEqual(dialog.get('role'), 'dialog')
             self.assertEqual(dialog.get('tabindex'), '-1')
             self.assertTrue(dialog.get('aria-label'))
+
+
+class OrganizerModeTemplates(unittest.TestCase):
+    def render(self, template, path, **context):
+        from bs4 import BeautifulSoup
+
+        frontend = Path(__file__).resolve().parents[2] / 'frontend'
+        app = Flask(__name__, template_folder=str(frontend / 'templates'))
+        with app.test_request_context(path):
+            return BeautifulSoup(render_template(template, url_base='', **context), 'html.parser')
+
+    def test_organizer_mode_marks_page_and_swaps_primary_action(self):
+        page = self.render('volumes.html', '/', organizer_mode=True)
+        self.assertIn('organizer-mode', page.html.get('class', []))
+        self.assertIsNotNone(page.select_one('a[href="/library-import"].primary-action'))
+        self.assertIsNone(page.select_one('option[value="monitored"]'))
+
+        page = self.render('volumes.html', '/', organizer_mode=False)
+        self.assertNotIn('organizer-mode', page.html.get('class', []) or [])
+        self.assertIsNotNone(page.select_one('option[value="monitored"]'))
+
+    def test_organizer_mode_drops_download_settings_tabs(self):
+        page = self.render('settings_general.html', '/settings/general', organizer_mode=True)
+        tabs = {a['href'] for a in page.select('.tab-container a, nav a') if a.get('href', '').startswith('/settings/')}
+        self.assertNotIn('/settings/download', tabs)
+        self.assertNotIn('/settings/downloadclients', tabs)
+        self.assertIsNotNone(page.select_one('#organizer-mode-input'))

@@ -1,90 +1,50 @@
 {% extends "base.html" %}
-{% from "base.html" import window %}
 {% block title %}Library Import{% endblock %}
 {% block css %}
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/window.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/library_import.css') }}">
 {% endblock %}
 {% block js %}
-	<script src="{{ url_for('static', filename='js/window.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/library_import.js') }}" defer></script>
 {% endblock %}
 
-{% block pre_build_rows %}
-<tr class="li-result" data-group_number="" data-rowid="">
-	<td>
-		<input type="checkbox" checked>
-	</td>
-	<td class="file-column" title=""></td>
-	<td class="metadata-source"></td>
-	<td>
-		<a href="" target="_blank"></a>
-	</td>
-	<td class="issue-count"></td>
-	<td class="match-details"></td>
-	<td>
-		<button title="Change match">
-			<img src="{{ url_for('static', filename='img/edit.svg') }}" alt="">
-		</button>
-	</td>
-</tr>
-<tr class="search-result">
-	<td>
-		<a target="_blank" href=""></a>
-	</td>
-	<td></td>
-	<td><button>Select</button></td>
-	<td><button>Select for group</button></td>
-</tr>
-{% endblock pre_build_rows %}
-
-{% block windows %}
-	{% set edit_cv_content %}
-		<form class="search-bar icon-text-color">
-			<input type="text" id="search-input">
-			<button type="submit">
-				<img src="{{url_base}}/static/img/search.svg" alt="">
-			</button>
-		</form>
-		<div class="search-results-container">
-			<table>
-				<thead>
-					<th>Search Result</th>
-					<th>Issue Count</th>
-					<th>Action</th>
-					<th>Group Action</th>
-				</thead>
-				<tbody class="search-results"></tbody>
-			</table>
-		</div>
-	{% endset %}
-
-	{{ window(False, "cv-window", "Edit ComicVine Match", edit_cv_content) }}
-{% endblock windows %}
-
 {% block main %}
-<main>
+<main class="library-import">
+	<template id="li-group-template">
+		<li class="li-group">
+			<button type="button" class="li-group-button">
+				<span class="li-cover" aria-hidden="true"></span>
+				<span class="li-group-text">
+					<span class="li-group-title"></span>
+					<span class="li-group-meta"></span>
+					<span class="li-group-match"></span>
+				</span>
+				<span class="li-chip"></span>
+			</button>
+		</li>
+	</template>
+	<template id="li-result-template">
+		<li>
+			<button type="button" class="li-result">
+				<span class="li-cover" aria-hidden="true"></span>
+				<span class="li-result-text">
+					<span class="li-result-title"></span>
+					<span class="li-result-meta"></span>
+					<span class="li-result-chips"></span>
+				</span>
+			</button>
+		</li>
+	</template>
+
 	<div id="start-window">
-		<h1>Set up an import scan</h1>
-		<p class="intro">Choose where to look. Kapowarr will find comic files, suggest matches, and let you review everything before moving a file.</p>
-		<details>
-			<summary>Before you scan</summary>
-		<ul>
-			<li>Tagged CBZ/ZIP files are matched from embedded ComicInfo.xml metadata before Kapowarr falls back to the filename.</li>
-			<li>Volumes already in your Kapowarr library are checked before a new ComicVine search, which makes adding more issues to an existing series more reliable.</li>
-			<li>Review matches carefully. ComicVine lists standard volumes, collected editions, one-shots, hardcovers, and other releases separately.</li>
-			<li>Import in batches of no more than 50 new volumes to avoid ComicVine rate limits.</li>
-			<li>You can scan comic files directly in a root folder or in any unmanaged sub-folder. Kapowarr-managed volume folders are excluded.</li>
-			<li>If each issue has a separate sub-folder, enable 'Apply limit to parent folder' so that the limit is correctly applied.</li>
-		</ul>
-		</details>
+		<h1>Import files</h1>
+		<p class="intro">Kapowarr looks for comic files that aren't in your library yet, matches them to Comic Vine, and lets you fix anything it couldn't match before a file moves.</p>
 		<section class="scan-setup" aria-labelledby="scan-scope-heading">
 			<div class="scan-option primary-scan-option">
 				<div>
 					<h2 id="scan-scope-heading">Where should Kapowarr look?</h2>
 					<p>Managed volume folders are skipped. Files in root folders and unmanaged subfolders are included.</p>
 				</div>
-				<label for="target-input">Scan location</label>
+				<label for="target-input" class="visually-hidden">Scan location</label>
 				<select id="target-input">
 					<option value="true">All root folders (recommended)</option>
 					<option value="false">Choose a folder or pattern</option>
@@ -99,69 +59,148 @@
 				<summary>Scan options</summary>
 				<div class="scan-options-content">
 					<div class="scan-option">
-						<div><label for="limit-input">How much should this scan include?</label><p>Smaller scans finish sooner and use fewer ComicVine lookups.</p></div>
+						<div><label for="limit-input">How much should this scan include?</label><p>Smaller scans finish sooner and use fewer Comic Vine lookups.</p></div>
 						<select id="limit-input"><option value="1">1 folder</option><option value="5">5 folders</option><option value="20" selected>20 folders (recommended)</option><option value="100">100 folders</option><option value="500">500 folders</option></select>
 					</div>
 					<div class="scan-option">
 						<div><label for="folder-input">Are issues stored one folder at a time?</label><p>Use this only when each individual issue has its own folder.</p></div>
-						<select id="folder-input"><option value="false" selected>No — count each comic folder</option><option value="true">Yes — count each parent folder</option></select>
+						<select id="folder-input"><option value="false" selected>No, count each comic folder</option><option value="true">Yes, count each parent folder</option></select>
 					</div>
 					<div class="scan-option">
-						<div><label for="lang-input">Which ComicVine releases should match?</label><p>Keep English-only enabled unless you want translated editions.</p></div>
+						<div><label for="lang-input">Which Comic Vine releases should match?</label><p>Keep English-only on unless you want translated editions.</p></div>
 						<select id="lang-input"><option value="true" selected>English releases only (recommended)</option><option value="false">Any language</option></select>
 					</div>
 				</div>
 			</details>
-			<button id="run-import-button">Review matches</button>
+			<details class="scan-tips">
+				<summary>How matching works</summary>
+				<ul>
+					<li>Tagged CBZ/ZIP files are matched from the Comic Vine ID in their ComicInfo.xml first, then by title.</li>
+					<li>Series already in your library are checked before a new Comic Vine search.</li>
+					<li>Comic Vine lists standard volumes, collected editions, one-shots and hardcovers separately, so check guesses before importing.</li>
+					<li>Import no more than about 50 new series at once to stay under Comic Vine's rate limit.</li>
+				</ul>
+			</details>
+			<button id="run-import-button" class="primary-action">Scan for new files</button>
 		</section>
 	</div>
-	<div id="loading-window" class="hidden">
-		<h2>Scanning library</h2>
-	</div>
+	<div id="loading-window" class="hidden"></div>
 	<div id="no-result-window" class="hidden">
-		<h2>No comic files found</h2>
-		<p>Check the folder selection and scan limit, then try again.</p>
-		<button class="cancel-button">Go Back</button>
+		<h2>No new comic files found</h2>
+		<p>Everything in your root folders is already in your library. Check the folder selection and scan limit if you expected more.</p>
+		<button class="cancel-button secondary-action">Back to scan setup</button>
 	</div>
 	<div id="no-cv-window" class="hidden">
-		<h2>ComicVine API key required</h2>
+		<h2>Comic Vine API key required</h2>
 		<p>Add an API key in General settings before scanning your library.</p>
-		<button class="cancel-button">Go Back</button>
-		<a href="{{url_base}}/settings/general#cv-input">Go to settings</a>
-	</div>
-	<div id="list-window" class="hidden">
-		<div class="action-container">
-			<button class="cancel-button">Cancel</button>
-			<button
-				id="import-button" 
-				title="Add volumes, set volume folder to the folder that the files are in, don't rename the volume folder, don't rename the files. If the volume is already added, move file into volume folder."
-			>Import</button>
-			<button
-				id="import-rename-button"
-				title="Add volumes, move files into automatically generated volume folder (named following the settings), rename files. If the volume is already added, move the file into volume folder and rename."
-			>Import and Rename</button>
-		</div>
-		<div id="import-conflict-notice" class="hidden" role="alert">
-			<strong>Some files were not imported</strong>
-			<p>Rescan the root folders before importing anything else.</p>
-			<ul></ul>
-		</div>
-		<div class="table-container icon-text-color">
-			<table aria-label="File list">
-				<thead>
-					<th>
-						<input type="checkbox" id="selectall-input" aria-label="Select all entries for importing" checked>
-					</th>
-					<th>File</th>
-					<th>Metadata</th>
-					<th>Match</th>
-					<th>Issues in match</th>
-					<th>Match info</th>
-					<th>Action</th>
-				</thead>
-				<tbody class="proposal-list"></tbody>
-			</table>
+		<div class="li-empty-actions">
+			<button class="cancel-button secondary-action">Back</button>
+			<a class="primary-action" href="{{url_base}}/settings/general#cv-input">Go to settings</a>
 		</div>
 	</div>
+
+	<section id="inbox-window" class="hidden" aria-labelledby="inbox-title">
+		<header class="li-header">
+			<div>
+				<h1 id="inbox-title">Import files</h1>
+				<p id="inbox-status" class="li-status"></p>
+			</div>
+			<button type="button" id="rescan-button" class="secondary-action">Scan again</button>
+		</header>
+
+		<div id="import-summary" class="li-summary hidden" role="status" tabindex="-1">
+			<div class="li-summary-head">
+				<h2 id="import-summary-title"></h2>
+				<button type="button" id="close-summary" class="li-link-button">Dismiss</button>
+			</div>
+			<ul id="import-summary-list"></ul>
+			<div id="import-conflicts" class="hidden">
+				<h3>Not moved because a file with the same name is already there</h3>
+				<ul id="import-conflict-list"></ul>
+			</div>
+		</div>
+
+		<div class="li-inbox" id="inbox">
+			<nav class="li-buckets" aria-label="Import groups">
+				<p class="li-bucket-heading">Needs you</p>
+				<button type="button" data-bucket="nomatch"><span class="li-dot bad"></span>No match<span class="li-count"></span></button>
+				<button type="button" data-bucket="guess"><span class="li-dot warn"></span>Check the guess<span class="li-count"></span></button>
+				<p class="li-bucket-heading">Ready to import</p>
+				<button type="button" data-bucket="new"><span class="li-dot ok"></span>New series<span class="li-count"></span></button>
+				<button type="button" data-bucket="existing"><span class="li-dot ok"></span>Joins a series you have<span class="li-count"></span></button>
+				<button type="button" data-bucket="manual"><span class="li-dot acc"></span>Matched by you<span class="li-count"></span></button>
+				<p class="li-bucket-heading">Not imported</p>
+				<button type="button" data-bucket="skipped"><span class="li-dot idle"></span>Already in library<span class="li-count"></span></button>
+				<button type="button" data-bucket="excluded"><span class="li-dot idle"></span>Left out by you<span class="li-count"></span></button>
+				<p class="li-keys"><kbd>J</kbd> <kbd>K</kbd> next or previous<br><kbd>/</kbd> search Comic Vine<br><kbd>A</kbd> accept the guess</p>
+			</nav>
+
+			<section class="li-list" aria-labelledby="bucket-title">
+				<div class="li-list-head">
+					<h2 id="bucket-title"></h2>
+					<p id="bucket-hint"></p>
+				</div>
+				<ul id="group-list" class="li-groups"></ul>
+				<p id="bucket-empty" class="li-bucket-empty hidden"></p>
+			</section>
+
+			<aside class="li-panel" id="match-panel" aria-label="Match details">
+				<div id="panel-empty" class="li-panel-empty">
+					<p>Select a series to see its match and where its files will go.</p>
+				</div>
+				<div id="panel-content" class="hidden">
+					<div class="li-panel-head">
+						<button type="button" id="close-panel" class="li-link-button li-panel-close">‹ Back to list</button>
+						<h2 id="panel-title"></h2>
+						<p id="panel-meta"></p>
+					</div>
+
+					<section class="li-card" aria-labelledby="current-match-title">
+						<h3 id="current-match-title" class="li-card-label">Current match</h3>
+						<div id="current-match" class="li-match"></div>
+						<div class="li-card-actions">
+							<button type="button" id="accept-guess" class="primary-action hidden">Looks right <kbd>A</kbd></button>
+							<button type="button" id="toggle-exclude" class="secondary-action"></button>
+						</div>
+					</section>
+
+					<section class="li-search" aria-labelledby="search-title">
+						<h3 id="search-title" class="li-card-label">Find a different match</h3>
+						<form id="search-form" class="li-search-bar" role="search">
+							<label for="search-input" class="visually-hidden">Search Comic Vine</label>
+							<input type="search" id="search-input" autocomplete="off" spellcheck="false">
+							<button type="submit" class="secondary-action">Search</button>
+						</form>
+						<p id="search-status" class="li-search-status" role="status"></p>
+						<ul id="search-results" class="li-results"></ul>
+					</section>
+
+					<section id="pending-match" class="li-card li-pending hidden" aria-labelledby="pending-title">
+						<h3 id="pending-title" class="li-card-label">Use this match?</h3>
+						<div id="pending-detail" class="li-match"></div>
+						<div class="li-card-actions">
+							<button type="button" id="use-for-group" class="primary-action"></button>
+							<button type="button" id="use-for-file" class="secondary-action hidden"></button>
+						</div>
+					</section>
+
+					<details class="li-files" id="group-files">
+						<summary id="group-files-summary"></summary>
+						<p class="li-files-hint">Select one file to match it on its own.</p>
+						<ul id="group-file-list"></ul>
+					</details>
+				</div>
+			</aside>
+		</div>
+
+		<footer class="li-footer">
+			<p id="ready-summary" class="li-ready"></p>
+			<label class="li-rename" for="rename-input">
+				<input type="checkbox" id="rename-input" checked>
+				<span>Rename files and move them into your folder layout</span>
+			</label>
+			<button type="button" id="import-button" class="primary-action"></button>
+		</footer>
+	</section>
 </main>
 {% endblock %}

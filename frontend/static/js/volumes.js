@@ -46,6 +46,10 @@ const pre_build_els = {
 	table_entry: document.querySelector('.pre-build-els .table-entry')
 };
 
+function isOrganizerMode() {
+	return Boolean(document.documentElement?.classList?.contains('organizer-mode'));
+};
+
 function showLibraryPage(el) {
 	hide(Object.values(library_els.pages), [el]);
 };
@@ -92,12 +96,14 @@ class LibraryEntry {
 				? `${downloaded_count} of ${total_count} issues` : `${downloaded_count}/${total_count}`;
 			const bar = entry.querySelector(`.${prefix}-prog-bar`);
 			bar.style.width = `${progress}%`;
-			const monitored = libraryVolumes.get(this.id)?.monitored ?? entry.hasAttribute('monitored');
+			// Organizer mode doesn't download, so an incomplete series isn't an error.
+			const monitored = isOrganizerMode()
+				|| (libraryVolumes.get(this.id)?.monitored ?? entry.hasAttribute('monitored'));
 			bar.style.backgroundColor = progress === 100 ? 'var(--success-color)'
 				: monitored ? (prefix === 'list' ? 'var(--progress-fill-color)' : 'var(--accent-color)') : 'var(--error-color)';
 		}
 		if (this.list_entry) this.list_entry.querySelector('.list-prog-container').title = total_count > 0
-			? `${downloaded_count} of ${total_count} issues downloaded` : 'No issues';
+			? `${downloaded_count} of ${total_count} issues have files` : 'No issues';
 	}
 }
 
