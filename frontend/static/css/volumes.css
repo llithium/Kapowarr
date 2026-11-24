@@ -673,6 +673,7 @@ main.library-browser .insp-links {
 }
 
 main.library-browser .insp-link {
+	min-height: 0;
 	padding: 0;
 	border: 0;
 	background: none;

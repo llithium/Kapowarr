@@ -44,14 +44,31 @@ class UiTemplates(unittest.TestCase):
 
         frontend = Path(__file__).resolve().parents[2] / 'frontend'
         app = Flask(__name__, template_folder=str(frontend / 'templates'))
-        with app.test_request_context('/volumes/3'):
-            page = BeautifulSoup(render_template('view_volume.html', url_base=''), 'html.parser')
+        with app.test_request_context('/add'):
+            page = BeautifulSoup(render_template('add_volume.html', url_base=''), 'html.parser')
         dialogs = page.select('.window .loading-window')
         self.assertTrue(dialogs)
         for dialog in dialogs:
             self.assertEqual(dialog.get('role'), 'dialog')
             self.assertEqual(dialog.get('tabindex'), '-1')
             self.assertTrue(dialog.get('aria-label'))
+
+
+    def test_series_page_edits_in_the_panel_not_in_windows(self):
+        from bs4 import BeautifulSoup
+
+        frontend = Path(__file__).resolve().parents[2] / 'frontend'
+        app = Flask(__name__, template_folder=str(frontend / 'templates'))
+        with app.test_request_context('/volumes/3'):
+            page = BeautifulSoup(render_template('view_volume.html', url_base=''), 'html.parser')
+        # Only the downloads-only "Find links" dialog is left.
+        self.assertEqual([w['id'] for w in page.select('.window > section')], ['manual-search-window'])
+        panel = page.select_one('#sp-panel')
+        for control in ('specialoverride-input', 'root-folder-input', 'volumefolder-input',
+                        'match-list', 'rename-button', 'submit-delete'):
+            self.assertIsNotNone(panel.select_one(f'#{control}'), control)
+        ids = [el['id'] for el in page.select('[id]')]
+        self.assertEqual(len(ids), len(set(ids)))
 
 
 class OrganizerModeTemplates(unittest.TestCase):

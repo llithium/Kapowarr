@@ -604,20 +604,22 @@ test('cover progress explains counts while table progress stays compact', () => 
 	assert.equal(element('#list-library .vol-1 .list-prog-num').innerText, '0 of 0 issues');
 });
 
-test('issue status labels and summary follow downloaded-status changes', () => {
+test('issue status labels and summary follow file-status changes', () => {
 	const summary = {};
 	const rows = [1, 2].map(id => {
 		const classes = new Set();
 		const label = {};
-		const convert = {};
 		const status = {
-			classList: { add: name => classes.add(name), remove: name => classes.delete(name) },
+			classList: {
+				add: name => classes.add(name),
+				remove: name => classes.delete(name),
+				toggle: (name, on) => on ? classes.add(name) : classes.delete(name)
+			},
 			querySelector: () => label
 		};
 		return {
-			id, classes, label, convert,
-			querySelector: selector => selector === '.issue-status' ? status
-				: selector === '.issue-actions-menu > button:nth-child(3)' ? convert : {}
+			id, classes, label, status,
+			querySelector: selector => selector === '.issue-status' ? status : {}
 		};
 	});
 	const list = {
@@ -627,26 +629,37 @@ test('issue status labels and summary follow downloaded-status changes', () => {
 	const ctx = context({
 		document: { querySelector: selector => selector === '#issues-list' ? list
 			: selector === '#issue-summary' ? summary : {} },
-		images: { check: 'check.svg', cancel: 'cancel.svg' },
-		setImage() {},
 		rows
 	});
 	vm.createContext(ctx);
 	vm.runInContext(read('frontend/static/js/view_volume.js').split('function fillTable(')[0], ctx);
 	vm.runInContext("new IssueEntry(1, 'key', rows[0]).setDownloaded(true)", ctx);
-	assert.equal(rows[0].label.textContent, 'Downloaded');
-	assert.equal(rows[0].convert.disabled, false);
-	assert.equal(summary.textContent, '1 of 2 downloaded');
+	assert.equal(rows[0].label.textContent, 'Has file');
+	assert.equal(rows[0].status.title, 'This issue has a file');
+	assert.equal(summary.textContent, '1 of 2 issues have files');
 	vm.runInContext("new IssueEntry(2, 'key', rows[1]).setDownloaded(true)", ctx);
-	assert.equal(summary.textContent, '2 of 2 downloaded');
+	assert.equal(summary.textContent, '2 of 2 issues have files');
 	vm.runInContext("new IssueEntry(1, 'key', rows[0]).setDownloaded(false)", ctx);
 	assert.equal(rows[0].label.textContent, 'Missing');
-	assert.equal(rows[0].convert.disabled, true);
-	assert.equal(rows[0].convert.title, 'No downloaded files to convert');
-	assert.equal(summary.textContent, '1 of 2 downloaded');
+	assert.equal(rows[0].classes.has('error'), true);
+	assert.equal(summary.textContent, '1 of 2 issues have files');
 	rows.length = 0;
 	vm.runInContext('updateIssueSummary()', ctx);
-	assert.equal(summary.textContent, '0 of 0 downloaded');
+	assert.equal(summary.textContent, '0 of 0 issues have files');
+});
+
+test('file match choices map to the manual-match payload', () => {
+	const source = read('frontend/static/js/view_volume.js');
+	const ctx = vm.createContext({});
+	vm.runInContext(source.slice(source.indexOf('function matchValue('), source.indexOf('function matchLabel(')), ctx);
+	vm.runInContext(source.slice(source.indexOf('function changeFromValue('), source.indexOf('function updateMatchButtons(')), ctx);
+	const json = code => JSON.parse(JSON.stringify(vm.runInContext(code, ctx)));
+	assert.equal(json("matchValue({general_file: false, forced_match: false, issue_ids: [4]})"), 'auto:4');
+	assert.equal(json("matchValue({general_file: true, forced_match: true, issue_ids: []})"), 'general');
+	assert.equal(json("matchValue({general_file: false, forced_match: true, issue_ids: [4, 5]})"), 'issue:4,5');
+	assert.deepEqual(json("changeFromValue('a.cbz', 'auto:4')"), {filepath: 'a.cbz', issue_ids: [], general_file: false, forced_match: false});
+	assert.deepEqual(json("changeFromValue('a.cbz', 'general')"), {filepath: 'a.cbz', issue_ids: [], general_file: true, forced_match: true});
+	assert.deepEqual(json("changeFromValue('a.cbz', 'issue:7,8')"), {filepath: 'a.cbz', issue_ids: [7, 8], general_file: false, forced_match: true});
 });
 
 function dialogContext() {

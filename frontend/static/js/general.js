@@ -132,16 +132,14 @@ function mapButtons(id) {
 		};
 
 		document.querySelectorAll('.issue-entry').forEach(entry => {
-			task_to_button[`auto_search_issue#${id}#${entry.dataset.id}`] = {
-				'button': entry.querySelector('.issue-actions-menu > button:first-child'),
-				'icon': `${url_base}/static/img/search.svg`,
-				'loading_icon': `${url_base}/static/img/loading.svg`
-			};
-			task_to_button[`mass_convert_issue#${id}#${entry.dataset.id}`] = {
-				'button': entry.querySelector('.issue-actions-menu > button:last-child'),
-				'icon': `${url_base}/static/img/convert.svg`,
-				'loading_icon': `${url_base}/static/img/loading.svg`
-			};
+			// The row shows a small spinner while a task runs for that issue.
+			const busy = entry.querySelector('.issue-busy');
+			for (const action of ['auto_search_issue', 'mass_rename_issue', 'mass_convert_issue'])
+				task_to_button[`${action}#${id}#${entry.dataset.id}`] = {
+					'button': busy,
+					'icon': `${url_base}/static/img/search.svg`,
+					'loading_icon': `${url_base}/static/img/loading.svg`
+				};
 		});
 	};
 	active_tasks.forEach(task => {
@@ -299,12 +297,15 @@ mapButtons(volume_id);
 
 let socket;
 setupLocalStorage();
+const systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 function setupTheme() {
+	const theme = getLocalStorage('theme').theme;
 	document.querySelector(':root').classList.toggle(
-		'dark-mode', getLocalStorage('theme').theme === 'dark'
+		'dark-mode', theme === 'dark' || (theme === 'auto' && Boolean(systemDark?.matches))
 	);
 };
 setupTheme();
+systemDark?.addEventListener?.('change', setupTheme);
 
 const socket_ready = usingApiKey()
 .then(api_key => {
