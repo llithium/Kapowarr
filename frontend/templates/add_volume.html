@@ -1,18 +1,17 @@
 {% extends "base.html" %}
-{% from "base.html" import icon_button, window, loading_window %}
-{% block title %}Add Volume{% endblock %}
+{% block title %}Add comics{% endblock %}
 {% block css %}
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/window.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/add_volume.css') }}">
 {% endblock %}
 {% block js %}
-	<script src="{{ url_for('static', filename='js/window.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/add_volume.js') }}" defer></script>
 {% endblock %}
 
 {% block pre_build_els %}
 <button
+	type="button"
 	class="search-entry"
+	aria-pressed="false"
 	data-title=""
 	data-cover=""
 	data-comicvine_id=""
@@ -22,153 +21,147 @@
 	data-_volume_number=""
 	data-_publisher=""
 >
-	<div class="cover-info-container">
-		<div>
-			<img src="" alt="" loading="lazy">
-		</div>
-		<div class="entry-info-container">
+	<img class="entry-cover" src="" alt="" loading="lazy">
+	<span class="entry-info-container">
+		<span class="entry-head">
 			<h2></h2>
-			<div class="entry-tags" aria-label="Tags"></div>
-			<div class="entry-aliases" aria-label="Aliases"></div>
-			<div class="entry-description description" aria-label="Description"></div>
-		</div>
-	</div>
-	<div class="entry-spare-description description" aria-hidden="true"></div>
+			<span class="entry-added hidden">In library</span>
+		</span>
+		<span class="entry-tags" aria-label="Details"></span>
+		<span class="entry-aliases" aria-label="Also known as"></span>
+		<span class="entry-description description" aria-label="Description"></span>
+	</span>
 </button>
 {% endblock pre_build_els %}
 
-{% block windows %}
-	{{ loading_window("loading-window", "Adding volume...") }}
-
-	{% set add_content %}
-		<img src="" id="add-cover" alt="">
-		<form id="add-form">
-			<input type="hidden" id="comicvine-input" value="">
-			<table class="fold-table">
-				<tr>
-					<th><label for="rootfolder-input">Root Folder</label></th>
-					<td>
-						<select id="rootfolder-input">
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<th><label for="volumefolder-input">Volume Folder</label></th>
-					<td>
-						<input type="text" id="volumefolder-input">
-					</td>
-				</tr>
-				<tr>
-					<th><label for="monitor-volume-input">Monitor Volume</label></th>
-					<td>
-						<select id="monitor-volume-input">
-							<option value="true" selected>Yes</option>
-							<option value="false">No</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<th><label for="monitor-issues-input">Monitor New Issues</label></th>
-					<td>
-						<select id="monitor-issues-input">
-							<option value="true" selected>Yes</option>
-							<option value="false">No</option>
-						</select>
-						<p>When new issues come out, automatically monitor them.</p>
-					</td>
-				</tr>
-				<tr>
-					<th><label for="monitoring-scheme-input">Monitoring Scheme</label></th>
-					<td>
-						<select id="monitoring-scheme-input">
-							<option value="all" selected>All</option>
-							<option value="missing">Missing</option>
-							<option value="none">None</option>
-						</select>
-						<p>Choose which issues to monitor that have already been released.</p>
-					</td>
-				</tr>
-				<tr>
-					<th><label for="specialoverride-input">Special Version</label></th>
-					<td>
-						<select id="specialoverride-input">
-							<option value="auto" selected>Automatic</option>
-							<option value="">Normal Volume</option>
-							<option value="tpb">Trade Paper Back</option>
-							<option value="one-shot">One Shot</option>
-							<option value="hard-cover">Hard Cover</option>
-							<option value="omnibus">Omnibus</option>
-							<option value="volume-as-issue">Volume As Issue</option>
-						</select>
-					</td>
-				</tr>
-			</table>
-		</form>
-	{% endset %}
-
-	{% set add_submit %}
-		<label for="auto-search-input">Automatically find and download missing issues</label>
-		<input type="checkbox" id="auto-search-input">
-		<button id="add-volume" type="submit" form="add-form">Add Volume</button>
-	{% endset %}
-
-	{{ window(False, "add-window", "Add volume", add_content, add_submit, "loading-window", False) }}
-
-{% endblock windows %}
-
 {% block main %}
-<main>
-    <div class="page-heading"><h1>Add comics</h1><a href="{{url_base}}/library-import" class="secondary-action">Import files</a></div>
-	<div>
-		<form class="search-bar icon-text-color" aria-label="Search Bar">
-			<button type="submit" id="search-button" title="Start the search">
-				<img src="{{url_base}}/static/img/search.svg" alt="">
-			</button>
-			<input type="text" id="search-input" required autofocus placeholder="Search title or Comic Vine ID" aria-label="Search title or Comic Vine ID">
-			<button type="button" id="search-cancel-button" title="Clear search">
-				<img src="{{url_base}}/static/img/cancel.svg" alt="">
-			</button>
-		</form>
-		<section id="search-explain" aria-label="Explanation">
-			<p>Search Comic Vine by the series title or its volume ID.</p>
-			<p>For example: <code>cv:4050-2127</code>, <code>cv:2127</code>, or <code>4050-2127</code>.</p>
-		</section>
-		<section id="search-empty" class="hidden">
-			<p>No results</p>
-		</section>
-		<section id="search-loading" class="hidden">
-			<p>Searching...</p>
-		</section>
-		<section id="search-failed" class="hidden">
-			<p>The Comic Vine api key is not set or is invalid</p>
-			<p><a class="primary-action" href="{{url_base}}/settings/general">Set up Comic Vine</a></p>
-		</section>
-		<section id="search-rate-limited" class="hidden">
-			<p>ComicVine API rate limit reached</p>
-			<p>Please wait a while before searching again</p>
-		</section>
-		<section id="search-blocked" class="hidden">
-			<p>Add a root folder before adding volumes.</p>
-			<div class="empty-actions">
-				<a class="primary-action" href="{{url_base}}/settings/mediamanagement">Add a root folder</a>
+<main class="add-page">
+	<div class="ap-layout">
+		<div class="ap-main">
+			<div class="page-heading">
+				<h1>Add comics</h1>
+				<a href="{{url_base}}/library-import" class="secondary-action">Import files</a>
 			</div>
-		</section>
-		<section id="search-results" class="hidden" aria-label="Search Results">
-			<div class="filter-bar" aria-label="Filter Bar">
-				<select id="filter-translations" aria-label="Filter translations">
-					<option value="all">All Languages</option>
-					<option value="only-english">Only English</option>
-				</select>
-				<select id="filter-year" aria-label="Filter year">
-				</select>
-				<select id="filter-issue-count" aria-label="Filter issue count">
-				</select>
-				<select id="filter-volume-number" aria-label="Filter volume number">
-				</select>
-				<select id="filter-publisher" aria-label="Filter publisher">
-				</select>
+			<div class="ap-search">
+				<form class="search-bar" aria-label="Search Comic Vine">
+					<button type="submit" id="search-button" title="Search">
+						<img src="{{url_base}}/static/img/search.svg" alt="">
+					</button>
+					<input type="text" id="search-input" required autofocus placeholder="Series title or Comic Vine ID" aria-label="Series title or Comic Vine ID">
+					<button type="button" id="search-cancel-button" title="Clear search">
+						<img src="{{url_base}}/static/img/cancel.svg" alt="">
+					</button>
+				</form>
+				<section id="search-explain" class="ap-message" aria-label="How to search">
+					<p class="ap-message-title">Find a series on Comic Vine</p>
+					<p>Search by title, or paste an ID like <code>4050-2127</code> or <code>cv:2127</code>. Already have the files? <a href="{{url_base}}/library-import">Import them</a> instead.</p>
+				</section>
+				<section id="search-empty" class="ap-message hidden">
+					<p class="ap-message-title">No results</p>
+					<p>Try a shorter title, or search by Comic Vine ID.</p>
+				</section>
+				<section id="search-loading" class="ap-message hidden">
+					<p class="ap-message-title">Searching Comic Vine…</p>
+				</section>
+				<section id="search-failed" class="ap-message hidden">
+					<p class="ap-message-title">The Comic Vine API key is missing or invalid</p>
+					<p><a class="primary-action" href="{{url_base}}/settings/general">Set up Comic Vine</a></p>
+				</section>
+				<section id="search-rate-limited" class="ap-message hidden">
+					<p class="ap-message-title">Comic Vine rate limit reached</p>
+					<p>Wait a little while, then search again.</p>
+				</section>
+				<section id="search-blocked" class="ap-message hidden">
+					<p class="ap-message-title">Add a root folder first</p>
+					<p>Series are filed inside a root folder.</p>
+					<p><a class="primary-action" href="{{url_base}}/settings/mediamanagement">Add a root folder</a></p>
+				</section>
+				<section id="search-results" class="hidden" aria-label="Search results">
+					<div class="filter-bar" aria-label="Filters">
+						<p id="result-count" class="ap-count" aria-live="polite"></p>
+						<select id="filter-translations" aria-label="Filter languages">
+							<option value="all">All languages</option>
+							<option value="only-english">English only</option>
+						</select>
+						<select id="filter-year" aria-label="Filter year"></select>
+						<select id="filter-issue-count" aria-label="Filter issue count"></select>
+						<select id="filter-volume-number" aria-label="Filter volume number"></select>
+						<select id="filter-publisher" aria-label="Filter publisher"></select>
+					</div>
+				</section>
 			</div>
-		</section>
+		</div>
+
+		<aside id="add-panel" class="ap-panel" aria-label="Add series">
+			<div class="ap-panel-head">
+				<h2 id="add-panel-title">Add to library</h2>
+				<button type="button" id="close-panel" class="ap-panel-close" title="Close">
+					<img src="{{url_base}}/static/img/cancel.svg" alt="">
+				</button>
+			</div>
+			<div id="add-empty" class="ap-panel-empty">
+				<p>Pick a search result to choose where it goes.</p>
+			</div>
+			<div id="add-window" class="hidden">
+				<div class="ap-pick">
+					<img src="" id="add-cover" alt="">
+					<div>
+						<h2></h2>
+						<p id="add-meta" class="ap-hint"></p>
+						<a id="add-cv" class="ap-link" href="" target="_blank" rel="noopener">View on Comic Vine</a>
+					</div>
+				</div>
+				<form id="add-form">
+					<input type="hidden" id="comicvine-input" value="">
+					<div class="ap-section">
+						<h3>Where it goes</h3>
+						<label for="rootfolder-input">Root folder</label>
+						<select id="rootfolder-input"></select>
+						<label for="volumefolder-input">Series folder</label>
+						<input type="text" id="volumefolder-input" spellcheck="false" autocomplete="off">
+						<p class="ap-hint">Inside the root folder. Leave it as suggested to follow your naming settings.</p>
+						<label for="specialoverride-input">Edition</label>
+						<select id="specialoverride-input">
+							<option value="auto" selected>Detect automatically</option>
+							<option value="">Standard issues</option>
+							<option value="tpb">Trade paperback</option>
+							<option value="one-shot">One-shot</option>
+							<option value="hard-cover">Hardcover</option>
+							<option value="omnibus">Omnibus</option>
+							<option value="volume-as-issue">Volumes as issues</option>
+						</select>
+					</div>
+					<details class="ap-section ap-fold download-ui">
+						<summary>Downloads</summary>
+						<label for="monitor-volume-input">Monitor series</label>
+						<select id="monitor-volume-input">
+							<option value="true">Yes</option>
+							<option value="false" selected>No</option>
+						</select>
+						<label for="monitor-issues-input">Monitor new issues</label>
+						<select id="monitor-issues-input">
+							<option value="true">Yes</option>
+							<option value="false" selected>No</option>
+						</select>
+						<p class="ap-hint">When new issues come out, monitor them automatically.</p>
+						<label for="monitoring-scheme-input">Monitor existing issues</label>
+						<select id="monitoring-scheme-input">
+							<option value="all">All</option>
+							<option value="missing">Missing</option>
+							<option value="none" selected>None</option>
+						</select>
+						<label class="ap-check" for="auto-search-input">
+							<input type="checkbox" id="auto-search-input">
+							Search for missing issues after adding
+						</label>
+					</details>
+					<div class="ap-submit">
+						<button id="add-volume" class="primary-action" type="submit">Add to library</button>
+						<p id="add-status" class="ap-status" role="status"></p>
+					</div>
+				</form>
+			</div>
+		</aside>
 	</div>
 </main>
 {% endblock main %}

@@ -176,16 +176,6 @@ a) { padding: 5px 9px; background: var(--hover-color); color: var(--dimmed-text-
 @media (max-width: 400px) { .tool-bar > button { padding: 8px; gap: 5px; } .tool-bar div > p { font-size: .75rem; } }
 
 #delete-button { color: var(--error-color); }
-main:has(.search-bar) > div:not(.page-heading) { padding: 0 32px 32px; }
-main:has(.search-bar) .page-heading { flex-direction: row; }
-.search-bar { max-width: 800px; min-height: 48px; }
-#search-explain { text-align: left; margin: 0; }
-#search-explain p { color: var(--dimmed-text-color); }
-#search-explain code { font-size: .85em; }
-.search-entry { border: 1px solid var(--border-color); box-shadow: none; }
-@media (max-width: 720px) {
-    main:has(.search-bar) > div:not(.page-heading) { padding: 0 20px 20px; }
-}
 
 @media (max-width: 900px) {
     #nav-bar { visibility: hidden; }
@@ -217,12 +207,7 @@ main:has(#queue:empty) > .icon-text-color { display: none; }
 .list-entry .list-unmonitored::before { background: var(--dimmed-text-color); }
 :root { --progress-fill-color: #2d5bd3; }
 :root.dark-mode { --progress-fill-color: #86a8ff; }
-.search-bar { border: 1px solid var(--border-color); border-radius: 7px; background: var(--foreground-color); overflow: visible; max-width: 720px; }
-.search-bar #search-input { min-width: 0; border: 0; box-shadow: none; background: transparent; font-size: .95rem; }
-.search-bar :where(#search-button,#search-cancel-button) { border: 0; background: transparent; flex-shrink: 0; }
-.search-bar:focus-within, #search-container:focus-within { outline: 2px solid var(--focus-color); outline-offset: 2px; }
-#search-explain { max-width: 720px; font-size: .9rem; line-height: 1.8; }
-#search-explain code { background: var(--hover-color); padding: 2px 5px; border-radius: 3px; }
+#search-container:focus-within { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 @media (max-width: 1050px) {
     .library-heading { grid-template-columns: 1fr auto auto; gap: 12px; }
     .library-heading #search-container { grid-column: 1 / -1; grid-row: 2; }

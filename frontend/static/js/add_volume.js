@@ -8,6 +8,15 @@ const SearchEls = {
 		input: document.querySelector('#search-input')
 	},
 	search_results: document.querySelector('#search-results'),
+	result_count: document.querySelector('#result-count'),
+	page: document.querySelector('main.add-page'),
+	panel: {
+		empty: document.querySelector('#add-empty'),
+		close: document.querySelector('#close-panel'),
+		meta: document.querySelector('#add-meta'),
+		cv_link: document.querySelector('#add-cv'),
+		status: document.querySelector('#add-status')
+	},
 	msgs: {
 		blocked: document.querySelector('#search-blocked'),
 		failed: document.querySelector('#search-failed'),
@@ -44,18 +53,35 @@ const SearchEls = {
 //
 function addAlreadyAdded(entry, id) {
 	entry.onclick = e => window.location.href = `${url_base}/volumes/${id}`;
+	entry.classList.add('is-added');
+	entry.title = 'Already in your library. Open the series.';
+	entry.querySelector('.entry-added').classList.remove('hidden');
+};
 
-	const title = entry.querySelector('h2');
-	const aa_icon = document.createElement('img');
-	aa_icon.src = `${url_base}/static/img/check_circle.svg`;
-	aa_icon.alt = 'Volume is already added';
-	title.appendChild(aa_icon);
+function plainText(html) {
+	// Comic Vine descriptions are HTML. Show them as plain text so that
+	// their images and links don't load inside the result list.
+	if (!html)
+		return '';
+	const doc = new DOMParser().parseFromString(html, 'text/html');
+	return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+};
+
+function addTag(container, text, className='') {
+	const tag = document.createElement('span');
+	tag.innerText = text;
+	if (className)
+		tag.className = className;
+	container.appendChild(tag);
+	return tag;
 };
 
 function buildResults(results, api_key) {
 	SearchEls.search_results
-        .querySelectorAll('button:not(.filter-bar)')
+        .querySelectorAll('button.search-entry')
         .forEach(e => e.remove());
+	closePanel(true);
+
 	results.forEach(result => {
 		const entry = SearchEls.pre_build.search_entry.cloneNode(true);
 		entry.dataset.title =
@@ -71,18 +97,20 @@ function buildResults(results, api_key) {
 		entry.dataset._volume_number = result.volume_number;
 		entry.dataset._publisher = result.publisher || '';
 		entry.dataset._issue_count = result.issue_count;
+		entry.dataset.site_url = result.site_url || '';
 
 		// Only allow adding volume if it isn't already added
 		if (result.already_added === null)
 			entry.onclick = e => showAddWindow(result.comicvine_id, api_key);
 
-		entry.querySelector('img').src = result.cover_link;
+		entry.querySelector('.entry-cover').src = result.cover_link;
 
 		const title = entry.querySelector('h2');
 		title.innerText = result.title;
 
 		if (result.year !== null) {
 			const year = document.createElement("span");
+			year.className = 'entry-year';
 			year.innerText = ` (${result.year})`;
 			title.appendChild(year);
 		};
@@ -91,40 +119,26 @@ function buildResults(results, api_key) {
 			addAlreadyAdded(entry, result.already_added);
 
 		const tags = entry.querySelector('.entry-tags');
+		addTag(tags, result.publisher || 'Publisher unknown', 'entry-publisher');
+		if (result.volume_number !== null)
+			addTag(tags, `Volume ${result.volume_number}`);
+		addTag(tags, result.issue_count === 1 ? '1 issue' : `${result.issue_count} issues`);
+		if (result.translated)
+			addTag(tags, 'Translated');
 
-		if (result.volume_number !== null) {
-			const volume_number = document.createElement('p');
-			volume_number.innerText = `Volume ${result.volume_number}`;
-			tags.appendChild(volume_number);
-		};
+		const aliases = entry.querySelector('.entry-aliases');
+		if (result.aliases.length)
+			aliases.innerText = 'Also known as ' + result.aliases.slice(0, 3).join(', ')
+				+ (result.aliases.length > 3 ? '…' : '');
+		else
+			aliases.remove();
 
-		const publisher = document.createElement('p');
-		publisher.innerText = result.publisher || 'Publisher Unknown';
-		tags.appendChild(publisher);
-
-		const issue_count = document.createElement('p');
-		issue_count.innerText = `${result.issue_count} issues`;
-		tags.appendChild(issue_count);
-
-		const info_link = document.createElement('a');
-		info_link.href = result.site_url;
-		info_link.innerText = 'Link';
-		info_link.onclick = e => e.stopImmediatePropagation();
-		tags.appendChild(info_link);
-
-		if (result.aliases.length) {
-			const aliases = entry.querySelector('.entry-aliases');
-			result.aliases.forEach(alias_text => {
-				const alias = document.createElement('p');
-				alias.innerText = alias_text;
-				aliases.appendChild(alias);
-			});
-		};
-
-		entry.querySelectorAll('.entry-description, .entry-spare-description')
-            .forEach(
-                d => d.innerHTML = result.description
-            );
+		const description = plainText(result.description);
+		const description_el = entry.querySelector('.entry-description');
+		if (description)
+			description_el.innerText = description;
+		else
+			description_el.remove();
 
 		SearchEls.search_results.appendChild(entry);
 	});
@@ -134,7 +148,7 @@ function buildResults(results, api_key) {
 	SearchEls.filters.year.innerHTML = '';
 	const all_years_option = document.createElement('option');
 	all_years_option.value = '';
-	all_years_option.innerText = 'All Years';
+	all_years_option.innerText = 'All years';
 	all_years_option.selected = true;
 	SearchEls.filters.year.appendChild(all_years_option);
 
@@ -142,7 +156,7 @@ function buildResults(results, api_key) {
 		const entry = document.createElement('option');
 		if (y === null) {
 			entry.value = y;
-			entry.innerText = '(No Year)';
+			entry.innerText = '(No year)';
 		} else {
 			entry.value = entry.innerText = y;
 		};
@@ -156,12 +170,12 @@ function buildResults(results, api_key) {
 	SearchEls.filters.issue_count.innerHTML = '';
 	const all_issue_counts_option = document.createElement('option');
 	all_issue_counts_option.value = '';
-	all_issue_counts_option.innerText = 'All Issue Counts';
+	all_issue_counts_option.innerText = 'Any issue count';
 	all_issue_counts_option.selected = true;
 	SearchEls.filters.issue_count.appendChild(all_issue_counts_option);
 	const one_higher_issue_counts_option = document.createElement('option');
 	one_higher_issue_counts_option.value = '>1 issues';
-	one_higher_issue_counts_option.innerText = '>1 issues';
+	one_higher_issue_counts_option.innerText = 'More than 1 issue';
 	SearchEls.filters.issue_count.appendChild(one_higher_issue_counts_option);
 
 	issue_counts.forEach(ic => {
@@ -177,7 +191,7 @@ function buildResults(results, api_key) {
 	SearchEls.filters.volume_number.innerHTML = '';
 	const all_volume_numbers_option = document.createElement('option');
 	all_volume_numbers_option.value = '';
-	all_volume_numbers_option.innerText = 'All Volume Numbers';
+	all_volume_numbers_option.innerText = 'Any volume';
 	all_volume_numbers_option.selected = true;
 	SearchEls.filters.volume_number.appendChild(all_volume_numbers_option);
 
@@ -191,7 +205,7 @@ function buildResults(results, api_key) {
 	SearchEls.filters.publisher.innerHTML = '';
 	const all_publishers_option = document.createElement('option');
 	all_publishers_option.value = '';
-	all_publishers_option.innerText = 'All Publishers';
+	all_publishers_option.innerText = 'All publishers';
 	all_publishers_option.selected = true;
 	SearchEls.filters.publisher.appendChild(all_publishers_option);
 
@@ -231,7 +245,7 @@ function search(reset_url_params=true) {
 
 			buildResults(json.result, api_key);
 
-			if (!SearchEls.search_results.querySelector('button:not(.filter-bar)'))
+			if (!SearchEls.search_results.querySelector('button.search-entry'))
 				hide([SearchEls.msgs.loading], [SearchEls.msgs.empty]);
 			else
 				hide([SearchEls.msgs.loading], [SearchEls.search_results]);
@@ -257,8 +271,9 @@ function clearSearch(e) {
 		SearchEls.msgs.explain
 	]);
 	SearchEls.search_results
-        .querySelectorAll('button:not(.filter-bar)')
+        .querySelectorAll('button.search-entry')
         .forEach(e => e.remove());
+	closePanel(true);
 	SearchEls.search_bar.input.value = '';
 	SearchEls.search_bar.input.focus();
     setURLParams();
@@ -292,13 +307,20 @@ function applyFilters() {
 	if (publisher !== '')
 		filter += `[data-_publisher="${publisher}"]`;
 
+	const entries = SearchEls.search_results.querySelectorAll('button.search-entry');
 	if (filter === '')
-		hide([], SearchEls.search_results.querySelectorAll('button'));
+		hide([], entries);
 	else
 		hide(
-			SearchEls.search_results.querySelectorAll('button'),
-			SearchEls.search_results.querySelectorAll(`button${filter}`)
+			entries,
+			SearchEls.search_results.querySelectorAll(`button.search-entry${filter}`)
 		);
+
+	const shown = [...entries].filter(e => !e.classList.contains('hidden')).length;
+	SearchEls.result_count.innerText =
+		shown === entries.length
+		? `${entries.length} ${entries.length === 1 ? 'result' : 'results'}`
+		: `${shown} of ${entries.length} results`;
 
     setURLParams();
 };
@@ -381,13 +403,59 @@ function fillRootFolderInput(api_key) {
 	});
 };
 
-function showAddWindow(comicvine_id, api_key) {
-	SearchEls.window.submit.innerText = 'Add Volume';
-	SearchEls.window.submit.style.color = '';
+function openPanel() {
+	SearchEls.page.classList.add('panel-open');
+};
 
-	const volume_data = document.querySelector(
-		`button[data-comicvine_id="${comicvine_id}"]`
-	).dataset;
+function closePanel(clear=false) {
+	SearchEls.page.classList.remove('panel-open');
+	if (!clear)
+		return;
+	SearchEls.search_results
+		.querySelectorAll('button.search-entry[aria-pressed="true"]')
+		.forEach(e => e.setAttribute('aria-pressed', 'false'));
+	hide([SearchEls.window.form.parentElement], [SearchEls.panel.empty]);
+};
+
+function setAddStatus(text, error=false) {
+	SearchEls.panel.status.innerText = text;
+	SearchEls.panel.status.classList.toggle('error', error);
+};
+
+function showAddWindow(comicvine_id, api_key) {
+	const entry = document.querySelector(
+		`button.search-entry[data-comicvine_id="${comicvine_id}"]`
+	);
+	const volume_data = entry.dataset;
+
+	SearchEls.search_results
+		.querySelectorAll('button.search-entry[aria-pressed="true"]')
+		.forEach(e => e.setAttribute('aria-pressed', 'false'));
+	entry.setAttribute('aria-pressed', 'true');
+
+	SearchEls.window.submit.disabled = false;
+	SearchEls.window.submit.innerText = 'Add to library';
+	setAddStatus('');
+
+	SearchEls.window.title.innerText = volume_data.title;
+	SearchEls.window.cover.src = volume_data.cover;
+	SearchEls.window.cv_input.value = comicvine_id;
+	SearchEls.panel.meta.innerText = [
+		volume_data._publisher || 'Publisher unknown',
+		volume_data._issue_count === '1' ? '1 issue' : `${volume_data._issue_count} issues`
+	].join(' · ');
+	SearchEls.panel.cv_link.href = volume_data.site_url;
+	SearchEls.panel.cv_link.classList.toggle('hidden', !volume_data.site_url);
+    SearchEls.window.special_state_input.value = "auto";
+
+	SearchEls.window.monitor_volume_input.value = 'false';
+	SearchEls.window.monitor_issues_input.value = 'false';
+	SearchEls.window.monitoring_scheme.value = 'none';
+	SearchEls.window.auto_search_input.checked = false;
+
+	// The suggested folder follows the naming settings
+	SearchEls.window.volume_folder_input.value = '';
+	SearchEls.window.volume_folder_input.placeholder = 'Working out the folder name…';
 	const body = {
 		'comicvine_id': volume_data.comicvine_id,
 		'title': volume_data._title,
@@ -395,28 +463,21 @@ function showAddWindow(comicvine_id, api_key) {
 		'volume_number': volume_data._volume_number,
 		'publisher': volume_data._publisher || null
 	};
-
 	sendAPI('POST', '/volumes/search', api_key, {}, body)
 	.then(response => response.json())
 	.then(json => {
+		if (SearchEls.window.cv_input.value !== String(comicvine_id))
+			return;
 		volume_data._volume_folder = json.result.folder;
 		SearchEls.window.volume_folder_input.value = json.result.folder;
-		showWindow("add-window");
+		SearchEls.window.volume_folder_input.placeholder = '';
 	});
 
-	SearchEls.window.title.innerText = volume_data.title;
-	SearchEls.window.cover.src = volume_data.cover;
-	SearchEls.window.cv_input.value = comicvine_id;
-    SearchEls.window.special_state_input.value = "auto";
-	
-	SearchEls.window.monitor_volume_input.value = 'false';
-	SearchEls.window.monitor_issues_input.value = 'false';
-	SearchEls.window.monitoring_scheme.value = 'none';
-	SearchEls.window.auto_search_input.checked = false;
+	hide([SearchEls.panel.empty], [SearchEls.window.form.parentElement]);
+	openPanel();
 };
 
 function addVolume() {
-	showLoadWindow("add-window");
 	const volume_folder = SearchEls.window.volume_folder_input.value;
 
 	const data = {
@@ -429,41 +490,44 @@ function addVolume() {
         'special_version': SearchEls.window.special_state_input.value || null,
 		'auto_search': SearchEls.window.auto_search_input.checked
 	};
+	const entry = document.querySelector(
+		`button.search-entry[data-comicvine_id="${data.comicvine_id}"]`
+	);
 	if (
 		volume_folder !== ''
-		&& volume_folder !== document.querySelector(
-			`button[data-comicvine_id="${data.comicvine_id}"]`
-		).dataset._volume_folder
+		&& volume_folder !== entry.dataset._volume_folder
 	) {
 		// Custom volume folder
 		data.volume_folder = volume_folder;
 	};
-	
+
+	SearchEls.window.submit.disabled = true;
+	SearchEls.window.submit.innerText = 'Adding…';
+	setAddStatus('');
+
 	usingApiKey()
 	.then(api_key => {
 		sendAPI('POST', '/volumes', api_key, {}, data)
 		.then(response => response.json())
 		.then(json => {
-			const entry = document.querySelector(
-				`button[data-comicvine_id="${data.comicvine_id}"]`
-			);
 			addAlreadyAdded(entry, json.result.id);
-			closeWindow();
+			SearchEls.window.submit.innerText = 'Added';
+			SearchEls.panel.status.classList.remove('error');
+			SearchEls.panel.status.innerText = 'Added to your library. ';
+			const open = document.createElement('a');
+			open.href = `${url_base}/volumes/${json.result.id}`;
+			open.innerText = 'Open series';
+			SearchEls.panel.status.appendChild(open);
 		})
 		.catch(e => {
-			if (e.status === 509) {
-				SearchEls.window.submit.innerText = 'Metadata source API rate limit reached';
-				SearchEls.window.submit.style.color = 'var(--error-color)';
-				showWindow("add-window");
-			} else if (e.status === 400) {
-				SearchEls.window.submit.innerText = 'The API key of the metadata source is invalid';
-				SearchEls.window.submit.style.color = 'var(--error-color)';
-				showWindow("add-window");
-			} else {
-				SearchEls.window.submit.innerText = 'Could not add volume. Please try again.';
-				SearchEls.window.submit.style.color = 'var(--error-color)';
-				showWindow('add-window');
-			}
+			SearchEls.window.submit.disabled = false;
+			SearchEls.window.submit.innerText = 'Add to library';
+			if (e.status === 509)
+				setAddStatus('Comic Vine rate limit reached. Try again in a little while.', true);
+			else if (e.status === 400)
+				setAddStatus('The Comic Vine API key is invalid.', true);
+			else
+				setAddStatus('Could not add this series. Please try again.', true);
 		});
 	});
 };
@@ -473,7 +537,15 @@ usingApiKey()
 .then(api_key => fillRootFolderInput(api_key));
 
 SearchEls.search_bar.cancel.onclick = clearSearch;
-SearchEls.window.form.action = 'javascript:addVolume();';
+SearchEls.window.form.onsubmit = e => {
+	e.preventDefault();
+	addVolume();
+};
+SearchEls.panel.close.onclick = e => closePanel();
+document.addEventListener('keydown', e => {
+	if (e.key === 'Escape' && SearchEls.page.classList.contains('panel-open'))
+		closePanel();
+});
 SearchEls.search_bar.bar.action = 'javascript:search();';
 
 SearchEls.filters.translations.onchange =

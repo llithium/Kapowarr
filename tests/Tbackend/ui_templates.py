@@ -3,7 +3,7 @@ from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
 
-from flask import Flask, render_template
+from flask import Flask, render_template, render_template_string
 
 
 class ElementIds(HTMLParser):
@@ -44,8 +44,12 @@ class UiTemplates(unittest.TestCase):
 
         frontend = Path(__file__).resolve().parents[2] / 'frontend'
         app = Flask(__name__, template_folder=str(frontend / 'templates'))
-        with app.test_request_context('/add'):
-            page = BeautifulSoup(render_template('add_volume.html', url_base=''), 'html.parser')
+        with app.test_request_context('/'):
+            html = render_template_string(
+                '{% from "base.html" import loading_window %}'
+                '<div class="window">{{ loading_window("loading-window", "Working...") }}</div>'
+            )
+        page = BeautifulSoup(html, 'html.parser')
         dialogs = page.select('.window .loading-window')
         self.assertTrue(dialogs)
         for dialog in dialogs:
@@ -67,6 +71,28 @@ class UiTemplates(unittest.TestCase):
         for control in ('specialoverride-input', 'root-folder-input', 'volumefolder-input',
                         'match-list', 'rename-button', 'submit-delete'):
             self.assertIsNotNone(panel.select_one(f'#{control}'), control)
+        ids = [el['id'] for el in page.select('[id]')]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_add_page_adds_from_a_panel_with_downloads_folded_away(self):
+        from bs4 import BeautifulSoup
+
+        frontend = Path(__file__).resolve().parents[2] / 'frontend'
+        app = Flask(__name__, template_folder=str(frontend / 'templates'))
+        with app.test_request_context('/add'):
+            page = BeautifulSoup(render_template('add_volume.html', url_base=''), 'html.parser')
+        self.assertEqual(page.select('.window > section'), [])
+        panel = page.select_one('#add-panel')
+        for control in ('rootfolder-input', 'volumefolder-input', 'specialoverride-input', 'add-volume'):
+            self.assertIsNotNone(panel.select_one(f'#{control}'), control)
+        downloads = panel.select_one('details.download-ui')
+        for control in ('monitor-volume-input', 'monitor-issues-input',
+                        'monitoring-scheme-input', 'auto-search-input'):
+            self.assertIsNotNone(downloads.select_one(f'#{control}'), control)
+        for field in panel.select('select, input:not([type="hidden"])'):
+            self.assertIsNotNone(page.find('label', attrs={'for': field['id']}), field['id'])
+        # Result rows are buttons, so they must not hold links.
+        self.assertIsNone(page.select_one('.pre-build-els .search-entry a'))
         ids = [el['id'] for el in page.select('[id]')]
         self.assertEqual(len(ids), len(set(ids)))
 
