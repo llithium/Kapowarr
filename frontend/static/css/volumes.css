@@ -305,6 +305,8 @@ main.library-browser {
 }
 
 main.library-browser > .page-heading {
+	position: relative;
+	z-index: 8;
 	flex: none;
 }
 
