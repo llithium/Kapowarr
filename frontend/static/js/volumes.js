@@ -34,6 +34,13 @@ const library_els = {
 	},
 	select_all: document.querySelector('#selectall-input'),
 	publishers: document.querySelector('#publisher-list'),
+	publisher_picker: {
+		button: document.querySelector('#publisher-button'),
+		popover: document.querySelector('#publisher-popover'),
+		search: document.querySelector('#publisher-search'),
+		none: document.querySelector('#publisher-none'),
+		chips: document.querySelector('#publisher-chips')
+	},
 	scope: {
 		title: document.querySelector('#scope-title'),
 		count: document.querySelector('#library-result-count')
@@ -50,6 +57,7 @@ const library_els = {
 		cv: document.querySelector('#insp-cv'),
 		clear: document.querySelector('#insp-clear'),
 		close: document.querySelector('#insp-close'),
+		count: document.querySelector('#insp-count'),
 		selection: document.querySelector('#insp-selection'),
 		form: document.querySelector('#insp-form'),
 		edition: document.querySelector('#insp-edition'),
@@ -206,6 +214,36 @@ function publisherCounts() {
 	});
 }
 
+const TOP_PUBLISHER_CHIPS = 5;
+
+function topPublishers(counts, limit=TOP_PUBLISHER_CHIPS) {
+	// The biggest publishers become one-click chips; the one being shown
+	// always gets a chip too.
+	const top = [...counts]
+		.filter(([name]) => name !== UNKNOWN_PUBLISHER)
+		.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, {sensitivity: 'base'}))
+		.slice(0, limit);
+	if (activePublisher !== null && !top.some(([name]) => name === activePublisher)) {
+		const active = counts.find(([name]) => name === activePublisher);
+		if (active) top.unshift(active);
+	}
+	return top;
+}
+
+function publisherButton(name, label, count) {
+	const button = document.createElement('button');
+	button.type = 'button';
+	button.dataset.publisher = name ?? '';
+	button.setAttribute('aria-pressed', String(activePublisher === name));
+	const text = document.createElement('span');
+	text.textContent = label;
+	const number = document.createElement('span');
+	number.className = 'lb-count';
+	number.textContent = count;
+	button.append(text, number);
+	return button;
+}
+
 function renderPublishers() {
 	const counts = publisherCounts();
 	if (libraryVolumes.size && activePublisher !== null
@@ -215,21 +253,57 @@ function renderPublishers() {
 	const container = library_els.publishers;
 	container.innerHTML = '';
 	const add = (name, label, count) => {
-		const button = document.createElement('button');
-		button.type = 'button';
-		button.dataset.publisher = name ?? '';
-		button.setAttribute('aria-pressed', String(activePublisher === name));
-		const text = document.createElement('span');
-		text.textContent = label;
-		const number = document.createElement('span');
-		number.className = 'lb-count';
-		number.textContent = count;
-		button.append(text, number);
-		button.onclick = () => setPublisher(name);
+		const button = publisherButton(name, label, count);
+		button.onclick = () => {
+			setPublisher(name);
+			closePublisherPicker(true);
+		};
 		container.appendChild(button);
 	};
 	add(null, 'All publishers', libraryVolumes.size);
 	for (const [name, count] of counts) add(name, name, count);
+	filterPublisherPicker();
+
+	const chips = library_els.publisher_picker.chips;
+	if (!chips) return;
+	chips.innerHTML = '';
+	for (const [name, count] of topPublishers(counts)) {
+		const chip = publisherButton(name, name, count);
+		chip.onclick = () => setPublisher(activePublisher === name ? null : name);
+		chips.appendChild(chip);
+	}
+}
+
+function filterPublisherPicker() {
+	const picker = library_els.publisher_picker;
+	if (!picker.search) return;
+	const query = picker.search.value.trim().toLowerCase();
+	let shown = 0;
+	library_els.publishers.querySelectorAll('button').forEach(button => {
+		const match = !query || button.textContent.toLowerCase().includes(query);
+		button.classList.toggle('hidden', !match);
+		if (match) shown++;
+	});
+	picker.none.classList.toggle('hidden', shown > 0);
+}
+
+function openPublisherPicker() {
+	const picker = library_els.publisher_picker;
+	picker.popover.classList.remove('hidden');
+	picker.button.setAttribute('aria-expanded', 'true');
+	picker.search.value = '';
+	filterPublisherPicker();
+	picker.search.focus();
+	library_els.publishers.querySelector('[aria-pressed="true"]')?.scrollIntoView?.({block: 'nearest'});
+}
+
+function closePublisherPicker(focus=false) {
+	const picker = library_els.publisher_picker;
+	if (!picker.popover || picker.popover.classList.contains('hidden')) return false;
+	picker.popover.classList.add('hidden');
+	picker.button.setAttribute('aria-expanded', 'false');
+	if (focus) picker.button.focus();
+	return true;
 }
 
 function setPublisher(name) {
@@ -243,9 +317,7 @@ function setPublisher(name) {
 		else url.searchParams.set('publisher', name);
 		window.history.replaceState(null, '', url);
 	} catch (_) {}
-	library_els.publishers.querySelectorAll('button').forEach(b =>
-		b.setAttribute('aria-pressed', String((b.dataset.publisher || null) === name))
-	);
+	renderPublishers();
 	applyScope();
 	updateSelection();
 	library_els.views[currentView()].closest('.lb-content')?.scrollTo?.(0, 0);
@@ -260,6 +332,7 @@ function applyScope() {
 	}
 	const count = visibleVolumeIds().length;
 	library_els.scope.title.textContent = activePublisher ?? 'All publishers';
+	library_els.publisher_picker.button?.classList.toggle('is-filtered', activePublisher !== null);
 	library_els.scope.count.textContent = `${count} series`;
 }
 
@@ -577,6 +650,7 @@ function renderInspector() {
 
 	const single = volumes.length === 1;
 	const first = volumes[0];
+	if (insp.count) insp.count.textContent = single ? '1 series selected' : `${volumes.length} series selected`;
 	insp.content.classList.toggle('multi', !single);
 	insp.title.textContent = single ? first.title : `${volumes.length} series selected`;
 
@@ -893,6 +967,7 @@ library_els.inspector.clear.onclick = clearSelection;
 library_els.inspector.close.onclick = clearSelection;
 
 document.addEventListener('keydown', event => {
+	if (event.key === 'Escape' && closePublisherPicker(true)) return;
 	if (isTyping(event.target) || event.altKey) return;
 	if (event.key === 'Escape' && selectedVolumes.size) {
 		if (document.querySelector('.library-tools[open]')) return;
@@ -911,4 +986,33 @@ library_tools.querySelectorAll('button').forEach(button => {
 		library_tools.open = false;
 		library_tools.querySelector('summary').focus();
 	});
+});
+
+// Publisher picker: a searchable list in a popover.
+const publisher_picker = library_els.publisher_picker;
+publisher_picker.button.onclick = () => {
+	if (publisher_picker.popover.classList.contains('hidden')) openPublisherPicker();
+	else closePublisherPicker();
+};
+publisher_picker.search.addEventListener('input', filterPublisherPicker);
+publisher_picker.search.addEventListener('keydown', event => {
+	const shown = [...library_els.publishers.querySelectorAll('button:not(.hidden)')];
+	if (event.key === 'Enter') {
+		event.preventDefault();
+		shown[0]?.click();
+	} else if (event.key === 'ArrowDown') {
+		event.preventDefault();
+		shown[0]?.focus();
+	}
+});
+library_els.publishers.addEventListener('keydown', event => {
+	if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+	event.preventDefault();
+	const shown = [...library_els.publishers.querySelectorAll('button:not(.hidden)')];
+	const index = shown.indexOf(document.activeElement);
+	if (event.key === 'ArrowUp' && index <= 0) publisher_picker.search.focus();
+	else shown[Math.min(shown.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1))]?.focus();
+});
+document.addEventListener('click', event => {
+	if (!event.target.closest('.lb-picker')) closePublisherPicker();
 });

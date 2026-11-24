@@ -77,25 +77,29 @@
 		{% if organizer_mode %}
 		<a class="primary-action" href="{{url_base}}/library-import">Import files</a>
 		{% else %}
-		<a class="primary-action" href="{{url_base}}/add">Add comics</a>
+		<a class="secondary-action" href="{{url_base}}/library-import">Import files</a>
+		<a class="primary-action lb-add" href="{{url_base}}/add"><img src="{{url_base}}/static/img/add.svg" alt="">Add comics</a>
 		{% endif %}
 	</div>
 
 	<div class="lb-layout">
-		<nav class="lb-sidebar" aria-label="Browse the library">
-			<a class="lb-inbox" href="{{url_base}}/library-import">
-				<span class="lb-inbox-title">Inbox</span>
-				<span class="lb-inbox-hint">Import and match new files</span>
-			</a>
-			<p class="lb-heading" id="publisher-heading">Publishers</p>
-			<div id="publisher-list" class="lb-publishers" role="group" aria-labelledby="publisher-heading"></div>
-		</nav>
-
 		<div class="lb-content">
-			<section class="tool-bar-container" aria-label="Tool bar">
-				<div class="lb-scope">
-					<h2 id="scope-title">All publishers</h2>
-					<p id="library-result-count" role="status"></p>
+			<section class="tool-bar-container lb-filterbar" aria-label="Filters">
+				<div class="lb-filters">
+					<div class="lb-picker">
+						<button type="button" id="publisher-button" class="lb-picker-button" aria-haspopup="dialog" aria-expanded="false" aria-controls="publisher-popover">
+							<span class="lb-picker-label">Publisher:</span>
+							<span id="scope-title">All publishers</span>
+							<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+						</button>
+						<div id="publisher-popover" class="lb-popover hidden" role="dialog" aria-label="Choose a publisher">
+							<label for="publisher-search" class="lb-visually-hidden">Find a publisher</label>
+							<input type="text" id="publisher-search" placeholder="Find a publisher" autocomplete="off" spellcheck="false">
+							<div id="publisher-list" class="lb-publishers" role="group" aria-label="Publishers"></div>
+							<p id="publisher-none" class="lb-popover-empty hidden">No publisher matches.</p>
+						</div>
+					</div>
+					<div id="publisher-chips" class="lb-chips" role="group" aria-label="Biggest publishers"></div>
 				</div>
 				<div class="tool-bar">
 					<select id="filter-button" aria-label="Apply a filter">
@@ -135,7 +139,22 @@
 			</div>
 			<div id="library-error" class="loading-screen hidden" role="alert"><h2>Couldn’t load your library</h2><p>Check your connection and try again.</p><button id="retry-library" class="primary-action" type="button">Try again</button></div>
 			<div id="library-container" class="hidden">
-				<p class="lb-select-hint">Click a cover to edit it. <kbd>Ctrl</kbd> or <kbd>⌘</kbd>-click adds to the selection, <kbd>Shift</kbd>-click selects a range, double-click opens the series.</p>
+				<div class="lb-summary">
+					<p id="library-result-count" role="status"></p>
+					<section id="lib-stats" aria-label="Library statistics">
+						<span class="lb-stats-label">Whole library:</span>
+						<dl>
+							<div><dt>Issues</dt><dd id="issue-count"></dd></div>
+							<div><dt>with files</dt><dd id="issue-download-count"></dd></div>
+							<div><dt>Files</dt><dd id="file-count"></dd></div>
+							<div><dt>Size</dt><dd id="total-file-size"></dd></div>
+							<div class="download-ui"><dt>Monitored</dt><dd id="volume-monitored-count"></dd></div>
+							<div class="lb-visually-hidden"><dt>Series</dt><dd id="volume-count"></dd></div>
+							<div class="lb-visually-hidden"><dt>Unmonitored</dt><dd id="volume-unmonitored-count"></dd></div>
+						</dl>
+					</section>
+					<p class="lb-select-hint">Click a cover to edit it. <kbd>Ctrl</kbd>/<kbd>⌘</kbd>-click adds, <kbd>Shift</kbd>-click selects a range, double-click opens.</p>
+				</div>
 				<div id="list-library">
 					<div class="space-taker"></div>
 				</div>
@@ -159,26 +178,18 @@
 			</div>
 		</div>
 
-		<aside id="inspector" class="lb-inspector" aria-labelledby="inspector-title">
+		<aside id="inspector" class="lb-inspector" aria-label="Edit series">
 			<div id="inspector-empty" class="insp-empty">
-				<h2 id="inspector-title">Library</h2>
+				<h2 id="inspector-title">Edit series</h2>
 				<p>Select a series to edit it here. Select several to change them together.</p>
-				<section id="lib-stats" aria-label="Library statistics">
-					<dl>
-						<div><dt>Series</dt><dd id="volume-count"></dd></div>
-						<div class="download-ui"><dt>Monitored</dt><dd id="volume-monitored-count"></dd></div>
-						<div class="download-ui"><dt>Unmonitored</dt><dd id="volume-unmonitored-count"></dd></div>
-						<div><dt>Issues</dt><dd id="issue-count"></dd></div>
-						<div><dt>Issues with files</dt><dd id="issue-download-count"></dd></div>
-						<div><dt>Files</dt><dd id="file-count"></dd></div>
-						<div><dt>Total size</dt><dd id="total-file-size"></dd></div>
-					</dl>
-				</section>
 			</div>
 
 			<div id="inspector-content" class="hidden">
 				<div class="insp-head">
-					<button type="button" id="insp-close" class="insp-link insp-close">‹ Back to library</button>
+					<div class="insp-bar">
+						<span id="insp-count" class="insp-count"></span>
+						<button type="button" id="insp-close" class="insp-close" aria-label="Close and clear the selection" title="Close (Esc)"><img src="{{url_base}}/static/img/cancel.svg" alt=""></button>
+					</div>
 					<div class="insp-identity">
 						<img id="insp-cover" class="insp-cover" alt="">
 						<div id="insp-stack" class="insp-stack hidden" aria-hidden="true"></div>

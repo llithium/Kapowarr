@@ -68,16 +68,16 @@
 		<div id="nav-bar">
 			<nav aria-label="Main navigation">
                 {% for group, links in [
-                    ('Collection', [('/', 'Library', 'files.svg'), ('/add', 'Add comics', 'add.svg'), ('/library-import', 'Import files', 'download.svg')]),
-                    ('Activity', [('/activity/queue', 'Downloads', 'download.svg'), ('/activity/history', 'History', 'refresh.svg'), ('/activity/blocklist', 'Blocklist', 'blocklist.svg')]),
-                    ('Manage', [('/settings', 'Settings', 'settings.svg'), ('/system/status', 'System', 'manage_files.svg'), ('/system/tasks', 'Tasks', 'refresh.svg')])
+                    ('Collection', [('/', 'Library', 'Library', 'files.svg'), ('/add', 'Add comics', 'Add', 'add.svg'), ('/library-import', 'Import files', 'Import', 'download.svg')]),
+                    ('Activity', [('/activity/queue', 'Downloads', 'Queue', 'download.svg'), ('/activity/history', 'History', 'History', 'refresh.svg'), ('/activity/blocklist', 'Blocklist', 'Blocked', 'blocklist.svg')]),
+                    ('Manage', [('/settings', 'Settings', 'Settings', 'settings.svg'), ('/system/status', 'System', 'System', 'manage_files.svg'), ('/system/tasks', 'Tasks', 'Tasks', 'refresh.svg')])
                 ] %}
                 <div class="nav-group{% if group == 'Activity' %} download-ui{% endif %}">
                     <p class="nav-group-title">{{ group }}</p>
-                    {% for path, label, icon in links %}
+                    {% for path, label, short, icon in links %}
                     {% set active = request.path == path or (path == '/' and request.path.startswith('/volumes/')) or (path == '/settings' and request.path.startswith('/settings')) %}
-                    <a href="{{url_base}}{{path}}" {% if active %}class="current-nav" aria-current="page"{% endif %}>
-                        <img src="{{url_base}}/static/img/{{icon}}" alt="">{{ label }}
+                    <a href="{{url_base}}{{path}}" title="{{ label }}" aria-label="{{ label }}" {% if active %}class="current-nav" aria-current="page"{% endif %}>
+                        <img src="{{url_base}}/static/img/{{icon}}" alt=""><span class="nav-label">{{ label }}</span><span class="nav-short" aria-hidden="true">{{ short }}</span>
                     </a>
                     {% endfor %}
                 </div>

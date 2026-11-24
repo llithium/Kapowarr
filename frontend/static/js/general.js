@@ -161,6 +161,7 @@ function buildTaskString(task) {
 function setTaskMessage(message) {
 	const table = document.querySelector('#task-queue');
 	table.innerHTML = '';
+	table.title = message;
 	if (message !== '') {
 		const entry = document.createElement('p');
 		entry.innerText = message;

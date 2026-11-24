@@ -494,3 +494,35 @@ main.list-page .page-turner > button:disabled { opacity: .45; }
     main.list-page .page-heading { flex-wrap: wrap; }
 }
 @media (max-width: 520px) { main.list-page .task-interval-table tr > :nth-child(3) { display: none; } }
+
+/* Main menu: a slim icon rail on wide screens, the full drawer on narrow ones. */
+.nav-short { display: none; }
+@media (min-width: 901px) {
+    :root { --nav-width: 76px; }
+    #nav-bar { width: var(--nav-width); overflow-x: hidden; }
+    #nav-bar nav { padding: 10px 8px; gap: 0; }
+    #nav-bar .nav-group { display: flex; flex-direction: column; gap: 2px; }
+    #nav-bar .nav-group + .nav-group { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color); }
+    #nav-bar .nav-group-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    #nav-bar nav a { flex-direction: column; justify-content: center; gap: 4px; min-height: 0; padding: 8px 2px 7px; border-radius: 9px; font-size: .6875rem; font-weight: 500; line-height: 1.15; text-align: center; }
+    #nav-bar nav a img { width: 20px; height: 20px; }
+    #nav-bar .nav-label { display: none; }
+    #nav-bar .nav-short { display: block; }
+    #task-queue:not(:empty) { margin: 8px; padding: 8px 4px; font-size: .625rem; text-align: center; overflow-wrap: anywhere; }
+}
+
+/* Library heading: title, search, then actions on the right. */
+.library-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.library-heading h1 { flex: none; margin-right: 8px; }
+.library-heading #search-container { flex: 0 1 440px; width: auto; min-width: 200px; }
+.library-heading .library-tools { margin-left: auto; }
+.library-heading .lb-add { display: inline-flex; align-items: center; gap: 8px; }
+.library-heading .lb-add img { width: 16px; height: 16px; filter: brightness(0) invert(1); }
+:root.dark-mode .library-heading .lb-add img { filter: none; }
+.library-heading .secondary-action { white-space: nowrap; }
+@media (max-width: 1050px) {
+    .library-heading #search-container { order: 10; flex: 1 1 100%; }
+}
+@media (max-width: 520px) {
+    .library-heading .secondary-action { display: none; }
+}

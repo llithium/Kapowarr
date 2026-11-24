@@ -395,6 +395,18 @@ test('publisher list sorts names, counts series and puts unknown publishers last
 	);
 });
 
+test('publisher chips show the biggest publishers and keep the one being shown', () => {
+	const { run } = libraryContext();
+	const counts = `[['Avatar Press', 37], ['Chaos! Comics', 105], ['DC Comics', 356],
+		['Dynamite', 128], ['Image', 90], ['Marvel', 300], ['Oni Press', 12], ['Unknown publisher', 400]]`;
+	const names = () => JSON.parse(run(`JSON.stringify(topPublishers(${counts}, 3).map(([name]) => name))`));
+	assert.deepEqual(names(), ['DC Comics', 'Marvel', 'Dynamite']);
+	run("activePublisher = 'Oni Press'");
+	assert.deepEqual(names(), ['Oni Press', 'DC Comics', 'Marvel', 'Dynamite']);
+	run("activePublisher = 'Marvel'");
+	assert.deepEqual(names(), ['DC Comics', 'Marvel', 'Dynamite']);
+});
+
 test('volumes with no issues have a finite progress bar', () => {
 	const { element, run } = libraryContext();
 	run("new LibraryEntry(1, 'key').setProgressBar(0, 0)");
