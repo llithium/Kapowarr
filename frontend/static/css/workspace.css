@@ -158,7 +158,6 @@ button:disabled { cursor: default; opacity: .45; }
 .settings-container a, .description a { color: var(--action-color); }
 .settings-container .client-list > button { border: 1px solid var(--border-color); box-shadow: none; }
 /* Series detail: the cover identifies the series, issues remain the next task. */
-.window > section { box-shadow: 0 24px 80px rgb(12 25 50 / 30%); }
 @media (max-width: 1050px) { .tool-bar-container { padding-inline: 20px; } #list-library { gap: 24px 18px; } }
 @media (max-width: 720px) {
     .page-heading { padding: 24px 20px 18px; }
@@ -447,3 +446,51 @@ main .settings-container table.fold-table input[type="checkbox"] { display: bloc
 main .settings-container .action-column { width: 92px; white-space: nowrap; }
 main .settings-container .number-column { width: 7.5rem; white-space: nowrap; }
 main .settings-container .action-column button:first-of-type { margin-right: 4px; }
+
+/* Activity, Tasks and Backups: heading actions plus a card table. */
+main.list-page .page-heading .tool-bar { flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+main.list-page .page-heading .tool-bar > button {
+    min-height: 34px; padding: 6px 12px; gap: 7px; border: 1px solid var(--control-border-color); border-radius: 7px;
+    background: var(--foreground-color); font-weight: 600;
+}
+main.list-page .page-heading .tool-bar > button:hover { background: var(--hover-color); }
+main.list-page .page-heading .tool-bar img { width: 15px; height: 15px; }
+main.list-page > :is(.main-window, .table-container, div.icon-text-color) { padding: 4px 28px 40px; min-width: 0; overflow-x: auto; }
+main.list-page .main-window > .table-container,
+main.list-page .main-window > .task-interval-container { padding: 0; overflow-x: auto; }
+main.list-page table {
+    width: 100%; min-width: 0; padding: 0; border: 1px solid var(--border-color); border-radius: 10px;
+    border-collapse: separate; border-spacing: 0; background: var(--foreground-color); color: var(--text-color); overflow: hidden;
+}
+main.list-page table thead th {
+    padding: 9px 14px; border-bottom: 1px solid var(--border-color); background: var(--hover-color);
+    color: var(--dimmed-text-color); font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; text-align: left; white-space: nowrap;
+}
+main.list-page table tbody :is(td, th) { padding: 10px 14px; border-top: 1px solid var(--border-color); font-size: .87rem; vertical-align: middle; }
+main.list-page table tbody tr:first-child > :is(td, th) { border-top: 0; }
+main.list-page table tbody tr:hover { background: transparent; }
+main.list-page table tbody tr:hover > :is(td, th) { background: color-mix(in srgb, var(--hover-color) 60%, transparent); }
+main.list-page table a { color: var(--action-color); }
+main.list-page table button { width: 30px; height: 30px; min-height: 0; padding: 6px; border-radius: 6px; background: transparent; }
+main.list-page table button:hover { background: var(--hover-color); }
+main.list-page table button img { width: 17px; height: 17px; }
+main.list-page table td:last-child:has(> button) { white-space: nowrap; }
+main.list-page table tbody:empty { display: none; }
+main.list-page .main-window h2 {
+    margin: 28px 0 8px; padding: 0; border: 0; color: var(--dimmed-text-color);
+    font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+}
+main.list-page .main-window h2:first-child { margin-top: 8px; }
+main.list-page #activity-message { padding: 32px 0; text-align: center; color: var(--dimmed-text-color); font-size: .88rem; }
+main.list-page #activity-message:empty, main.list-page #activity-message.hidden { display: none; }
+main.list-page .page-turner { justify-content: flex-end; align-items: center; gap: 4px; margin-bottom: 10px; font-size: .82rem; }
+main.list-page .page-turner > button {
+    min-height: 30px; padding: 2px 10px; border: 1px solid var(--control-border-color); border-radius: 7px;
+    background: var(--foreground-color); color: var(--text-color); font-size: .8rem;
+}
+main.list-page .page-turner > button:disabled { opacity: .45; }
+@media (max-width: 720px) {
+    main.list-page > :is(.main-window, .table-container, div.icon-text-color) { padding: 4px 16px 32px; }
+    main.list-page .page-heading { flex-wrap: wrap; }
+}
+@media (max-width: 520px) { main.list-page .task-interval-table tr > :nth-child(3) { display: none; } }

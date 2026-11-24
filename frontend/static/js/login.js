@@ -4,7 +4,7 @@ function loadFields() {
 	.then(json => {
 		const am = json.result.authentication_method;
 		if (am == 1) {
-			document.querySelector("#username-input").remove();
+			document.querySelector("#username-input").closest(".input-container").remove();
 			document.querySelector("#login-form").classList.remove('hidden');
 			document.querySelector("#password-input").focus();
 		} else {

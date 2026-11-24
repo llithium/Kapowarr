@@ -148,13 +148,13 @@
 		</div>
 	{% endset %}
 
-	{{ window(False, "builtin-window", "Client Information", builtin_content) }}
+	{{ window(False, "builtin-window", "Client information", builtin_content) }}
 
 	{% set choose_content %}
 		<div id="choose-torrent-list"></div>
 	{% endset %}
 
-	{{ window(False, "choose-torrent-window", "Choose Torrent Client", choose_content) }}
+	{{ window(False, "choose-torrent-window", "Choose torrent client", choose_content) }}
 
 	{% set add_content %}
 		<p class="error hidden" id="add-error"></p>
@@ -192,7 +192,7 @@
 		<button id="submit-torrent-add" type="submit" form="add-torrent-form">Add</button>
 	{% endset %}
 
-	{{ window(False, "add-torrent-window", "Add Torrent Client", add_content, add_submit) }}
+	{{ window(False, "add-torrent-window", "Add torrent client", add_content, add_submit) }}
 
 	{% set edit_content %}
 		<p class="error hidden" id="edit-error"></p>
@@ -231,7 +231,7 @@
 		<button id="submit-torrent-edit" type="submit" form="edit-torrent-form">Save</button>
 	{% endset %}
 
-	{{ window(False, "edit-torrent-window", "Edit Torrent Client", edit_content, edit_submit) }}
+	{{ window(False, "edit-torrent-window", "Edit torrent client", edit_content, edit_submit) }}
 
 	{% set add_remote_mapping_content %}
 		<p class="error hidden" id="add-mapping-error"></p>
@@ -265,7 +265,7 @@
 		<button id="submit-mapping-add" type="submit" form="add-mapping-form">Add</button>
 	{% endset %}
 
-	{{ window(False, "add-mapping-window", "Add Remote Path Mapping", add_remote_mapping_content, add_remote_mapping_submit) }}
+	{{ window(False, "add-mapping-window", "Add remote path mapping", add_remote_mapping_content, add_remote_mapping_submit) }}
 
 	{% set edit_remote_mapping_content %}
 		<p class="error hidden" id="edit-mapping-error"></p>
@@ -299,7 +299,7 @@
 		<button id="submit-mapping-edit" type="submit" form="edit-mapping-form">Save</button>
 	{% endset %}
 
-	{{ window(False, "edit-mapping-window", "Edit Remote Path Mapping", edit_remote_mapping_content, edit_remote_mapping_submit) }}
+	{{ window(False, "edit-mapping-window", "Edit remote path mapping", edit_remote_mapping_content, edit_remote_mapping_submit) }}
 
 {% endblock windows %}
 

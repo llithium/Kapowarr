@@ -5,8 +5,8 @@
 .window[show-window] {
 	position: absolute;
 	inset: 0 0 0 0;
-	background-color: rgb(10 11 9 / 72%);
-	backdrop-filter: blur(2px);
+	background-color: rgb(15 20 30 / 45%);
+	backdrop-filter: blur(3px);
 	z-index: 10;
 }
 
@@ -23,11 +23,11 @@
 	transform: translate(-50%, -50%);
 	overflow: auto;
 	display: flex;
-	background-color: var(--background-color);
+	background-color: var(--foreground-color);
 	color: var(--text-color);
 	border: 1px solid var(--border-color);
-	border-radius: 8px;
-	box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
+	border-radius: 12px;
+	box-shadow: 0 24px 70px var(--shadow-color);
 }
 
 .window > section[show-window].wide-window {
@@ -50,7 +50,7 @@
 
 .window-header,
 .window-footer {
-	min-height: 4rem;
+	min-height: 56px;
 	display: flex;
 	align-items: center;
 	font-size: .8rem;
@@ -65,15 +65,16 @@
 }
 
 .window-header h2 {
-	font-size: 1.2rem;
-	font-weight: 600;
+	font-size: 1.05rem;
+	font-weight: 650;
+	letter-spacing: -.01em;
 }
 
 .window-header > button:last-of-type {
-	width: 44px;
-	height: 44px;
-	min-height: 44px;
-	flex: 0 0 44px;
+	width: 34px;
+	height: 34px;
+	min-height: 0;
+	flex: 0 0 34px;
 	padding: 0;
 	border-radius: 6px;
 	background-color: transparent;
@@ -113,6 +114,13 @@
 .window-content th {
 	font-size: .85rem;
 	font-weight: 600;
+	text-align: left;
+	vertical-align: top;
+	padding-top: 1rem;
+}
+
+:root.dark-mode .window-header > button:last-of-type > img {
+	filter: invert(1);
 }
 
 .window-content table th :where(input) {
@@ -121,10 +129,10 @@
 
 .window-content table :where(select, input:not([type="checkbox"])) {
 	width: 100%;
-	min-height: 44px;
-	padding: .5rem .75rem;
+	min-height: 38px;
+	padding: 6px 10px;
 	border: 1px solid var(--control-border-color);
-	border-radius: 6px;
+	border-radius: 7px;
 	background-color: var(--foreground-color);
 	font: inherit;
 	color: var(--text-color);
@@ -141,13 +149,14 @@
 /* Footer */
 .window-footer {
 	justify-content: flex-end;
-	border-top: 2px solid var(--border-color);
+	border-top: 1px solid var(--border-color);
 }
 
 .window-footer button {
-	min-height: 2.75rem;
-	padding: .55rem 1rem;
-	border-radius: 4px;
+	min-height: 36px;
+	padding: 6px 14px;
+	border-radius: 7px;
+	font-weight: 600;
 	color: var(--text-color);
 	border: 1px solid var(--control-border-color);
 	background: var(--foreground-color);
@@ -204,5 +213,8 @@
 		width: 100%;
 		height: 100%;
 		border-radius: 0;
+	}
+	.window > section[show-window] .window-content th {
+		padding-top: .5rem;
 	}
 }

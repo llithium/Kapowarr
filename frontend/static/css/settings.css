@@ -320,14 +320,6 @@
 	transform: rotate(45deg);
 }
 
-.window-footer > button {
-	background-color: var(--error-color);
-}
-
-.window-footer > button[type="submit"] {
-	background-color: var(--success-color);
-}
-
 .window-content p.error {
 	text-align: center;
 }

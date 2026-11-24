@@ -1,131 +1,166 @@
-main > div {
-	padding: 1rem;
-	color: var(--text-color);
-}
-
-h2 {
-	margin-bottom: 1rem;
-
+/*  */
+/* System */
+/*  */
+main.system-page > div:not(.page-heading) {
 	display: flex;
-	gap: 1rem;
-	align-items: center;
-
-	border-bottom: 1px solid var(--border-color);
-
-	font-size: 2rem;
-	font-weight: 500;
-}
-
-section:not(:first-of-type) h2 {
-	margin-top: 1rem;
-}
-
-.container {
-	overflow-x: auto;
+	flex-direction: column;
+	gap: 28px;
+	max-width: 960px;
+	padding: 4px 28px 48px;
 	color: var(--text-color);
 }
 
-#status-table {
-	width: calc(100% - 2rem);
-	min-width: 30rem;
-
-	margin-inline: 1rem;
+main.system-page h2 {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 32px;
+	margin-bottom: 8px;
+	padding: 0;
+	border: 0;
+	color: var(--dimmed-text-color);
+	font-size: .72rem;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
 }
 
-#status-body tr {
-	transition: background-color 150ms linear;
-	
-	&:hover {
-		background-color: var(--hover-color);
-	}
+main.system-page .container {
+	overflow-x: auto;
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	background: var(--foreground-color);
 }
 
-#status-table :where(th, td) {
-	padding-block: .5rem;
-
-	&:first-of-type {
-		width: 100%;
-		padding-left: 1rem;
-	}
-
-	&:last-of-type {
-		width: 7rem;
-
-		display: flex;
-		align-items: center;
-
-		padding-left: 1rem;
-		padding-right: 1rem;
-
-		& button {
-			width: 1rem;
-			fill: var(--light-color);
-		}
-	}
+main.system-page table {
+	width: 100%;
+	border-collapse: collapse;
 }
 
-#status-body td {
+main.system-page :where(#status-table, #about-table) :where(th, td) {
+	padding: 11px 16px;
+	font-size: .88rem;
+	text-align: left;
+	vertical-align: top;
+}
+
+main.system-page #status-table thead th {
+	padding-block: 9px;
+	border-bottom: 1px solid var(--border-color);
+	background: var(--hover-color);
+	color: var(--dimmed-text-color);
+	font-size: .72rem;
+	font-weight: 700;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+}
+
+main.system-page #status-table :where(th, td):last-child {
+	width: 90px;
+	text-align: right;
+}
+
+main.system-page #status-body tr + tr td,
+main.system-page #about-table tr + tr > * {
 	border-top: 1px solid var(--border-color);
 }
 
-#status-body:has(tr:not(#status-clear-row)) #status-clear-row {
+main.system-page #status-body:has(tr:not(#status-clear-row)) #status-clear-row {
 	display: none;
 }
 
-#copy-about {
-	width: 4rem;
-
-	padding: .5rem;
-	border-radius: 4px;
-	color: var(--nav-background-color);
-	background-color: var(--accent-color);
-
-	font-weight: 700;
+main.system-page #status-clear-row td:first-child::before {
+	content: "";
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	margin-right: 10px;
+	border-radius: 50%;
+	background: var(--success-color);
+	vertical-align: 1px;
 }
 
-#about-table {
-	width: 100%;
-	min-width: 31rem;
+main.system-page #status-body button {
+	width: 30px;
+	height: 30px;
+	min-height: 0;
+	padding: 6px;
+	border-radius: 6px;
+	background: transparent;
 }
 
-#about-table :where(th, td) {
-	padding: .3rem .5rem;
+main.system-page #status-body button:hover {
+	background: var(--hover-color);
 }
 
-#about-table th {
-	width: 10rem;
-	text-align: right;
-	font-weight: 400;
+main.system-page #about-table th {
+	width: 190px;
+	color: var(--dimmed-text-color);
+	font-weight: 500;
 }
 
-#about-table td {
-	margin-left: 1rem;
+main.system-page #about-table td {
+	overflow-wrap: anywhere;
 }
 
-.link-list {
+main.system-page :where(#database-location, #data-folder) {
+	font: .82rem var(--mono-font);
+}
+
+main.system-page #copy-about,
+main.system-page .link-list > :where(a, button) {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 34px;
+	padding: 6px 14px;
+	border: 1px solid var(--control-border-color, var(--border-color));
+	border-radius: 7px;
+	background: var(--foreground-color);
+	color: var(--text-color);
+	font-size: .82rem;
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+	text-decoration: none;
+}
+
+main.system-page #copy-about {
+	min-height: 30px;
+	padding: 4px 12px;
+	font-size: .78rem;
+}
+
+main.system-page :where(#copy-about, .link-list > a, .link-list > button):hover {
+	background: var(--hover-color);
+}
+
+main.system-page .link-list {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 1rem;
+	gap: 8px;
 }
 
-.link-list > :where(a, button) {
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	gap: 1rem;
-
-	border-radius: 4px;
-	padding: 0.7rem 1rem;
-	background-color: var(--accent-color);
-	color: var(--nav-background-color);
+main.system-page .link-list > a > img {
+	width: 18px;
+	height: 18px;
+	object-fit: contain;
 }
 
-.link-list > a > img {
-	width: 2.5rem;
+:root.dark-mode main.system-page .link-list > a > img[src$=".svg"] {
+	filter: invert(1);
+}
+
+main.system-page #shutdown-button {
+	color: var(--error-color);
 }
 
 @media (max-width: 720px) {
-	.link-list > :where(a, button) {
-		flex-grow: 1;
+	main.system-page > div:not(.page-heading) {
+		padding: 4px 16px 40px;
+	}
+	main.system-page #about-table th {
+		width: 130px;
 	}
 }
