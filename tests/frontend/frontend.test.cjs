@@ -352,12 +352,47 @@ test('library search ignores old responses and recovers from a failed request', 
 
 test('bulk actions require a selection and deletion requires confirmation', () => {
 	let calls = 0;
-	const { element, run } = libraryContext({ sendAPI: () => { calls++; } });
+	const { run } = libraryContext({ sendAPI: () => { calls++; } });
 	run("runAction('key', 'delete')");
 	assert.equal(calls, 0);
-	element('#table-library').querySelectorAll = () => [{ parentNode: { parentNode: { dataset: { id: '1' } } } }];
+	run('selectedVolumes.add(1)');
 	run("runAction('key', 'delete', {delete_folder: true})");
 	assert.equal(calls, 0);
+});
+
+test('library selection supports single, toggle and range picks within the publisher shown', () => {
+	const { run } = libraryContext();
+	run(`[
+		{id: 1, publisher: 'DC Comics'}, {id: 2, publisher: 'Image'},
+		{id: 3, publisher: 'DC Comics'}, {id: 4, publisher: null}, {id: 5, publisher: 'DC Comics'}
+	].forEach(v => libraryVolumes.set(v.id, v))`);
+	const selected = () => JSON.stringify([...run('selectedVolumes')].sort());
+
+	run("clickSelect({}, 1)");
+	assert.equal(selected(), '[1]');
+	run("clickSelect({shiftKey: true}, 4)");
+	assert.equal(selected(), '[1,2,3,4]');
+	run("clickSelect({ctrlKey: true}, 2)");
+	assert.equal(selected(), '[1,3,4]');
+
+	// A range only covers series from the publisher being shown.
+	run("activePublisher = 'DC Comics'; clickSelect({}, 1); clickSelect({shiftKey: true}, 5)");
+	assert.equal(selected(), '[1,3,5]');
+	assert.equal(run('JSON.stringify(visibleVolumeIds())'), '[1,3,5]');
+	run('activePublisher = UNKNOWN_PUBLISHER');
+	assert.equal(run('JSON.stringify(visibleVolumeIds())'), '[4]');
+});
+
+test('publisher list sorts names, counts series and puts unknown publishers last', () => {
+	const { run } = libraryContext();
+	run(`[
+		{id: 1, publisher: 'image'}, {id: 2, publisher: null},
+		{id: 3, publisher: 'DC Comics'}, {id: 4, publisher: 'DC Comics'}
+	].forEach(v => libraryVolumes.set(v.id, v))`);
+	assert.equal(
+		run('JSON.stringify(publisherCounts())'),
+		JSON.stringify([['DC Comics', 2], ['image', 1], ['Unknown publisher', 1]])
+	);
 });
 
 test('volumes with no issues have a finite progress bar', () => {

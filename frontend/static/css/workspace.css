@@ -113,9 +113,6 @@ button:disabled { cursor: default; opacity: .45; }
 #table-container > table { border-bottom: 1px solid var(--border-color); }
 #table-container :where(th,td) { padding: 14px 12px; }
 #table-container thead { position: static; }
-.action-bar { position: static; padding: 16px; background: var(--foreground-color); border: 1px solid var(--border-color); color: var(--text-color); }
-#selection-count { flex-basis: 100%; font-size: .875rem; font-weight: 700; }
-#cancel-massedit { background: var(--action-color); border-color: var(--action-color); color: var(--action-text); }
 #lib-stats { padding: 24px 0 0; color: var(--dimmed-text-color); gap: 32px; }
 #lib-stats th { text-align: left; font-weight: 500; }
 #lib-stats td { font-variant-numeric: tabular-nums; }
@@ -177,9 +174,6 @@ button:disabled { cursor: default; opacity: .45; }
     .settings-tabs { padding: 0 20px 18px; }
     #list-library { grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 24px 18px; }
     .brand span { display: inline; }
-    .action-divider { flex-wrap: wrap; }
-    .option-container { min-width: 0; flex-wrap: wrap; }
-    .option-container select { min-width: 0; }
 }
 @media (max-width: 400px) { .tool-bar > button { padding: 8px; gap: 5px; } .tool-bar div > p { font-size: .75rem; } }
 

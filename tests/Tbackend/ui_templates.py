@@ -24,7 +24,7 @@ class UiTemplates(unittest.TestCase):
             parser.feed(render_template('volumes.html', url_base=''))
         counts = Counter(parser.ids)
         self.assertEqual({name: count for name, count in counts.items() if count > 1}, {})
-        for action in ('updateall-button', 'searchall-button', 'massedit-button'):
+        for action in ('updateall-button', 'searchall-button', 'inspector', 'publisher-list'):
             self.assertEqual(counts[action], 1)
 
     def test_api_key_has_an_associated_label(self):
