@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "base.html" import icon_button, window, loading_window %}
-{% block title %}Volume{% endblock %}
+{% block title %}Series{% endblock %}
 {% block css %}
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/window.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/view_volume.css') }}">
@@ -12,24 +12,18 @@
 
 {% block pre_build_rows %}
 	<tr data-id="" class="issue-entry" aria-label="">
-		<td class="issue-monitored">
-			<button data-monitored="" data-id="" title=""></button>
+		<td class="issue-monitored download-ui">
+			<button type="button" data-monitored="" data-id="" title=""></button>
 		</td>
 		<td class="issue-number"></td>
-		<td class="issue-title"><button type="button" class="issue-title-button"><span class="issue-title-label"></span><span class="issue-inline-date"></span></button></td>
+		<td class="issue-title">
+			<span class="issue-title-label"></span>
+			<span class="issue-inline-date"></span>
+		</td>
 		<td class="issue-date"></td>
 		<td class="issue-status" title="">
-			<img src="" alt=""><span class="issue-status-label"></span>
-		</td>
-		<td class="action-column" aria-label="Actions">
-			<details class="issue-actions">
-				<summary><span>Actions</span><img class="issue-task-indicator" src="{{url_base}}/static/img/loading.svg" alt=""></summary>
-				<div class="issue-actions-menu">
-			{{ icon_button('', "Find a matching download and add it to the queue", "search.svg", "Auto download") }}
-			{{ icon_button('', "Show matching download links so you can choose one", "manual_search.svg", "Find links") }}
-			{{ icon_button('', "Convert files for this issue", "convert.svg", "Convert") }}
-				</div>
-			</details>
+			<span class="issue-status-label"></span>
+			<span class="issue-busy" aria-hidden="true"><img src="" alt=""></span>
 		</td>
 	</tr>
 	<tr class="search-entry">
@@ -47,167 +41,9 @@
 			{{ icon_button('', "Add to blocklist", "blocklist.svg") }}
 		</td>
 	</tr>
-	<tr class="rename-before">
-		<td rowspan="2">
-			<input type="checkbox" checked>
-		</td>
-		<td>-</td>
-		<td></td>
-	</tr>
-	<tr class="rename-after">
-		<td>+</td>
-		<td></td>
-	</tr>
-	<tr class="manage-entry" data-manage_id="">
-		<td>
-			<input type="checkbox">
-		</td>
-		<td class="mi-filepath"></td>
-		<td></td>
-	</tr>
-	<tr class="match-entry" data-issue_id="">
-		<td>
-			<input type="checkbox">
-		</td>
-		<td></td>
-		<td></td>
-		<td></td>
-	</tr>
-	<tr class="files-entry">
-		<td class="f-filepath"></td>
-        <td class="f-size"></td>
-        <td class="f-delete">
-            {{ icon_button('', "Delete", "delete.svg") }}
-        </td>
-	</tr>
-	<tr class="general-files-entry">
-		<td class="gf-filepath"></td>
-		<td class="gf-type"></td>
-        <td class="gf-size"></td>
-        <td class="gf-delete">
-            {{ icon_button('', "Delete", "delete.svg") }}
-        </td>
-	</tr>
 {% endblock pre_build_rows %}
 
 {% block windows %}
-	{{ loading_window("updating-window", "Updating volume...") }}
-
-	{% set delete_content %}
-		<p>Are you sure you want to delete this volume?</p>
-		<p id="volume-downloading-error" class="error hidden">*There is a download in the queue for this volume</p>
-		<p id="volume-tasking-error" class="error hidden">*There is a task running for this volume</p>
-		<form id="delete-form">
-			<table class="fold-table">
-				<tr>
-					<th><label for="delete-folder-input">Delete folder</label></th>
-					<td>
-						<select id="delete-folder-input">
-							<option value="true">Yes</option>
-							<option value="false" selected>No</option>
-						</select>
-					</td>
-				</tr>
-			</table>
-		</form>
-	{% endset %}
-	{% set delete_submit %}
-		<button id="submit-delete" type="submit" form="delete-form">Delete</button>
-	{% endset %}
-	{{ window(False, "delete-window", "Delete volume", delete_content, delete_submit) }}
-
-	{% set edit_content %}
-		<form id="edit-form">
-			<table class="fold-table">
-				<tr>
-					<th><label for="monitored-input">Monitor volume</label></th>
-					<td>
-						<select id="monitored-input">
-							<option value="true">Yes</option>
-							<option value="false" selected>No</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<th><label for="monitor-issues-input">Monitor new issues</label></th>
-					<td>
-						<select id="monitor-issues-input">
-							<option value="true" selected>Yes</option>
-							<option value="false">No</option>
-						</select>
-						<p>Automatically monitor future releases.</p>
-					</td>
-				</tr>
-				<tr>
-					<th><label for="monitoring-scheme-input">Existing issues</label></th>
-					<td>
-						<select id="monitoring-scheme-input">
-							<option value="" selected>Keep current settings</option>
-							<option value="all">All</option>
-							<option value="missing">Missing</option>
-							<option value="none">None</option>
-						</select>
-						<p>Apply to existing issues when you save.</p>
-					</td>
-				</tr>
-				<tr>
-					<th><label for="root-folder-input">Root folder</label></th>
-					<td>
-						<select id="root-folder-input">
-							<option value="true">Yes</option>
-							<option value="false" selected>No</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<th><label for="volumefolder-input">Volume folder</label></th>
-					<td>
-						<input type="text" id="volumefolder-input">
-						<p>Leave empty to use the default folder.</p>
-					</td>
-				</tr>
-				<tr>
-					<th><label for="specialoverride-input">Edition</label></th>
-					<td>
-						<select id="specialoverride-input">
-							<option value="auto">Automatic</option>
-							<option value="">Standard</option>
-							<option value="tpb">Trade paperback</option>
-							<option value="one-shot">One-shot</option>
-							<option value="hard-cover">Hardcover</option>
-							<option value="omnibus">Omnibus</option>
-							<option value="volume-as-issue">Volume as issue</option>
-						</select>
-
-					</td>
-				</tr>
-			</table>
-		</form>
-	{% endset %}
-	{% set edit_submit %}
-		<button id="submit-edit" type="submit" form="edit-form">Save changes</button>
-	{% endset %}
-	{{ window(False, "edit-window", "Edit volume", edit_content, edit_submit, "updating-window") }}
-
-	{% set rename_content %}
-		<p class="empty-rename-message">Nothing to Rename</p>
-		<table class="rename-preview">
-			<thead>
-				<tr>
-                    <th colspan="2" aria-label="Select All">
-                        <input type="checkbox" id="selectall-input" checked>
-                    </th>
-                    <th>Files</th>
-                </tr>
-			</thead>
-			<tbody></tbody>
-		</table>
-	{% endset %}
-	{% set rename_submit %}
-		<button id="submit-rename" type="submit">Rename</button>
-	{% endset %}
-	{{ window(True, "rename-window", "Rename volume files", rename_content, rename_submit) }}
-
 	{% set manual_search_content %}
 		<p id="searching-message">Searching...</p>
 		<table id="search-result-table" class="icon-text-color">
@@ -224,239 +60,206 @@
 		</table>
 	{% endset %}
 	{{ window(True, "manual-search-window", "Find links", manual_search_content, '') }}
-
-	{% set issue_info_content %}
-		<div id="issue-info-selectors">
-			<button id="issue-info-selector">Info</button>
-			<button id="issue-files-selector">Files</button>
-			<button id="issue-rename-selector">Rename</button>
-		</div>
-		<div id="issue-info">
-			<h3 id="issue-info-title"></h3>
-			<p id="issue-info-desc" class="description"></p>
-		</div>
-		<table id="issue-files" class="icon-text-color hidden">
-            <thead>
-                <tr>
-                    <th>File</th>
-                    <th>Size</th>
-                    <th>Delete</th>
-                </tr>
-            </thead>
-            <tbody id="issue-files-list"></tbody>
-        </table>
-	{% endset %}
-	{{ window(False, "issue-info-window", "Issue info", issue_info_content, '') }}
-
-	{% set convert_content %}
-		<p id="convert-preference"></p>
-		<p class="empty-rename-message">Nothing to Convert</p>
-		<table class="rename-preview">
-			<thead>
-				<tr>
-                    <th colspan="2" aria-label="Select All">
-                        <input type="checkbox" id="selectall-convert-input" checked>
-                    </th>
-                    <th>Files</th>
-                </tr>
-			</thead>
-			<tbody></tbody>
-		</table>
-	{% endset %}
-	{% set convert_submit %}
-		<button id="submit-convert" type="submit">Convert</button>
-	{% endset %}
-	{{ window(True, "convert-window", "Convert volume files", convert_content, convert_submit) }}
-
-	{% set manage_issues_content %}
-		<table id="manage-issues-table">
-			<thead>
-				<tr>
-                    <th aria-label="Select All">
-                        <input type="checkbox" id="selectall-manage-input">
-                    </th>
-                    <th>File</th>
-					<th>Matched To</th>
-                </tr>
-			</thead>
-			<tbody>
-				<tr>
-					<td colspan="3" class="empty-manage-message">No files in volume folder</td>
-				</tr>
-			</tbody>
-		</table>
-	{% endset %}
-	{% set manage_issues_submit %}
-		<button id="show-issue-match" type="button">Set Match</button>
-		<button id="submit-manage-issues" type="submit">Save</button>
-	{% endset %}
-	{{ window(True, "manage-window", "Manage Issues", manage_issues_content, manage_issues_submit) }}
-
-	{% set issue_match_content %}
-		<table id="issue-match-table">
-			<thead>
-				<tr>
-                    <th aria-label="Select All">
-                        <input type="checkbox" id="selectall-match-input">
-                    </th>
-                    <th>#</th>
-                    <th>Title</th>
-                    <th>Release Date</th>
-                </tr>
-			</thead>
-			<tbody>
-				<tr class="match-entry" id="auto-match-entry" data-issue_id="">
-					<td>
-						<input type="checkbox">
-					</td>
-					<td></td>
-					<td>Automatically Match</td>
-					<td></td>
-				</tr>
-				<tr class="match-entry" id="general-file-match-entry" data-issue_id="-1">
-					<td>
-						<input type="checkbox">
-					</td>
-					<td></td>
-					<td>General File</td>
-					<td></td>
-				</tr>
-				<tr>
-					<td colspan="4" class="empty-issue-match-list-message">No issues in volume</td>
-				</tr>
-			</tbody>
-		</table>
-	{% endset %}
-	{% set issue_match_submit %}
-		<button id="cancel-match-issues" type="button">Cancel</button>
-		<button id="submit-match-issues" type="submit">Select</button>
-	{% endset %}
-	{{ window(False, "match-window", "Match Files", issue_match_content, issue_match_submit, cancel=False) }}
-
-	{% set files_content %}
-		<p class="empty-rename-message">No general files</p>
-		<table class="icon-text-color">
-			<thead>
-				<tr>
-                    <th>File</th>
-                    <th>Type</th>
-                    <th>Size</th>
-                    <th>Delete</th>
-                </tr>
-			</thead>
-			<tbody></tbody>
-		</table>
-	{% endset %}
-	{{ window(False, "files-window", "General volume files", files_content) }}
-
 {% endblock windows %}
 
 {% block main %}
 <div class="loading-container">
 	<div id="loading-screen" class="loading-screen">
-		<h2>Loading...</h2>
+		<h2>Loading…</h2>
 	</div>
-	<main class="hidden">
-        <div class="volume-back"><a href="{{url_base}}/">‹ Library</a>
-<section class="tool-bar-container" aria-label="Tool bar">
-			<div class="tool-bar">
-				{{ icon_button(
-					"refresh-button",
-					"Trigger a 'refresh and scan' for the volume",
-					"refresh.svg",
-					"Refresh"
-				) }}
-				{{ icon_button(
-					"autosearch-button",
-					"Search for monitored missing issues and queue matching downloads",
-					"search.svg",
-					"Auto download"
-				) }}
-				{{ icon_button(
-					"manualsearch-button",
-					"Show matching download links so you can choose one",
-					"manual_search.svg",
-					"Find links"
-				) }}
-            </div>
-
-		</section>
-<details class="volume-tools"><summary>Manage volume</summary><div class="tool-bar">
-				{{ icon_button(
-					"rename-button",
-					"Preview how the files of the volume will be renamed",
-					"rename.svg",
-					"Preview Rename"
-				) }}
-				{{ icon_button(
-					"convert-button",
-					"Preview how the files of the volume will be converted to a different format",
-					"convert.svg",
-					"Preview Convert"
-				) }}
-				{{ icon_button(
-					"manage-button",
-					"Change the mapping of files to issues or the volume",
-					"manage_files.svg",
-					"Manage Issues"
-				) }}
-				{{ icon_button(
-					"files-button",
-					"View the general files of the volume",
-					"files.svg",
-					"General Files"
-				) }}
-				{{ icon_button(
-					"edit-button",
-					"Edit the volume",
-					"edit.svg",
-					"Edit"
-				) }}
-				{{ icon_button(
-					"delete-button",
-					"Delete the volume",
-					"delete.svg",
-					"Delete"
-				) }}
-            </div></details>
-        </div>
-
-		<div id="volume-content">
-			<div class="volume-mobile-description-container">
-				<div class="volume-info">
-					<img src="" alt="">
-					<div class="volume-info-container">
-						<div class="volume-title-monitored">
-							<h1></h1>
-							<button id="volume-monitor"></button>
-						</div>
-						<section id="volume-tags" aria-label="Tags"></section>
-						<p id="volume-path" aria-label="Volume folder path"></p>
-
+	<main class="series-page hidden">
+		<div class="sp-layout">
+			<div class="sp-main">
+				<div class="sp-bar">
+					<a class="sp-back" href="{{url_base}}/">‹ Library</a>
+					<div class="sp-bar-actions">
+						<button type="button" id="refresh-button" class="sp-tool" title="Refresh from Comic Vine and rescan the folder">
+							<img src="{{url_base}}/static/img/refresh.svg" alt=""><span>Refresh &amp; scan</span>
+						</button>
+						<button type="button" id="autosearch-button" class="sp-tool download-ui" title="Search for monitored missing issues and queue matching downloads">
+							<img src="{{url_base}}/static/img/search.svg" alt=""><span>Auto download</span>
+						</button>
+						<button type="button" id="manualsearch-button" class="sp-tool download-ui" title="Show matching download links so you can choose one">
+							<img src="{{url_base}}/static/img/manual_search.svg" alt=""><span>Find links</span>
+						</button>
+						<button type="button" id="open-editor" class="sp-tool sp-editor-toggle">
+							<img src="{{url_base}}/static/img/edit.svg" alt=""><span>Edit</span>
+						</button>
 					</div>
 				</div>
-				<details class="volume-description">
-					<summary>About this series</summary>
-					<section id="volume-description" class="description" aria-label="Description"></section>
-				</details>
+
+				<section class="sp-hero" aria-labelledby="sp-title">
+					<img id="sp-cover" class="sp-cover" src="" alt="">
+					<div class="sp-hero-text">
+						<h1 id="sp-title"></h1>
+						<p id="sp-meta" class="sp-meta"></p>
+						<div id="sp-chips" class="sp-chips"></div>
+						<p class="sp-path"><code id="volume-path"></code></p>
+						<div class="sp-hero-links">
+							<a id="sp-cv" href="" target="_blank" rel="noopener">Comic Vine</a>
+							<button type="button" id="volume-monitor" class="sp-monitor download-ui"></button>
+						</div>
+						<details class="sp-about">
+							<summary>About this series</summary>
+							<div id="volume-description" class="description"></div>
+						</details>
+					</div>
+				</section>
+
+				<section class="sp-issues" aria-labelledby="sp-issues-title">
+					<div class="sp-issues-head">
+						<div>
+							<h2 id="sp-issues-title">Issues</h2>
+							<p id="issue-summary"></p>
+						</div>
+						<div class="sp-filter" role="group" aria-label="Show issues">
+							<button type="button" data-filter="all" aria-pressed="true">All</button>
+							<button type="button" data-filter="missing" aria-pressed="false">Missing</button>
+							<button type="button" data-filter="files" aria-pressed="false">Has files</button>
+						</div>
+					</div>
+					<table class="issues-table" aria-label="Issue list">
+						<thead>
+							<tr>
+								<th class="issue-monitored download-ui" aria-label="Monitored"></th>
+								<th class="issue-number">#</th>
+								<th class="issue-title">Title</th>
+								<th class="issue-date">Released</th>
+								<th class="issue-status">Status</th>
+							</tr>
+						</thead>
+						<tbody id="issues-list"></tbody>
+					</table>
+					<p id="issues-empty" class="sp-empty hidden">No issues match this filter.</p>
+				</section>
 			</div>
-			<div class="issues-heading"><h2>Issues</h2><p id="issue-summary"></p></div>
-			<div class="issues-table-container icon-text-color">
-				<table class="issues-table" aria-label="Issue list">
-					<thead>
-						<tr>
-							<th class="issue-monitored" aria-label="Monitored status"></th>
-							<th class="issue-number" aria-label="Issue number">#</th>
-							<th class="issue-title">Title</th>
-							<th class="issue-date">Release Date</th>
-							<th class="issue-status" aria-label="Downloaded">Status</th>
-							<th class="action-column" aria-label="Actions">Actions</th>
-						</tr>
-					</thead>
-					<tbody id="issues-list">
-					</tbody>
-				</table>
-			</div>
+
+			<aside id="sp-panel" class="sp-panel" aria-label="Series and issue details">
+				<div class="sp-panel-head">
+					<div class="sp-tabs" role="tablist">
+						<button type="button" role="tab" id="tab-series" aria-selected="true" aria-controls="panel-series">Series</button>
+						<button type="button" role="tab" id="tab-issue" aria-selected="false" aria-controls="panel-issue" class="hidden"></button>
+					</div>
+					<button type="button" id="close-panel" class="sp-link sp-panel-close">Close</button>
+				</div>
+
+				<div id="panel-series" role="tabpanel" aria-labelledby="tab-series">
+					<form id="sp-form" class="sp-section" aria-labelledby="sp-details-title">
+						<h3 id="sp-details-title">Details</h3>
+						<label for="specialoverride-input">Edition</label>
+						<select id="specialoverride-input">
+							<option value="auto">Detect automatically</option>
+							<option value="">Standard</option>
+							<option value="tpb">Trade paperback</option>
+							<option value="one-shot">One-shot</option>
+							<option value="hard-cover">Hardcover</option>
+							<option value="omnibus">Omnibus</option>
+							<option value="volume-as-issue">Volume as issue</option>
+						</select>
+						<label for="root-folder-input">Root folder</label>
+						<select id="root-folder-input"></select>
+						<label for="volumefolder-input">Folder</label>
+						<input type="text" id="volumefolder-input" spellcheck="false" autocomplete="off">
+						<p class="sp-hint">Inside the root folder. Files move when you save.</p>
+						<div class="sp-actions">
+							<button type="submit" id="sp-save" class="primary-action" disabled>Save</button>
+							<button type="button" id="sp-undo" class="secondary-action" disabled>Undo</button>
+						</div>
+						<p id="sp-form-status" class="sp-status" role="status"></p>
+					</form>
+
+					<section class="sp-section" aria-labelledby="sp-naming-title">
+						<h3 id="sp-naming-title">File names</h3>
+						<p id="rename-summary" class="sp-note"></p>
+						<ul id="rename-list" class="sp-changes"></ul>
+						<div class="sp-actions">
+							<button type="button" id="rename-button" class="secondary-action hidden"><img src="{{url_base}}/static/img/rename.svg" alt=""><span>Rename</span></button>
+						</div>
+					</section>
+
+					<section class="sp-section" aria-labelledby="sp-convert-title">
+						<h3 id="sp-convert-title">Format</h3>
+						<p id="convert-summary" class="sp-note"></p>
+						<ul id="convert-list" class="sp-changes"></ul>
+						<p id="convert-preference" class="sp-hint"></p>
+						<div class="sp-actions">
+							<button type="button" id="convert-button" class="secondary-action hidden"><img src="{{url_base}}/static/img/convert.svg" alt=""><span>Convert</span></button>
+						</div>
+					</section>
+
+					<section class="sp-section" aria-labelledby="sp-match-title">
+						<h3 id="sp-match-title">Files on disk</h3>
+						<p class="sp-hint">Each file and the issue it belongs to. Change a match if Kapowarr got it wrong.</p>
+						<ul id="match-list" class="sp-files"></ul>
+						<div class="sp-actions">
+							<button type="button" id="match-save" class="primary-action hidden">Save matches</button>
+							<button type="button" id="match-undo" class="secondary-action hidden">Undo</button>
+						</div>
+						<p id="match-status" class="sp-status" role="status"></p>
+					</section>
+
+					<section class="sp-section" aria-labelledby="sp-other-title">
+						<h3 id="sp-other-title">Other files</h3>
+						<p id="other-empty" class="sp-note">No covers or metadata files in this folder.</p>
+						<ul id="other-files" class="sp-files"></ul>
+					</section>
+
+					<details class="sp-section sp-fold download-ui">
+						<summary><span>Downloads</span><span id="downloads-state" class="sp-fold-state"></span></summary>
+						<label class="sp-check" for="monitored-input">
+							<input type="checkbox" id="monitored-input"><span>Monitor this series</span>
+						</label>
+						<label class="sp-check" for="monitor-issues-input">
+							<input type="checkbox" id="monitor-issues-input"><span>Monitor new issues when they come out</span>
+						</label>
+						<label for="monitoring-scheme-input">Monitor which existing issues</label>
+						<div class="sp-inline">
+							<select id="monitoring-scheme-input">
+								<option value="all">All</option>
+								<option value="missing">Missing</option>
+								<option value="none">None</option>
+							</select>
+							<button type="button" id="apply-scheme" class="secondary-action">Apply</button>
+						</div>
+					</details>
+
+					<details class="sp-section sp-fold sp-danger" id="sp-remove">
+						<summary><span>Remove from library</span></summary>
+						<label class="sp-check" for="delete-folder-input">
+							<input type="checkbox" id="delete-folder-input"><span>Also delete the folder and its files</span>
+						</label>
+						<button type="button" id="submit-delete" class="sp-danger-button">Remove this series</button>
+						<p id="delete-status" class="sp-status" role="status"></p>
+					</details>
+				</div>
+
+				<div id="panel-issue" role="tabpanel" aria-labelledby="tab-issue" class="hidden">
+					<div class="sp-section sp-issue-head">
+						<h3 id="issue-info-title" class="sp-issue-title"></h3>
+						<p id="issue-info-meta" class="sp-meta"></p>
+						<div class="sp-actions download-ui">
+							<button type="button" id="issue-autosearch" class="secondary-action"><img src="{{url_base}}/static/img/search.svg" alt=""><span>Auto download</span></button>
+							<button type="button" id="issue-manualsearch" class="secondary-action"><img src="{{url_base}}/static/img/manual_search.svg" alt=""><span>Find links</span></button>
+						</div>
+					</div>
+					<div id="issue-info-desc" class="sp-section description"></div>
+					<section class="sp-section" aria-labelledby="issue-files-title">
+						<h3 id="issue-files-title">Files</h3>
+						<p id="issue-files-empty" class="sp-note">No file for this issue yet.</p>
+						<ul id="issue-files-list" class="sp-files"></ul>
+					</section>
+					<section class="sp-section" aria-labelledby="issue-tidy-title">
+						<h3 id="issue-tidy-title">Name and format</h3>
+						<p id="issue-tidy-summary" class="sp-note"></p>
+						<ul id="issue-tidy-list" class="sp-changes"></ul>
+						<div class="sp-actions">
+							<button type="button" id="issue-rename" class="secondary-action hidden">Rename</button>
+							<button type="button" id="issue-convert" class="secondary-action hidden">Convert</button>
+						</div>
+						<p id="issue-status-line" class="sp-status" role="status"></p>
+					</section>
+				</div>
+			</aside>
 		</div>
 	</main>
 </div>

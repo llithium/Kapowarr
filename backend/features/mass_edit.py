@@ -5,7 +5,8 @@ from typing import Iterator, List
 from backend.base.custom_exceptions import (InvalidKeyValue, KeyNotFound,
                                             RootFolderNotFound,
                                             VolumeDownloadedFor)
-from backend.base.definitions import MassEditorAction, MonitorScheme
+from backend.base.definitions import (MassEditorAction, MonitorScheme,
+                                      SpecialVersion)
 from backend.base.helpers import get_subclasses
 from backend.base.logging import LOGGER
 from backend.features.download_queue import DownloadHandler
@@ -174,6 +175,48 @@ class MassEditorMonitoringScheme(MassEditorAction):
 
         for volume_id in self.volume_ids:
             Volume(volume_id).apply_monitor_scheme(monitoring_scheme)
+
+        return
+
+
+class MassEditorSpecialVersion(MassEditorAction):
+    identifier = 'special_version'
+
+    EDITABLE = (
+        SpecialVersion.NORMAL,
+        SpecialVersion.TPB,
+        SpecialVersion.ONE_SHOT,
+        SpecialVersion.HARD_COVER,
+        SpecialVersion.OMNIBUS,
+        SpecialVersion.VOLUME_AS_ISSUE
+    )
+
+    def run(self, **kwargs) -> None:
+        if 'special_version' not in kwargs:
+            raise KeyNotFound('special_version')
+        value = kwargs['special_version']
+
+        if value == 'auto':
+            # Let Kapowarr detect the edition again on the next refresh.
+            changes = {'special_version_locked': False}
+        else:
+            try:
+                special_version = SpecialVersion(value or None)
+            except ValueError:
+                raise InvalidKeyValue('special_version', value)
+            if special_version not in self.EDITABLE:
+                raise InvalidKeyValue('special_version', value)
+            changes = {
+                'special_version_locked': True,
+                'special_version': special_version
+            }
+
+        LOGGER.info(
+            f'Using mass editor, setting edition to "{value}" for volumes: {self.volume_ids}'
+        )
+
+        for volume_id in self.volume_ids:
+            Volume(volume_id).update(changes)
 
         return
 

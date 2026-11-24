@@ -12,7 +12,7 @@ from backend.base.custom_exceptions import (CVRateLimitReached,
                                             VolumeAlreadyAdded)
 from backend.base.definitions import (CVFileMapping, FileConstants,
                                       FileMatch, FilenameData, MonitorScheme,
-                                      SpecialVersion)
+                                      SpecialVersion, VolumeData)
 from backend.base.file_extraction import extract_filename_data
 from backend.base.files import (change_basefolder, common_folder,
                                 delete_empty_parent_folders,
@@ -28,7 +28,8 @@ from backend.implementations.comicinfo_cv import match_comicinfo_ids
 from backend.implementations.comicvine import ComicVine
 from backend.implementations.file_matching import scan_files, set_file_matching
 from backend.implementations.matching import match_title
-from backend.implementations.naming import mass_rename
+from backend.implementations.naming import (generate_volume_folder_name,
+                                            mass_rename)
 from backend.implementations.root_folders import RootFolders
 from backend.implementations.volumes import Library
 from backend.internals.db import commit
@@ -518,6 +519,96 @@ def _match_unmatched_comicinfo_files(
     return
 
 
+def preview_volume_folder(
+    title: str,
+    year: Union[int, None],
+    publisher: Union[str, None],
+    volume_number: Union[int, None]
+) -> str:
+    """Return the volume folder, relative to its root folder, that a new
+    volume with this metadata would get under the current naming settings.
+    """
+    return generate_volume_folder_name(VolumeData(
+        id=0,
+        comicvine_id=0,
+        title=title,
+        alt_title=title,
+        year=year,
+        volume_number=volume_number or 1,
+        description='',
+        site_url='',
+        publisher=publisher,
+        monitored=False,
+        monitor_new_issues=False,
+        root_folder=1,
+        folder='',
+        custom_folder=False,
+        special_version=SpecialVersion.NORMAL,
+        special_version_locked=False,
+        last_cv_fetch=0
+    ))
+
+
+def _relative_to_root_folder(folder: str, root_folders: Set[str]) -> str:
+    for root_folder in root_folders:
+        if folder_is_inside_folder(root_folder, folder):
+            return folder[len(force_suffix(root_folder)):].strip('/\\')
+    return folder
+
+
+def _add_match_previews(
+    group_to_cv: Dict[int, Dict[str, Any]],
+    group_to_files: Dict[int, Dict[str, FilenameData]],
+    comicinfo_metadata: Dict[str, ComicInfoData],
+    root_folders: Set[str]
+) -> None:
+    """Add the publisher, year and destination folder to each match, so the
+    import screen can show where files will end up before anything moves.
+    """
+    for group_number, match in group_to_cv.items():
+        if not match.get('id'):
+            continue
+
+        if not match.get('publisher'):
+            # Cached exact-ID matches don't store the publisher, but the
+            # ComicInfo.xml that pointed to the volume usually names it.
+            match['publisher'] = next((
+                comicinfo_metadata[f]['publisher']
+                for f in group_to_files.get(group_number, {})
+                if comicinfo_metadata.get(f, {}).get('publisher')
+            ), None)
+
+        try:
+            volume_id = match.get('already_added')
+            if isinstance(volume_id, int):
+                volume_data = Library.get_volume(volume_id).vd
+                match.setdefault('series_title', volume_data.title)
+                match['year'] = volume_data.year
+                match['publisher'] = volume_data.publisher
+                match['volume_number'] = volume_data.volume_number
+                match['destination'] = _relative_to_root_folder(
+                    volume_data.folder, root_folders
+                )
+                match['destination_exists'] = True
+
+            elif match.get('series_title'):
+                match['destination'] = preview_volume_folder(
+                    match['series_title'],
+                    match.get('year'),
+                    match.get('publisher'),
+                    match.get('volume_number')
+                )
+                match['destination_exists'] = False
+
+        except Exception:
+            LOGGER.debug(
+                'Could not preview the destination of %s', match.get('id'),
+                exc_info=True
+            )
+
+    return
+
+
 def propose_library_import(
     folder_filter: Union[str, None] = None,
     limit: int = 20,
@@ -740,6 +831,10 @@ def propose_library_import(
                 match['match_source'] = 'comicvine'
                 group_to_cv[group_number] = match
 
+    _add_match_previews(
+        group_to_cv, group_to_files, comicinfo_metadata, root_folders
+    )
+
     # Build result
     result = [
         {
@@ -791,7 +886,8 @@ def _source_folder_is_shared(
 
 def import_library(
     matches: List[CVFileMapping],
-    rename_files: bool = False
+    rename_files: bool = False,
+    summary: Union[List[Dict[str, Any]], None] = None
 ) -> List[Dict[str, str]]:
     """Add volume to library and import linked files.
 
@@ -800,6 +896,12 @@ def import_library(
 
         rename_files (bool, optional): Trigger a rename after importing files.
             Defaults to False.
+
+        summary (Union[List[Dict[str, Any]], None], optional): When given, an
+            entry is appended for every volume that received files: its ID,
+            title, folder (relative to its root folder), the number of files
+            and whether the volume was newly added.
+            Defaults to None.
 
     Returns:
         Files that were not imported because their target path already exists.
@@ -943,5 +1045,20 @@ def import_library(
         if rename_files:
             # Rename the filenames themselves
             mass_rename(volume_id, filepath_filter=files)
+
+        if summary is not None:
+            volume_data = Library.get_volume(volume_id).vd
+            summary.append({
+                'volume_id': volume_id,
+                'comicvine_id': cv_id,
+                'title': volume_data.title,
+                'year': volume_data.year,
+                'publisher': volume_data.publisher,
+                'folder': _relative_to_root_folder(
+                    volume_data.folder, {root_folder.folder}
+                ),
+                'file_count': len(files),
+                'new_volume': not volume_already_added
+            })
 
     return conflicts

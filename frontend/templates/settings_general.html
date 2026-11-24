@@ -14,13 +14,13 @@
 			{{ icon_button("save-button", "Save the changes made", "save.svg", "Save changes", True) }}
 		</div></div>
     <nav class="settings-tabs" aria-label="Settings categories">
-    {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] %}
+    {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] if not (organizer_mode and path in ('download', 'downloadclients')) %}
         <a href="{{url_base}}/settings/{{path}}" {% if request.path.endswith('/' + path) %}aria-current="page"{% endif %}>{{label}}</a>
     {% endfor %}
     </nav>
     <label class="settings-category-picker">Settings
         <select aria-label="Settings category">
-        {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] %}
+        {% for path, label in [('mediamanagement', 'Media management'), ('download', 'Downloads'), ('downloadclients', 'Clients'), ('metadata', 'Metadata'), ('general', 'General')] if not (organizer_mode and path in ('download', 'downloadclients')) %}
             <option value="{{url_base}}/settings/{{path}}" {% if request.path.endswith('/' + path) %}selected{% endif %}>{{label}}</option>
         {% endfor %}
         </select>
@@ -28,8 +28,18 @@
 
 	<div class="settings-container">
 		<form id="settings-form">
+			<h2>How you use Kapowarr</h2>
+			<table class="fold-table">
+				<tr>
+					<th><label for="organizer-mode-input">Organizer only</label></th>
+					<td>
+						<input type="checkbox" id="organizer-mode-input">
+						<p>Use Kapowarr only to import and organize comic files you already have. Hides downloads, monitoring and the download queue everywhere, and turns downloading off.</p>
+					</td>
+				</tr>
+			</table>
 			{% if config.get('DESKTOP_SESSION_URL') %}
-			<h2>Mac App</h2>
+			<h2>Mac app</h2>
 			<table class="fold-table">
 				<tr>
 					<th><label for="quit-on-browser-close-input">Quit when browser tabs close</label></th>
@@ -44,14 +54,14 @@
 			<p>Changing these settings restarts Kapowarr. Reopen the web UI within 60 seconds to keep the changes.</p>
 			<table class="fold-table">
 				<tr>
-					<th><label for="bind-address-input">Bind Address</label></th>
+					<th><label for="bind-address-input">Bind address</label></th>
 					<td>
 						<input type="text" id="bind-address-input" required spellcheck="false">
 						<p>Valid IPv4 address (default is '0.0.0.0' for all available interfaces).</p>
 					</td>
 				</tr>
 				<tr>
-					<th><label for="port-input">Port Number</label></th>
+					<th><label for="port-input">Port number</label></th>
 					<td>
 						<input type="text" id="port-input" required spellcheck="false">
 						<p>The port used to access the web UI (default is '5656').</p>
@@ -105,7 +115,7 @@
 			<p>Changing proxy settings will immediately restart Kapowarr.</p>
 			<table class="fold-table">
 				<tr>
-					<th><label for="proxy-type-input">Proxy Type</label></th>
+					<th><label for="proxy-type-input">Proxy type</label></th>
 					<td>
 						<select id="proxy-type-input">
 							<option value="">Disabled</option>
@@ -145,24 +155,24 @@
 					</td>
 				</tr>
 				<tr>
-					<th><label for="proxy-ignored-addresses-input">Ignored Addresses</label></th>
+					<th><label for="proxy-ignored-addresses-input">Ignored addresses</label></th>
 					<td>
 						<input id="proxy-ignored-addresses-input" spellcheck="false">
 						<p>Use ',' as a separator, and '*' as a wildcard for subdomains.</p>
 					</td>
 				</tr>
 			</table>
-			<h2>External Websites</h2>
+			<h2>External websites</h2>
 			<table class="fold-table">
 				<tr>
-					<th><label for="cv-input">Comic Vine API Key</label></th>
+					<th><label for="cv-input">Comic Vine API key</label></th>
 					<td>
 						<input type="text" id="cv-input" required spellcheck="false">
 						<p>The API key of the <a href="https://comicvine.gamespot.com/api" target="_blank">Comic Vine API</a>, which is required for Kapowarr to work.</p>
 					</td>
 				</tr>
 				<tr>
-					<th><label for="flaresolverr-input">FlareSolverr Base URL</label></th>
+					<th><label for="flaresolverr-input">FlareSolverr base URL</label></th>
 					<td>
 						<input type="url" name="" id="flaresolverr-input">
 						<p>Base URL of a FlareSolverr instance (set empty to disable). Needed in case of a large amount of requests to CloudFlare protected websites.</p>
@@ -175,6 +185,7 @@
 					<th><label for="theme-input">Theme</label></th>
 					<td>
 						<select id="theme-input">
+							<option value="auto">Match system</option>
 							<option value="light">Light</option>
 							<option value="dark">Dark</option>
 						</select>
@@ -184,7 +195,7 @@
 			<h2>Logging</h2>
 			<table class="fold-table">
 				<tr>
-					<th><label for="log-level-input">Log Level</label></th>
+					<th><label for="log-level-input">Log level</label></th>
 					<td>
 						<select id="log-level-input" required>
 							<option value="20">Info</option>
@@ -194,22 +205,22 @@
 					</td>
 				</tr>
 				<tr>
-					<th><label for="download-logs-button">Download Logs</label></th>
+					<th><label for="download-logs-button">Download logs</label></th>
 					<td>
 						<a id="download-logs-button" href="">Download Logs</a>
 					</td>
 				</tr>
 			</table>
-			<h2>Database Backups</h2>
+			<h2>Database backups</h2>
 			<table class="fold-table">
 				<tr>
-					<th><label for="db-backup-folder-input">Backup Folder</label></th>
+					<th><label for="db-backup-folder-input">Backup folder</label></th>
 					<td>
 						<input type="text" id="db-backup-folder-input" required spellcheck="false">
 					</td>
 				</tr>
 				<tr>
-					<th><label for="db-backup-count-input">Backup Count</label></th>
+					<th><label for="db-backup-count-input">Backup count</label></th>
 					<td>
 						<input type="number" id="db-backup-count-input" required min="0">
 						<p>The amount of backups to keep. If a new backup will exceed this amount, the oldest backup is deleted.</p>

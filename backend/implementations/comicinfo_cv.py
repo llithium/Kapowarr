@@ -285,7 +285,12 @@ async def match_comicinfo_ids(
                 'match_source': 'comicinfo-id',
                 'confidence': 100,
                 'match_reason': reason,
-                'direct_id': True
+                'direct_id': True,
+                'series_title': volume.get('title'),
+                'year': volume.get('year'),
+                'publisher': volume.get('publisher'),
+                'volume_number': volume.get('volume_number'),
+                'cover_link': volume.get('cover_link')
             }
             continue
 

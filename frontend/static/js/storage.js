@@ -2,7 +2,7 @@ const default_values = {
 	lib_sorting: 'title',
 	lib_view: 'posters',
 	lib_filter: '',
-	theme: 'light',
+	theme: 'auto',
 	translated_filter: 'all',
 	api_key: null,
 	last_login: 0

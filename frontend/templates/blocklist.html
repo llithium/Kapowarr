@@ -24,14 +24,11 @@
 {% endblock %}
 
 {% block main %}
-<main>
-    <div class="page-heading"><h1>Blocklist</h1></div>
-	<section class="tool-bar-container" aria-label="Tool bar">
-		<div class="tool-bar">
+<main class="list-page">
+    <div class="page-heading"><h1>Blocklist</h1><div class="tool-bar">
 			{{ icon_button("refresh-button", "Refresh the list", "refresh.svg", "Refresh") }}
-			{{ icon_button("clear-button", "Empty the complete blocklist", "delete.svg", "Clear Blocklist") }}
-		</div>
-	</section>
+			{{ icon_button("clear-button", "Empty the complete blocklist", "delete.svg", "Clear blocklist") }}
+		</div></div>
 	<div class="main-window">
 		{{ page_turner() }}
         <p id="activity-message" role="status">Loading…</p>

@@ -10,6 +10,7 @@
 	<link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/x-icon">
 
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/general.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/workspace.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
 	<script src="{{ url_for('static', filename='js/storage.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/auth.js') }}"></script>
@@ -17,23 +18,28 @@
 
 	<title>Login - Kapowarr</title>
 </head>
-<body>
-	<div id="text-container">
-		<h1>Kapowarr</h1>
-		<p>Your comic library, organized.</p>
-	</div>
-	<noscript>
-		WARNING: This web-UI does not work without JavaScript.
-	</noscript>
-	<form id="login-form" class="hidden">
-		<p id="error-message" class="error hidden" role="alert">Username or password is incorrect.</p>
-		<div class="input-container">
-			<input type="text" id="username-input" autocomplete="username" placeholder="Username" autofocus required>
+<body class="login-page">
+	<main class="login-card">
+		<div id="text-container">
+			<img src="{{ url_for('static', filename='img/favicon.svg') }}" alt="">
+			<h1>Kapowarr</h1>
+			<p>Your comic library, organized.</p>
 		</div>
-		<div class="input-container">
-			<input type="password" id="password-input" autocomplete="current-password" placeholder="Password" required>
-		</div>
-		<button>Log in</button>
-	</form>
+		<noscript>
+			This page needs JavaScript to sign you in.
+		</noscript>
+		<form id="login-form" class="hidden">
+			<p id="error-message" class="error hidden" role="alert">That username and password don't match.</p>
+			<div class="input-container">
+				<label for="username-input">Username</label>
+				<input type="text" id="username-input" autocomplete="username" autofocus required>
+			</div>
+			<div class="input-container">
+				<label for="password-input">Password</label>
+				<input type="password" id="password-input" autocomplete="current-password" required>
+			</div>
+			<button type="submit">Sign in</button>
+		</form>
+	</main>
 </body>
 </html>

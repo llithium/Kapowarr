@@ -4,7 +4,7 @@ function loadFields() {
 	.then(json => {
 		const am = json.result.authentication_method;
 		if (am == 1) {
-			document.querySelector("#username-input").remove();
+			document.querySelector("#username-input").closest(".input-container").remove();
 			document.querySelector("#login-form").classList.remove('hidden');
 			document.querySelector("#password-input").focus();
 		} else {
@@ -69,7 +69,9 @@ usingApiKey(false)
 		loadFields();
 })
 
-if (getLocalStorage('theme').theme === 'dark')
+const login_theme = getLocalStorage('theme').theme;
+if (login_theme === 'dark' || (login_theme === 'auto'
+	&& window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches))
 	document.querySelector(':root').classList.add('dark-mode');
 
 document.querySelector('#login-form').action = 'javascript:login();';

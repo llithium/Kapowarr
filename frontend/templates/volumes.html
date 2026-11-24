@@ -10,6 +10,7 @@
 
 {% block pre_build_els %}
 	<a href="" class="list-entry" aria-label="">
+		<span class="list-check" aria-hidden="true"></span>
 		<img class="list-img" src="" alt="" loading="lazy">
 		<h2 class="list-title" title=""></h2>
 		<p class="list-volume"></p>
@@ -25,7 +26,7 @@
 {% block pre_build_rows %}
 	<tr class="table-entry" aria-label="">
 		<td>
-			<input type="checkbox" aria-label="Select volume for mass edit">
+			<input type="checkbox" aria-label="Select series">
 		</td>
 		<td>
 			<a class="table-link" href=""></a>
@@ -38,7 +39,7 @@
 				<div class="table-prog-num"></div>
 			</div>
 		</td>
-		<td class="table-monitored-container">
+		<td class="table-monitored-container download-ui">
 			<button class="table-monitored">
 			</button>
 		</td>
@@ -46,8 +47,8 @@
 {% endblock %}
 
 {% block main %}
-<main>
-    <div class="page-heading library-heading"><h1>Library</h1>
+<main class="library-browser">
+	<div class="page-heading library-heading"><h1>Library</h1>
 	<form id="search-container" class="icon-dark-color" aria-label="Search bar">
 		<button type="submit" id="start-search" aria-label="Start search">
 			<img src="{{url_base}}/static/img/search.svg" alt="">
@@ -63,7 +64,7 @@
 				"updateall-button",
 				"Trigger a 'refresh and scan' for all volumes",
 				"refresh.svg",
-				"Refresh"
+				"Refresh all"
 			) }}
 			{{ icon_button(
 				"searchall-button",
@@ -71,164 +72,214 @@
 				"search.svg",
 				"Auto download"
 			) }}
-			{{ icon_button(
-				"massedit-button",
-				"Start mass-editing the volumes",
-				"edit.svg",
-				"Select"
-			) }}
 		</div>
 		</details>
-		<a class="primary-action" href="{{url_base}}/add">Add comics</a>
+		{% if organizer_mode %}
+		<a class="primary-action" href="{{url_base}}/library-import">Import files</a>
+		{% else %}
+		<a class="secondary-action" href="{{url_base}}/library-import">Import files</a>
+		<a class="primary-action lb-add" href="{{url_base}}/add"><img src="{{url_base}}/static/img/add.svg" alt="">Add comics</a>
+		{% endif %}
 	</div>
-	<input type="checkbox" id="massedit-toggle" class="hidden">
 
-	<section class="tool-bar-container" aria-label="Tool bar">
-
-		<div class="tool-bar">
-			<select id="filter-button" aria-label="Apply a filter">
-				<option value="">All comics</option>
-				<option value="wanted">Missing issues</option>
-				<option value="monitored">Monitored</option>
-			</select>
-			<select id="view-button" aria-label="Change the view">
-				<option value="posters">Covers</option>
-				<option value="table">List</option>
-			</select>
-			<select id="sort-button" aria-label="Sort the list of volumes">
-				<option value="title">Sort: Title</option>
-				<option value="volume_number">Sort: Volume</option>
-				<option value="year">Sort: Year</option>
-				<option value="recently_added">Sort: Newest added</option>
-				<option value="recently_released">Sort: Newest released</option>
-				<option value="publisher">Sort: Publisher</option>
-                <option value="wanted">Sort: Missing issues</option>
-			</select>
-		</div>
-	</section>
-	<div id="loading-library" class="loading-screen">
-		<h2>Loading library</h2>
-		<p id="massedit-progress"></p>
-		<noscript>
-			WARNING: This web-UI does not work without JavaScript.
-		</noscript>
-	</div>
-	<div id="empty-library" class="loading-screen hidden">
-		<h2 id="library-empty-title">Your collection starts here</h2>
-		<p id="library-empty-description">Add a ComicVine volume or import an existing comic folder to get started.</p>
-		<button id="reset-library" class="secondary-action hidden" type="button">Clear search and filters</button>
-		<div class="empty-actions" id="library-empty-actions">
-
-		<a class="primary-action" href="{{url_base}}/add">Add comics</a>
-			<a href="{{url_base}}/library-import">Import files</a>
-		</div>
-	</div>
-	<div id="library-error" class="loading-screen hidden" role="alert"><h2>Couldn’t load your library</h2><p>Check your connection and try again.</p><button id="retry-library" class="primary-action" type="button">Try again</button></div>
-	<div id="library-container" class="hidden">
-		<p id="library-result-count" role="status"></p>
-		<div id="list-library">
-			<div class="space-taker"></div>
-		</div>
-		<div id="table-container">
-			<section class="action-bar" aria-label="Selected comics">
-                <p id="selection-count" role="status">0 selected</p>
-                <div class="action-divider">
-                    <button id="cancel-massedit">Done</button>
-                </div>
-				<div class="action-divider">
-					<div class="option-container">
-						<button data-action="delete">Delete</button>
-						<select name="delete_folder" id="delete-folder-input" aria-label="Keep or delete the volume folder">
-							<option value="true">Delete Volume Folder</option>
-							<option value="false" selected>Keep Volume Folder</option>
-						</select>
+	<div class="lb-layout">
+		<div class="lb-content">
+			<section class="tool-bar-container lb-filterbar" aria-label="Filters">
+				<div class="lb-filters">
+					<div class="lb-picker">
+						<button type="button" id="publisher-button" class="lb-picker-button" aria-haspopup="dialog" aria-expanded="false" aria-controls="publisher-popover">
+							<span class="lb-picker-label">Publisher:</span>
+							<span id="scope-title">All publishers</span>
+							<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+						</button>
+						<div id="publisher-popover" class="lb-popover hidden" role="dialog" aria-label="Choose a publisher">
+							<label for="publisher-search" class="lb-visually-hidden">Find a publisher</label>
+							<input type="text" id="publisher-search" placeholder="Find a publisher" autocomplete="off" spellcheck="false">
+							<div id="publisher-list" class="lb-publishers" role="group" aria-label="Publishers"></div>
+							<p id="publisher-none" class="lb-popover-empty hidden">No publisher matches.</p>
+						</div>
 					</div>
-					<div class="option-container">
-						<button data-action="root_folder">Set Root Folder</button>
-						<select name="root_folder_id" id="rf-id-input" aria-label="Set the root folder for the selected volumes">
-                        </select>
+					<div id="publisher-chips" class="lb-chips" role="group" aria-label="Biggest publishers"></div>
+				</div>
+				<div class="tool-bar">
+					<select id="filter-button" aria-label="Apply a filter">
+						<option value="">All comics</option>
+						<option value="wanted">Missing issues</option>
+						{% if not organizer_mode %}<option value="monitored">Monitored</option>{% endif %}
+					</select>
+					<select id="view-button" aria-label="Change the view">
+						<option value="posters">Covers</option>
+						<option value="table">List</option>
+					</select>
+					<select id="sort-button" aria-label="Sort the list of volumes">
+						<option value="title">Sort: Title</option>
+						<option value="volume_number">Sort: Volume</option>
+						<option value="year">Sort: Year</option>
+						<option value="recently_added">Sort: Newest added</option>
+						<option value="recently_released">Sort: Newest released</option>
+						<option value="publisher">Sort: Publisher</option>
+						<option value="wanted">Sort: Missing issues</option>
+					</select>
+				</div>
+			</section>
+			<div id="loading-library" class="loading-screen">
+				<h2>Loading library</h2>
+				<noscript>
+					WARNING: This web-UI does not work without JavaScript.
+				</noscript>
+			</div>
+			<div id="empty-library" class="loading-screen hidden">
+				<h2 id="library-empty-title">Your collection starts here</h2>
+				<p id="library-empty-description">Add a ComicVine volume or import an existing comic folder to get started.</p>
+				<button id="reset-library" class="secondary-action hidden" type="button">Clear search and filters</button>
+				<div class="empty-actions" id="library-empty-actions">
+					<a class="primary-action" href="{{url_base}}/library-import">Import files</a>
+					{% if not organizer_mode %}<a href="{{url_base}}/add">Add comics</a>{% endif %}
+				</div>
+			</div>
+			<div id="library-error" class="loading-screen hidden" role="alert"><h2>Couldn’t load your library</h2><p>Check your connection and try again.</p><button id="retry-library" class="primary-action" type="button">Try again</button></div>
+			<div id="library-container" class="hidden">
+				<div class="lb-summary">
+					<p id="library-result-count" role="status"></p>
+					<section id="lib-stats" aria-label="Library statistics">
+						<span class="lb-stats-label">Whole library:</span>
+						<dl>
+							<div><dt>Issues</dt><dd id="issue-count"></dd></div>
+							<div><dt>with files</dt><dd id="issue-download-count"></dd></div>
+							<div><dt>Files</dt><dd id="file-count"></dd></div>
+							<div><dt>Size</dt><dd id="total-file-size"></dd></div>
+							<div class="download-ui"><dt>Monitored</dt><dd id="volume-monitored-count"></dd></div>
+							<div class="lb-visually-hidden"><dt>Series</dt><dd id="volume-count"></dd></div>
+							<div class="lb-visually-hidden"><dt>Unmonitored</dt><dd id="volume-unmonitored-count"></dd></div>
+						</dl>
+					</section>
+					<p class="lb-select-hint">Click a cover to edit it. <kbd>Ctrl</kbd>/<kbd>⌘</kbd>-click adds, <kbd>Shift</kbd>-click selects a range, double-click opens.</p>
+				</div>
+				<div id="list-library">
+					<div class="space-taker"></div>
+				</div>
+				<div id="table-container">
+					<table>
+						<thead>
+							<tr>
+								<th>
+									<input type="checkbox" id="selectall-input" aria-label="Select all shown series">
+								</th>
+								<th>Volume Title</th>
+								<th>Year</th>
+								<th>Volume</th>
+								<th>Progress</th>
+								<th class="download-ui">Monitored</th>
+							</tr>
+						</thead>
+						<tbody id="table-library"></tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+
+		<aside id="inspector" class="lb-inspector" aria-label="Edit series">
+			<div id="inspector-empty" class="insp-empty">
+				<h2 id="inspector-title">Edit series</h2>
+				<p>Select a series to edit it here. Select several to change them together.</p>
+			</div>
+
+			<div id="inspector-content" class="hidden">
+				<div class="insp-head">
+					<div class="insp-bar">
+						<span id="insp-count" class="insp-count"></span>
+						<button type="button" id="insp-close" class="insp-close" aria-label="Close and clear the selection" title="Close (Esc)"><img src="{{url_base}}/static/img/cancel.svg" alt=""></button>
 					</div>
+					<div class="insp-identity">
+						<img id="insp-cover" class="insp-cover" alt="">
+						<div id="insp-stack" class="insp-stack hidden" aria-hidden="true"></div>
+						<div>
+							<h2 id="insp-title"></h2>
+							<p id="insp-meta" class="insp-meta"></p>
+							<p class="insp-links">
+								<a id="insp-open" href="">Open series</a>
+								<a id="insp-cv" href="" target="_blank" rel="noopener">Comic Vine</a>
+								<button type="button" id="insp-clear" class="insp-link">Clear selection</button>
+							</p>
+						</div>
+					</div>
+					<ul id="insp-selection" class="insp-selection hidden"></ul>
 				</div>
-				<div class="action-divider">
-					<button data-action="rename">Rename</button>
-					<button data-action="convert">Convert</button>
-                    <button data-action="unmonitor">Unmonitor</button>
-                    <button data-action="monitor">Monitor</button>
-				</div>
-				<div class="action-divider">
-					<div class="option-container">
-						<button data-action="monitoring_scheme">Apply Monitoring Scheme</button>
-						<select name="monitoring_scheme" id="monitoring-scheme-input" aria-label="Apply a monitoring scheme for the selected volumes">
-							<option value="all" selected>All</option>
+
+				<form id="insp-form" class="insp-section" aria-labelledby="insp-details-title">
+					<h3 id="insp-details-title">Details</h3>
+					<label for="insp-edition">Edition</label>
+					<select id="insp-edition">
+						<option value="__keep">Leave as is</option>
+						<option value="auto">Detect automatically</option>
+						<option value="">Standard</option>
+						<option value="tpb">Trade paperback</option>
+						<option value="one-shot">One-shot</option>
+						<option value="hard-cover">Hardcover</option>
+						<option value="omnibus">Omnibus</option>
+						<option value="volume-as-issue">Volume as issue</option>
+					</select>
+					<label for="insp-root-folder">Root folder</label>
+					<select id="insp-root-folder">
+						<option value="__keep">Leave as is</option>
+					</select>
+					<div id="insp-folder-field">
+						<label for="insp-folder">Folder</label>
+						<input type="text" id="insp-folder" spellcheck="false" autocomplete="off">
+						<p class="insp-hint">Inside the root folder. Files move when you save.</p>
+					</div>
+					<div class="insp-actions">
+						<button type="submit" id="insp-save" class="primary-action" disabled>Save</button>
+						<button type="button" id="insp-undo" class="secondary-action" disabled>Undo</button>
+					</div>
+				</form>
+
+				<section class="insp-section" aria-labelledby="insp-files-title">
+					<h3 id="insp-files-title">Files</h3>
+					<p id="insp-files" class="insp-files"></p>
+					<p id="insp-naming" class="insp-naming"></p>
+					<details id="insp-rename-details" class="insp-rename hidden">
+						<summary>Show the new names</summary>
+						<ul id="insp-rename-list"></ul>
+					</details>
+					<div class="insp-actions">
+						<button type="button" class="secondary-action" data-insp-action="rename">Rename files</button>
+						<button type="button" class="secondary-action" data-insp-action="convert">Convert</button>
+						<button type="button" class="secondary-action" data-insp-action="update">Refresh &amp; scan</button>
+					</div>
+				</section>
+
+				<details class="insp-section insp-fold download-ui" id="insp-downloads">
+					<summary><span>Downloads</span><span id="insp-downloads-state" class="insp-fold-state"></span></summary>
+					<div class="insp-actions">
+						<button type="button" class="secondary-action" data-insp-action="monitor">Monitor</button>
+						<button type="button" class="secondary-action" data-insp-action="unmonitor">Stop monitoring</button>
+					</div>
+					<label for="insp-scheme">Monitor which issues</label>
+					<div class="insp-inline">
+						<select id="insp-scheme">
+							<option value="all">All</option>
 							<option value="missing">Missing</option>
 							<option value="none">None</option>
 						</select>
+						<button type="button" class="secondary-action" data-insp-action="monitoring_scheme">Apply</button>
 					</div>
-				</div>
-				<div class="action-divider">
-                    <button data-action="update">Refresh & Scan</button>
-                    <button data-action="search">Auto Search</button>
-				</div>
-			</section>
+					<div class="insp-actions">
+						<button type="button" class="secondary-action" data-insp-action="search">Auto search</button>
+					</div>
+				</details>
 
-			<table>
-				<thead>
-					<tr>
-						<th>
-							<input type="checkbox" id="selectall-input" aria-label="Select all volumes for mass edit">
-						</th>
-						<th>Volume Title</th>
-						<th>Year</th>
-						<th>Volume</th>
-						<th>Progress</th>
-						<th>Monitored</th>
-					</tr>
-				</thead>
-				<tbody id="table-library"></tbody>
-			</table>
-		</div>
-		<footer id="lib-stats" aria-label="Library statistics">
-			<table>
-				<tbody>
-					<tr>
-						<th>Volumes</th>
-						<td id="volume-count"></td>
-					</tr>
-					<tr>
-						<th>Monitored</th>
-						<td id="volume-monitored-count"></td>
-					</tr>
-					<tr>
-						<th>Unmonitored</th>
-						<td id="volume-unmonitored-count"></td>
-					</tr>
-				</tbody>
-			</table>
-			<table>
-				<tbody>
-					<tr>
-						<th>Issues</th>
-						<td id="issue-count"></td>
-					</tr>
-					<tr>
-						<th>Issues downloaded</th>
-						<td id="issue-download-count"></td>
-					</tr>
-				</tbody>
-			</table>
-			<table>
-				<tbody>
-					<tr>
-						<th>Files</th>
-						<td id="file-count"></td>
-					</tr>
-					<tr>
-						<th>Total file size</th>
-						<td id="total-file-size"></td>
-					</tr>
-				</tbody>
-			</table>
-		</footer>
+				<details class="insp-section insp-fold insp-danger" id="insp-remove">
+					<summary><span>Remove from library</span></summary>
+					<label class="insp-check" for="insp-delete-folder">
+						<input type="checkbox" id="insp-delete-folder">
+						<span>Also delete the folder and its files</span>
+					</label>
+					<button type="button" id="insp-remove-button" class="insp-danger-button" data-insp-action="delete">Remove</button>
+				</details>
+			</div>
+			<p id="insp-status" class="insp-status" role="status"></p>
+		</aside>
 	</div>
 </main>
 {% endblock main %}

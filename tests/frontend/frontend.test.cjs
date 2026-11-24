@@ -352,12 +352,59 @@ test('library search ignores old responses and recovers from a failed request', 
 
 test('bulk actions require a selection and deletion requires confirmation', () => {
 	let calls = 0;
-	const { element, run } = libraryContext({ sendAPI: () => { calls++; } });
+	const { run } = libraryContext({ sendAPI: () => { calls++; } });
 	run("runAction('key', 'delete')");
 	assert.equal(calls, 0);
-	element('#table-library').querySelectorAll = () => [{ parentNode: { parentNode: { dataset: { id: '1' } } } }];
+	run('selectedVolumes.add(1)');
 	run("runAction('key', 'delete', {delete_folder: true})");
 	assert.equal(calls, 0);
+});
+
+test('library selection supports single, toggle and range picks within the publisher shown', () => {
+	const { run } = libraryContext();
+	run(`[
+		{id: 1, publisher: 'DC Comics'}, {id: 2, publisher: 'Image'},
+		{id: 3, publisher: 'DC Comics'}, {id: 4, publisher: null}, {id: 5, publisher: 'DC Comics'}
+	].forEach(v => libraryVolumes.set(v.id, v))`);
+	const selected = () => JSON.stringify([...run('selectedVolumes')].sort());
+
+	run("clickSelect({}, 1)");
+	assert.equal(selected(), '[1]');
+	run("clickSelect({shiftKey: true}, 4)");
+	assert.equal(selected(), '[1,2,3,4]');
+	run("clickSelect({ctrlKey: true}, 2)");
+	assert.equal(selected(), '[1,3,4]');
+
+	// A range only covers series from the publisher being shown.
+	run("activePublisher = 'DC Comics'; clickSelect({}, 1); clickSelect({shiftKey: true}, 5)");
+	assert.equal(selected(), '[1,3,5]');
+	assert.equal(run('JSON.stringify(visibleVolumeIds())'), '[1,3,5]');
+	run('activePublisher = UNKNOWN_PUBLISHER');
+	assert.equal(run('JSON.stringify(visibleVolumeIds())'), '[4]');
+});
+
+test('publisher list sorts names, counts series and puts unknown publishers last', () => {
+	const { run } = libraryContext();
+	run(`[
+		{id: 1, publisher: 'image'}, {id: 2, publisher: null},
+		{id: 3, publisher: 'DC Comics'}, {id: 4, publisher: 'DC Comics'}
+	].forEach(v => libraryVolumes.set(v.id, v))`);
+	assert.equal(
+		run('JSON.stringify(publisherCounts())'),
+		JSON.stringify([['DC Comics', 2], ['image', 1], ['Unknown publisher', 1]])
+	);
+});
+
+test('publisher chips show the biggest publishers and keep the one being shown', () => {
+	const { run } = libraryContext();
+	const counts = `[['Avatar Press', 37], ['Chaos! Comics', 105], ['DC Comics', 356],
+		['Dynamite', 128], ['Image', 90], ['Marvel', 300], ['Oni Press', 12], ['Unknown publisher', 400]]`;
+	const names = () => JSON.parse(run(`JSON.stringify(topPublishers(${counts}, 3).map(([name]) => name))`));
+	assert.deepEqual(names(), ['DC Comics', 'Marvel', 'Dynamite']);
+	run("activePublisher = 'Oni Press'");
+	assert.deepEqual(names(), ['Oni Press', 'DC Comics', 'Marvel', 'Dynamite']);
+	run("activePublisher = 'Marvel'");
+	assert.deepEqual(names(), ['DC Comics', 'Marvel', 'Dynamite']);
 });
 
 test('volumes with no issues have a finite progress bar', () => {
@@ -424,30 +471,56 @@ test('API requests preserve multipart bodies and reject unauthorized responses',
 	}
 });
 
-test('import selection excludes disabled conflict rows from submission', async () => {
+function libraryImportContext() {
 	const source = read('frontend/static/js/library_import.js');
-	const selection = source.slice(source.indexOf('function toggleSelectAll()'), source.indexOf('function openEditCVMatch('));
-	const submission = source.slice(source.indexOf('function importLibrary('), source.indexOf('// code run on load'));
-	const normal = {checked: false, disabled: false};
-	const conflict = {checked: false, disabled: true};
-	const rows = [normal, conflict].map((checkbox, rowid) => ({
-		dataset: {rowid: String(rowid)}, querySelector: () => checkbox
-	}));
-	const list = {querySelectorAll: selector => selector.startsWith('tr:') ? rows.filter(row => row.querySelector().checked) : [normal, conflict]};
-	const ctx = context({
-		LIEls: {select_all: {checked: true}, proposal_list: list, views: {list: {}, loading: {}, start: {}}, buttons: {}, conflict_notice: {}},
-		rowid_to_filepath: {0: {cv_id: 1, filepath: 'good'}, 1: {cv_id: 2, filepath: 'conflict'}},
-		setLibraryImportLoadingMode() {}, hide() {},
-		sendAPI: async (...args) => { ctx.payload = args[4]; return {json: async () => ({result: {conflicts: []}})}; }
-	});
-	vm.runInNewContext(selection + submission, ctx);
-	vm.runInNewContext('toggleSelectAll()', ctx);
-	assert.equal(normal.checked, true);
-	assert.equal(conflict.checked, false);
-	conflict.checked = true;
-	await vm.runInNewContext("importLibrary('key')", ctx);
-	await new Promise(resolve => setImmediate(resolve));
-	assert.deepEqual(JSON.parse(JSON.stringify(ctx.payload)), [{filepath: 'good', id: 1}]);
+	const logic = source.slice(source.indexOf('const READY_BUCKETS'), source.indexOf('// code run on load'));
+	const ctx = context({});
+	vm.createContext(ctx);
+	vm.runInContext(logic, ctx);
+	return code => vm.runInContext(code, ctx);
+}
+
+function importResult(group_number, filepath, cv, conflict = null) {
+	return {group_number, filepath, file_title: filepath, metadata_source: 'filename', comicinfo: null, cv, conflict};
+}
+
+test('import inbox sorts series groups into buckets by match outcome', () => {
+	const run = libraryImportContext();
+	run(`buildGroups(${JSON.stringify([
+		importResult(1, 'a1', {id: 10, match_source: 'comicinfo-id', already_added: null}),
+		importResult(1, 'a2', {id: 10, match_source: 'comicinfo-id', already_added: null}),
+		importResult(2, 'b', {id: 20, match_source: 'existing-library', already_added: 5}),
+		importResult(3, 'c', {id: 30, match_source: 'comicvine', already_added: null}),
+		importResult(4, 'd', {id: null}),
+		importResult(5, 'e', {id: 50, match_source: 'comicinfo-id'}, 'already there')
+	])})`);
+	assert.equal(run('LIState.groups.size'), 5);
+	assert.equal(run('LIState.groups.get(1).files.length'), 2);
+	assert.deepEqual(
+		run('JSON.stringify([...LIState.groups.values()].map(groupBucket))'),
+		JSON.stringify(['new', 'existing', 'guess', 'nomatch', 'skipped'])
+	);
+});
+
+test('import payload only holds ready groups, never guesses, gaps, exclusions or conflicts', () => {
+	const run = libraryImportContext();
+	run(`buildGroups(${JSON.stringify([
+		importResult(1, 'tagged', {id: 10, match_source: 'comicinfo-id'}),
+		importResult(2, 'guess', {id: 20, match_source: 'comicvine'}),
+		importResult(3, 'unmatched', {id: null}),
+		importResult(4, 'left-out', {id: 40, match_source: 'comicinfo-id'}),
+		importResult(5, 'conflict', {id: 50, match_source: 'comicinfo-id'}, 'exists')
+	])})`);
+	run('LIState.groups.get(4).excluded = true');
+	assert.deepEqual(JSON.parse(run('JSON.stringify(importPayload())')), [{filepath: 'tagged', id: 10}]);
+
+	// Accepting the guess and matching the gap by hand makes both importable.
+	run("LIState.groups.get(2).manual = true; LIState.groups.get(3).cv = {id: 30}; LIState.groups.get(3).manual = true");
+	assert.equal(run('groupBucket(LIState.groups.get(2))'), 'manual');
+	assert.deepEqual(
+		JSON.parse(run('JSON.stringify(importPayload().map(d => d.filepath))')),
+		['tagged', 'guess', 'unmatched']
+	);
 });
 
 test('queue move uses the row position after another download ends', () => {
@@ -529,6 +602,7 @@ test('General settings load and save the Mac browser-close preference', async ()
 		vm.runInNewContext("saveSettings('key')", ctx);
 		await new Promise(resolve => setImmediate(resolve));
 		assert.equal(saved.quit_on_browser_close, isMacApp ? true : undefined);
+		assert.equal(saved.organizer_mode, false);
 	}
 });
 
@@ -542,20 +616,22 @@ test('cover progress explains counts while table progress stays compact', () => 
 	assert.equal(element('#list-library .vol-1 .list-prog-num').innerText, '0 of 0 issues');
 });
 
-test('issue status labels and summary follow downloaded-status changes', () => {
+test('issue status labels and summary follow file-status changes', () => {
 	const summary = {};
 	const rows = [1, 2].map(id => {
 		const classes = new Set();
 		const label = {};
-		const convert = {};
 		const status = {
-			classList: { add: name => classes.add(name), remove: name => classes.delete(name) },
+			classList: {
+				add: name => classes.add(name),
+				remove: name => classes.delete(name),
+				toggle: (name, on) => on ? classes.add(name) : classes.delete(name)
+			},
 			querySelector: () => label
 		};
 		return {
-			id, classes, label, convert,
-			querySelector: selector => selector === '.issue-status' ? status
-				: selector === '.issue-actions-menu > button:nth-child(3)' ? convert : {}
+			id, classes, label, status,
+			querySelector: selector => selector === '.issue-status' ? status : {}
 		};
 	});
 	const list = {
@@ -565,26 +641,37 @@ test('issue status labels and summary follow downloaded-status changes', () => {
 	const ctx = context({
 		document: { querySelector: selector => selector === '#issues-list' ? list
 			: selector === '#issue-summary' ? summary : {} },
-		images: { check: 'check.svg', cancel: 'cancel.svg' },
-		setImage() {},
 		rows
 	});
 	vm.createContext(ctx);
 	vm.runInContext(read('frontend/static/js/view_volume.js').split('function fillTable(')[0], ctx);
 	vm.runInContext("new IssueEntry(1, 'key', rows[0]).setDownloaded(true)", ctx);
-	assert.equal(rows[0].label.textContent, 'Downloaded');
-	assert.equal(rows[0].convert.disabled, false);
-	assert.equal(summary.textContent, '1 of 2 downloaded');
+	assert.equal(rows[0].label.textContent, 'Has file');
+	assert.equal(rows[0].status.title, 'This issue has a file');
+	assert.equal(summary.textContent, '1 of 2 issues have files');
 	vm.runInContext("new IssueEntry(2, 'key', rows[1]).setDownloaded(true)", ctx);
-	assert.equal(summary.textContent, '2 of 2 downloaded');
+	assert.equal(summary.textContent, '2 of 2 issues have files');
 	vm.runInContext("new IssueEntry(1, 'key', rows[0]).setDownloaded(false)", ctx);
 	assert.equal(rows[0].label.textContent, 'Missing');
-	assert.equal(rows[0].convert.disabled, true);
-	assert.equal(rows[0].convert.title, 'No downloaded files to convert');
-	assert.equal(summary.textContent, '1 of 2 downloaded');
+	assert.equal(rows[0].classes.has('error'), true);
+	assert.equal(summary.textContent, '1 of 2 issues have files');
 	rows.length = 0;
 	vm.runInContext('updateIssueSummary()', ctx);
-	assert.equal(summary.textContent, '0 of 0 downloaded');
+	assert.equal(summary.textContent, '0 of 0 issues have files');
+});
+
+test('file match choices map to the manual-match payload', () => {
+	const source = read('frontend/static/js/view_volume.js');
+	const ctx = vm.createContext({});
+	vm.runInContext(source.slice(source.indexOf('function matchValue('), source.indexOf('function matchLabel(')), ctx);
+	vm.runInContext(source.slice(source.indexOf('function changeFromValue('), source.indexOf('function updateMatchButtons(')), ctx);
+	const json = code => JSON.parse(JSON.stringify(vm.runInContext(code, ctx)));
+	assert.equal(json("matchValue({general_file: false, forced_match: false, issue_ids: [4]})"), 'auto:4');
+	assert.equal(json("matchValue({general_file: true, forced_match: true, issue_ids: []})"), 'general');
+	assert.equal(json("matchValue({general_file: false, forced_match: true, issue_ids: [4, 5]})"), 'issue:4,5');
+	assert.deepEqual(json("changeFromValue('a.cbz', 'auto:4')"), {filepath: 'a.cbz', issue_ids: [], general_file: false, forced_match: false});
+	assert.deepEqual(json("changeFromValue('a.cbz', 'general')"), {filepath: 'a.cbz', issue_ids: [], general_file: true, forced_match: true});
+	assert.deepEqual(json("changeFromValue('a.cbz', 'issue:7,8')"), {filepath: 'a.cbz', issue_ids: [7, 8], general_file: false, forced_match: true});
 });
 
 function dialogContext() {

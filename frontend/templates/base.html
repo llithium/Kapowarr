@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{% if organizer_mode %} class="organizer-mode"{% endif %}>
 <head>
 	<!-- Standard headers -->
 	<meta charset="UTF-8">
@@ -10,14 +10,11 @@
 
 	<link rel="manifest" href="{{url_base}}/manifest.json">
 	<link rel="apple-touch-icon" href="{{ url_for('static', filename='img/favicon.svg') }}">
-	<meta name="apple-mobile-web-app-status-bar" content="#244fc2">
-	<meta name="theme-color" content="#244fc2">
+	<meta name="apple-mobile-web-app-status-bar" content="#ffffff">
+	<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+	<meta name="theme-color" content="#1d2026" media="(prefers-color-scheme: dark)">
 
 	<link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/x-icon">
-
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/general.css') }}">
 	{% block css %}
@@ -71,16 +68,16 @@
 		<div id="nav-bar">
 			<nav aria-label="Main navigation">
                 {% for group, links in [
-                    ('Collection', [('/', 'Library', 'files.svg'), ('/add', 'Add comics', 'search.svg'), ('/library-import', 'Import files', 'download.svg')]),
-                    ('Activity', [('/activity/queue', 'Downloads', 'download.svg'), ('/activity/history', 'History', 'refresh.svg'), ('/activity/blocklist', 'Blocklist', 'blocklist.svg')]),
-                    ('Manage', [('/settings', 'Settings', 'settings.svg'), ('/system/status', 'System', 'manage_files.svg'), ('/system/tasks', 'Tasks', 'refresh.svg')])
+                    ('Collection', [('/', 'Library', 'Library', 'files.svg'), ('/add', 'Add comics', 'Add', 'add.svg'), ('/library-import', 'Import files', 'Import', 'download.svg')]),
+                    ('Activity', [('/activity/queue', 'Downloads', 'Queue', 'download.svg'), ('/activity/history', 'History', 'History', 'refresh.svg'), ('/activity/blocklist', 'Blocklist', 'Blocked', 'blocklist.svg')]),
+                    ('Manage', [('/settings', 'Settings', 'Settings', 'settings.svg'), ('/system/status', 'System', 'System', 'manage_files.svg'), ('/system/tasks', 'Tasks', 'Tasks', 'refresh.svg')])
                 ] %}
-                <div class="nav-group">
+                <div class="nav-group{% if group == 'Activity' %} download-ui{% endif %}">
                     <p class="nav-group-title">{{ group }}</p>
-                    {% for path, label, icon in links %}
+                    {% for path, label, short, icon in links %}
                     {% set active = request.path == path or (path == '/' and request.path.startswith('/volumes/')) or (path == '/settings' and request.path.startswith('/settings')) %}
-                    <a href="{{url_base}}{{path}}" {% if active %}class="current-nav" aria-current="page"{% endif %}>
-                        <img src="{{url_base}}/static/img/{{icon}}" alt="">{{ label }}
+                    <a href="{{url_base}}{{path}}" title="{{ label }}" aria-label="{{ label }}" {% if active %}class="current-nav" aria-current="page"{% endif %}>
+                        <img src="{{url_base}}/static/img/{{icon}}" alt=""><span class="nav-label">{{ label }}</span><span class="nav-short" aria-hidden="true">{{ short }}</span>
                     </a>
                     {% endfor %}
                 </div>

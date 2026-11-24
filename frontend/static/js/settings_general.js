@@ -3,6 +3,8 @@ function fillSettings(api_key) {
 	.then(json => {
 		const quitOnClose = document.querySelector('#quit-on-browser-close-input');
 		if (quitOnClose) quitOnClose.checked = json.result.quit_on_browser_close;
+		const organizerMode = document.querySelector('#organizer-mode-input');
+		if (organizerMode) organizerMode.checked = Boolean(json.result.organizer_mode);
 		document.querySelector('#bind-address-input').value = json.result.host;
 		document.querySelector('#port-input').value = json.result.port;
 		document.querySelector('#url-base-input').value = json.result.url_base;
@@ -64,6 +66,8 @@ function saveSettings(api_key) {
 	
 	const quitOnClose = document.querySelector('#quit-on-browser-close-input');
 	if (quitOnClose) data.quit_on_browser_close = quitOnClose.checked;
+	const organizerMode = document.querySelector('#organizer-mode-input');
+	if (organizerMode) data.organizer_mode = organizerMode.checked;
 
 	const auth_toggle = document.querySelector('#auth-toggle');
 	if (auth_toggle.value === 'username-password')
@@ -76,6 +80,13 @@ function saveSettings(api_key) {
 	.then(response => response.json())
 	.then(json => {
 		document.querySelector("#save-button p").innerText = 'Saved';
+		// The navigation and every page change with organizer mode.
+		if (
+			organizerMode
+			&& document.documentElement
+			&& document.documentElement.classList.contains('organizer-mode') !== Boolean(json.result.organizer_mode)
+		)
+			window.location.reload();
 	})
 	.catch(async e => {
 		document.querySelector("#save-button p").innerText = 'Failed';

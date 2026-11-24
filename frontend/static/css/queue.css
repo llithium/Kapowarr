@@ -9,7 +9,8 @@ main {
 }
 
 main:has(#queue tr) #empty-window,
-main:not(:has(#queue tr)) .tool-bar-container {
+main:not(:has(#queue tr)) .page-heading .tool-bar,
+main:not(:has(#queue tr)) > div.icon-text-color {
     display: none;
 }
 

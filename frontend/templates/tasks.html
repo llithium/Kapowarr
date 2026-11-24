@@ -33,7 +33,7 @@
 		<form id="task-form">
 			<table class="fold-table">
 				<tr>
-					<th><label for="task-schedule-preset">Task Schedule</label></th>
+					<th><label for="task-schedule-preset">Task schedule</label></th>
 					<td>
 						<select id="task-schedule-preset">
 							<option value="0,30 * * * *">Every half hour</option>
@@ -45,7 +45,7 @@
 					</td>
 				</tr>
 				<tr id="custom-schedule-row">
-					<th><label for="custom-schedule">Custom Schedule</label></th>
+					<th><label for="custom-schedule">Custom schedule</label></th>
 					<td>
 						<input type="text" id="custom-schedule" required placeholder="E.g. '0 * * * *'">
 						<p>Enter a Cron schedule</p>
@@ -63,14 +63,11 @@
 {% endblock windows %}
 
 {% block main %}
-<main>
-    <div class="page-heading"><h1>Tasks</h1></div>
-	<section class="tool-bar-container" aria-label="Tool bar">
-		<div class="tool-bar">
+<main class="list-page">
+    <div class="page-heading"><h1>Tasks</h1><div class="tool-bar">
 			{{ icon_button("refresh-button", "Refresh the list", "refresh.svg", "Refresh") }}
-			{{ icon_button("clear-button", "Clear Task History", "delete.svg", "Clear History") }}
-		</div>
-	</section>
+			{{ icon_button("clear-button", "Clear task history", "delete.svg", "Clear history") }}
+		</div></div>
 	<div class="main-window">
 		<h2>Scheduled</h2>
 		<div class="task-interval-container">
@@ -79,8 +76,8 @@
 					<tr>
 						<th>Name</th>
 						<th>Schedule</th>
-						<th>Last Execution</th>
-						<th>Next Execution</th>
+						<th>Last run</th>
+						<th>Next run</th>
 						<th>Actions</th>
 					</tr>
 				</thead>

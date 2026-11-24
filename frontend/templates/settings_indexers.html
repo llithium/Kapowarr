@@ -15,7 +15,7 @@
 		<div id="choose-indexer-list"></div>
 	{% endset %}
 
-	{{ window(False, "choose-indexer-window", "Choose Indexer", choose_content) }}
+	{{ window(False, "choose-indexer-window", "Choose indexer", choose_content) }}
 
 	{% set add_content %}
 		<p class="error hidden" id="add-error"></p>
@@ -52,7 +52,7 @@
 		<button id="submit-indexer-add" type="submit" form="add-indexer-form">Add</button>
 	{% endset %}
 
-	{{ window(False, "add-indexer-window", "Add Indexer", add_content, add_submit) }}
+	{{ window(False, "add-indexer-window", "Add indexer", add_content, add_submit) }}
 
 	{% set edit_content %}
 		<p class="error hidden" id="edit-error"></p>
@@ -90,7 +90,7 @@
 		<button id="submit-indexer-edit" type="submit" form="edit-indexer-form">Save</button>
 	{% endset %}
 
-	{{ window(False, "edit-indexer-window", "Edit Indexer Client", edit_content, edit_submit) }}
+	{{ window(False, "edit-indexer-window", "Edit indexer client", edit_content, edit_submit) }}
 {% endblock windows %}
 
 {% block main %}

@@ -67,7 +67,7 @@ th, td {
 }
 
 #task-form:not(:has(#task-schedule-preset option[value=""]:checked)) #custom-schedule-row {
-	display: none;
+	display: none !important;
 }
 
 #schedule-error {

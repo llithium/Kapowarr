@@ -23,14 +23,11 @@
 {% endblock %}
 
 {% block main %}
-<main>
-    <div class="page-heading"><h1>Download history</h1></div>
-	<section class="tool-bar-container" aria-label="Tool bar">
-		<div class="tool-bar">
+<main class="list-page">
+    <div class="page-heading"><h1>Download history</h1><div class="tool-bar">
 			{{ icon_button("refresh-button", "Refresh the list", "refresh.svg", "Refresh") }}
-			{{ icon_button("clear-button", "Clear History", "delete.svg", "Clear History") }}
-		</div>
-	</section>
+			{{ icon_button("clear-button", "Clear history", "delete.svg", "Clear history") }}
+		</div></div>
 	<div class="main-window">
 		{{ page_turner() }}
         <p id="activity-message" role="status">Loading…</p>
@@ -41,7 +38,7 @@
 						<th>Link</th>
                         <th>File</th>
                         <th>Source</th>
-						<th>Downloaded At</th>
+						<th>Downloaded</th>
 						<th>State</th>
 					</tr>
 				</thead>

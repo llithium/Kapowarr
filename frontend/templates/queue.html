@@ -38,18 +38,15 @@
 {% endblock %}
 
 {% block main %}
-<main>
-    <div class="page-heading"><h1>Downloads</h1></div>
-    <section class="tool-bar-container" aria-label="Tool bar">
-        <div class="tool-bar">
+<main class="list-page">
+    <div class="page-heading"><h1>Downloads</h1><div class="tool-bar">
             {{ icon_button(
                 "removeall-button",
                 "Remove all downloads from the queue",
                 "delete.svg",
-                "Remove All"
+                "Remove all"
             ) }}
-        </div>
-    </section>
+        </div></div>
     <div class="icon-text-color">
         <table>
             <thead>

@@ -8,11 +8,11 @@
 {% endblock %}
 
 {% block main %}
-<main>
+<main class="system-page">
     <div class="page-heading"><h1>System</h1></div>
 	<div>
-		<section aria-label="Status Checks">
-			<h2>Status Checks</h2>
+		<section aria-label="Status checks">
+			<h2>Status checks</h2>
 			<div class="container">
 				<table id="status-table">
 					<thead>
@@ -33,7 +33,7 @@
 		<section aria-label="About">
 			<h2>
 				<span>About</span>
-				<button id="copy-about">Copy</button>
+				<button id="copy-about" type="button">Copy details</button>
 			</h2>
 			<div class="container">
 				<table id="about-table">
@@ -68,11 +68,11 @@
 				</table>
 			</div>
 		</section>
-		<section aria-label="Power Management">
+		<section aria-label="Power">
 			<h2>Power</h2>
 			<div class="link-list">
-				<button id="restart-button">Restart</button>
-				<button id="shutdown-button">Shutdown</button>
+				<button id="restart-button" type="button">Restart</button>
+				<button id="shutdown-button" type="button">Shut down</button>
 			</div>
 		</section>
 		<section aria-label="Donate">

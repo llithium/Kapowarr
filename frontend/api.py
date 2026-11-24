@@ -578,6 +578,11 @@ def api_settings():
         if hosting_changes:
             settings.backup_hosting_settings()
 
+        if data.get('organizer_mode') is True:
+            # Organizer mode hides every download control, so make sure
+            # nothing keeps downloading in the background either.
+            data = {**data, 'downloads_enabled': False}
+
         settings.update(data, from_public=True)
 
         if data.get('downloads_enabled') is True:
@@ -946,8 +951,12 @@ def api_library_import():
         ):
             raise InvalidKeyValue
 
-        conflicts = import_library(data, rename_files)
-        return return_api({'conflicts': conflicts}, code=201)
+        imported: List[Dict[str, Any]] = []
+        conflicts = import_library(data, rename_files, summary=imported)
+        return return_api(
+            {'conflicts': conflicts, 'imported': imported},
+            code=201
+        )
 
 
 # region Library + Volumes

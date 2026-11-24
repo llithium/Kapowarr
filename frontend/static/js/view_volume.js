@@ -1,3 +1,8 @@
+// Series page: the issue list on the left, and a docked panel on the right
+// that edits the series or shows the selected issue. Everything that used to
+// open in a window (edit, delete, rename, convert, file matching, general
+// files, issue info) lives in the panel now. Only "Find links" is a window.
+
 const ViewEls = {
 	views: {
 		loading: document.querySelector('#loading-screen'),
@@ -5,29 +10,29 @@ const ViewEls = {
 	},
 	pre_build: {
 		issue_entry: document.querySelector('.pre-build-els .issue-entry'),
-		manual_search: document.querySelector('.pre-build-els .search-entry'),
-		rename_before: document.querySelector('.pre-build-els .rename-before'),
-		rename_after: document.querySelector('.pre-build-els .rename-after'),
-		manage: document.querySelector('.pre-build-els .manage-entry'),
-		match: document.querySelector('.pre-build-els .match-entry'),
-		files_entry: document.querySelector('.pre-build-els .files-entry'),
-		general_files_entry: document.querySelector('.pre-build-els .general-files-entry')
+		manual_search: document.querySelector('.pre-build-els .search-entry')
 	},
 	vol_data: {
 		monitor: document.querySelector('#volume-monitor'),
-		title: document.querySelector('.volume-title-monitored > h1'),
-		cover: document.querySelector('.volume-info > img'),
-		tags: document.querySelector('#volume-tags'),
+		title: document.querySelector('#sp-title'),
+		cover: document.querySelector('#sp-cover'),
+		meta: document.querySelector('#sp-meta'),
+		chips: document.querySelector('#sp-chips'),
 		path: document.querySelector('#volume-path'),
+		cv: document.querySelector('#sp-cv'),
 		description: document.querySelector('#volume-description')
 	},
 	vol_edit: {
+		form: document.querySelector('#sp-form'),
 		monitor: document.querySelector('#monitored-input'),
 		monitor_new_issues: document.querySelector('#monitor-issues-input'),
 		monitoring_scheme: document.querySelector('#monitoring-scheme-input'),
 		root_folder: document.querySelector('#root-folder-input'),
 		volume_folder: document.querySelector('#volumefolder-input'),
-		special_version: document.querySelector('#specialoverride-input')
+		special_version: document.querySelector('#specialoverride-input'),
+		save: document.querySelector('#sp-save'),
+		undo: document.querySelector('#sp-undo'),
+		status: document.querySelector('#sp-form-status')
 	},
 	tool_bar: {
 		refresh: document.querySelector('#refresh-button'),
@@ -35,326 +40,696 @@ const ViewEls = {
 		manual_search: document.querySelector('#manualsearch-button'),
 		rename: document.querySelector('#rename-button'),
 		convert: document.querySelector('#convert-button'),
-		manage: document.querySelector('#manage-button'),
-		files: document.querySelector('#files-button'),
-		edit: document.querySelector('#edit-button'),
-		delete: document.querySelector('#delete-button')
+		editor: document.querySelector('#open-editor')
+	},
+	panel: {
+		root: document.querySelector('#sp-panel'),
+		tab_series: document.querySelector('#tab-series'),
+		tab_issue: document.querySelector('#tab-issue'),
+		series: document.querySelector('#panel-series'),
+		issue: document.querySelector('#panel-issue'),
+		close: document.querySelector('#close-panel')
 	},
 	issues_list: document.querySelector('#issues-list')
 };
 
 const enqueueFailureReasonMap = {
-    webpage_broken: "Webpage unavailable",
-    no_matches: "No links found on webpage that match to volume and are not blocklisted",
-    no_working_links: "All download links found on the webpage are broken",
-    only_rate_limited_links: "All working download links on the webpage are from rate limited services",
+	webpage_broken: "Webpage unavailable",
+	no_matches: "No links found on webpage that match to volume and are not blocklisted",
+	no_working_links: "All download links found on the webpage are broken",
+	only_rate_limited_links: "All working download links on the webpage are from rate limited services",
 
-    link_broken: "Download link broken",
-    link_rate_limited: "Download link rate limited"
-}
-
-//
-// Filling data
-//
-function setVolumeMonitor(monitored) {
-	const monitor = ViewEls.vol_data.monitor;
-	setIcon(monitor, monitored ? icons.monitored : icons.unmonitored,
-		monitored ? 'Volume is monitored. Click to unmonitor.' : 'Volume is unmonitored. Click to monitor.');
-	const label = document.createElement('span');
-	label.textContent = monitored ? 'Monitored' : 'Unmonitored';
-	monitor.appendChild(label);
+	link_broken: "Download link broken",
+	link_rate_limited: "Download link rate limited"
 };
 
+const EDITION_NAMES = {
+	'': 'Standard', 'tpb': 'Trade paperback', 'one-shot': 'One-shot',
+	'hard-cover': 'Hardcover', 'omnibus': 'Omnibus',
+	'volume-as-issue': 'Volume as issue', 'cover': 'Cover', 'metadata': 'Metadata'
+};
+
+//
+// Issue rows
+//
 function updateIssueSummary() {
 	const rows = ViewEls.issues_list.querySelectorAll('.issue-entry');
-	const downloaded = ViewEls.issues_list.querySelectorAll('.issue-status.success');
-	document.querySelector('#issue-summary').textContent = `${downloaded.length} of ${rows.length} downloaded`;
+	const with_files = ViewEls.issues_list.querySelectorAll('.issue-status.success');
+	document.querySelector('#issue-summary').textContent =
+		`${with_files.length} of ${rows.length} issues have files`;
 };
 
 class IssueEntry {
 	constructor(id, api_key, row_entry=null) {
 		this.id = id;
 		this.api_key = api_key;
-		if (row_entry !== null)
-			this.entry = row_entry;
-		else
-			this.entry = ViewEls.issues_list.querySelector(`tr[data-id="${id}"]`);
-
+		this.entry = row_entry !== null
+			? row_entry
+			: ViewEls.issues_list.querySelector(`tr[data-id="${id}"]`);
 		this.monitored = this.entry.querySelector('.issue-monitored button');
-		this.issue_number = this.entry.querySelector('.issue-number');
-		this.title = this.entry.querySelector('.issue-title-button');
-		this.date = this.entry.querySelector('.issue-date');
 		this.status = this.entry.querySelector('.issue-status');
-		this.auto_search = this.entry.querySelector('.issue-actions-menu > button:nth-child(1)');
-		this.manual_search = this.entry.querySelector('.issue-actions-menu > button:nth-child(2)');
-		this.convert = this.entry.querySelector('.issue-actions-menu > button:nth-child(3)');
 	};
 
 	setMonitorIcon() {
-		if (this.monitored.dataset.monitored === 'true') {
-			setIcon(
-				this.monitored,
-				icons.monitored,
-				'Issue is monitored. Click to unmonitor.'
-			);
-		} else {
-			setIcon(
-				this.monitored,
-				icons.unmonitored,
-				'Issue is unmonitored. Click to monitor.'
-			);
-		};
+		const monitored = this.monitored.dataset.monitored === 'true';
+		setIcon(this.monitored, monitored ? icons.monitored : icons.unmonitored,
+			monitored ? 'Issue is monitored. Click to stop monitoring.' : 'Issue is not monitored. Click to monitor.');
 	};
 
 	toggleMonitored() {
 		const monitored = this.monitored.dataset.monitored !== 'true';
-		sendAPI('PUT', `/issues/${this.id}`, this.api_key, {}, {
-			'monitored': monitored
-		})
-		.then(response => {
+		sendAPI('PUT', `/issues/${this.id}`, this.api_key, {}, {monitored})
+		.then(() => {
 			this.monitored.dataset.monitored = monitored;
+			const issue = seriesIssues().find(i => i.id === this.id);
+			if (issue) issue.monitored = monitored;
 			this.setMonitorIcon();
 		});
 	};
 
 	setDownloaded(downloaded, update_summary=true) {
-		if (downloaded) {
-			// Downloaded
-			setImage(this.status, images.check, 'Issue is downloaded');
-            this.status.classList.remove('error');
-            this.status.classList.add('success');
-		} else {
-			// Not downloaded
-			setImage(this.status, images.cancel, 'Issue is not downloaded');
-            this.status.classList.remove('success');
-            this.status.classList.add('error');
-		};
-		this.convert.disabled = !downloaded;
-		this.convert.title = downloaded ? 'Convert files for this issue' : 'No downloaded files to convert';
-		this.status.querySelector('.issue-status-label').textContent = downloaded ? 'Downloaded' : 'Missing';
+		this.status.classList.toggle('success', Boolean(downloaded));
+		this.status.classList.toggle('error', !downloaded);
+		this.status.title = downloaded ? 'This issue has a file' : 'No file for this issue yet';
+		this.status.querySelector('.issue-status-label').textContent = downloaded ? 'Has file' : 'Missing';
 		if (update_summary) updateIssueSummary();
 	};
 };
 
-function syncIssueActionLayout() {
-	ViewEls.issues_list.querySelectorAll('.issue-actions').forEach(menu => {
-		menu.open = issue_action_media.matches;
-		menu.querySelector('.issue-actions-menu').classList.remove('opens-up');
-	});
-};
+let seriesData = null;
+function seriesIssues() {
+	return seriesData ? seriesData.issues : [];
+}
 
 function fillTable(issues, api_key) {
 	ViewEls.issues_list.innerHTML = '';
-
-	for (i = issues.length - 1; i >= 0; i--) {
+	// Newest issue first, like the old list.
+	for (let i = issues.length - 1; i >= 0; i--) {
 		const obj = issues[i];
-
 		const entry = ViewEls.pre_build.issue_entry.cloneNode(true);
 		entry.dataset.id = obj.id;
+		entry.tabIndex = 0;
+		entry.ariaLabel = `Issue ${obj.issue_number}${obj.title ? ': ' + obj.title : ''}`;
 		ViewEls.issues_list.appendChild(entry);
 
 		const inst = new IssueEntry(obj.id, api_key, entry);
-
-		// ARIA
-		inst.entry.ariaLabel = `Issue ${obj.issue_number}`;
-		entry.querySelector('.issue-actions summary').setAttribute('aria-label', `Actions for issue ${obj.issue_number}`);
-
-		// Monitored
 		inst.monitored.dataset.monitored = obj.monitored;
 		inst.monitored.dataset.id = obj.id;
-		inst.monitored.onclick = e => inst.toggleMonitored();
+		inst.monitored.onclick = e => {
+			e.stopPropagation();
+			inst.toggleMonitored();
+		};
 		inst.setMonitorIcon();
 
-		// Issue number
-		inst.issue_number.innerText = obj.issue_number;
-
-		// Title
-		inst.title.querySelector('.issue-title-label').innerText = obj.title;
-		inst.title.onclick = e => showIssueInfo(obj.id, api_key);
-
-		// Release date
-		inst.date.innerText = obj.date;
-		inst.title.querySelector('.issue-inline-date').innerText = obj.date;
-
-		// Download status
+		entry.querySelector('.issue-number').textContent = obj.issue_number;
+		entry.querySelector('.issue-title-label').textContent = obj.title || `Issue #${obj.issue_number}`;
+		entry.querySelector('.issue-title-label').classList.toggle('untitled', !obj.title);
+		entry.querySelector('.issue-date').textContent = obj.date || '';
+		entry.querySelector('.issue-inline-date').textContent = obj.date || '';
 		inst.setDownloaded(obj.files.length, false);
-
-		// Actions
-		inst.auto_search.onclick = e => autosearchIssue(obj.id, api_key);
-		inst.manual_search.onclick = e => showManualSearch(api_key, obj.id);
-		inst.convert.onclick = e => showConvert(api_key, obj.id);
+		entry.classList.toggle('selected', obj.id === selectedIssueId);
 	};
-	syncIssueActionLayout();
+	updateIssueSummary();
+	applyIssueFilter();
 };
 
-function fillPage(data, api_key) {
-	if (data.special_version_locked)
-		ViewEls.vol_edit.special_version.value = data.special_version || '';
-	else {
-		ViewEls.vol_edit.special_version.value = 'auto';
-		const sv_name = ViewEls.vol_edit.special_version
-			.querySelector(`option[value='${data.special_version || ''}']`)
-			.innerText;
-		ViewEls.vol_edit.special_version
-			.querySelector("option[value='auto']")
-			.innerText += ` (${sv_name})`;
-	};
+let issueFilter = 'all';
+function applyIssueFilter() {
+	let shown = 0;
+	ViewEls.issues_list.querySelectorAll('.issue-entry').forEach(row => {
+		const has_file = row.querySelector('.issue-status').classList.contains('success');
+		const show = issueFilter === 'all'
+			|| (issueFilter === 'missing' && !has_file)
+			|| (issueFilter === 'files' && has_file);
+		row.classList.toggle('hidden', !show);
+		if (show) shown++;
+	});
+	document.querySelector('#issues-empty').classList.toggle('hidden', shown > 0);
+	document.querySelectorAll('.sp-filter button').forEach(b =>
+		b.setAttribute('aria-pressed', String(b.dataset.filter === issueFilter)));
+}
 
-	// Cover
+//
+// Small helpers
+//
+function shortPath(filepath) {
+	const folder = seriesData?.folder;
+	if (folder && filepath.startsWith(folder))
+		return filepath.slice(folder.length).replace(/^[\\/]/, '');
+	return filepath.split(/[\\/]/).pop();
+}
+
+function fileName(path) {
+	return String(path).split(/[\\/]/).pop();
+}
+
+function setStatus(el, text, error=false) {
+	el.textContent = text;
+	el.classList.toggle('error', error);
+}
+
+async function errorText(error) {
+	const json = await apiError(error);
+	return json.result?.description || json.error || 'Something went wrong.';
+}
+
+function issueLabel(issue_id) {
+	const issue = seriesIssues().find(i => i.id === issue_id);
+	return issue ? `#${issue.issue_number}` : `#?`;
+}
+
+//
+// Header
+//
+function setVolumeMonitor(monitored) {
+	const monitor = ViewEls.vol_data.monitor;
+	setIcon(monitor, monitored ? icons.monitored : icons.unmonitored,
+		monitored ? 'Series is monitored. Click to stop monitoring.' : 'Series is not monitored. Click to monitor.');
+	const label = document.createElement('span');
+	label.textContent = monitored ? 'Monitored' : 'Not monitored';
+	monitor.appendChild(label);
+	monitor.classList.toggle('on', monitored);
+	ViewEls.vol_edit.monitor.checked = monitored;
+	document.querySelector('#downloads-state').textContent = monitored ? 'Monitored' : 'Off';
+};
+
+function fillHeader(data, api_key) {
 	ViewEls.vol_data.cover.src = `${url_base}/api/volumes/${data.id}/cover?api_key=${api_key}`;
 	ViewEls.vol_data.cover.alt = `${data.title} cover`;
+	ViewEls.vol_data.title.textContent = data.title;
+	document.title = `${data.title} - Kapowarr`;
 
-	// Monitored state
-	ViewEls.vol_edit.monitor_new_issues.value = data.monitor_new_issues;
+	const meta = [data.year, `Volume ${data.volume_number || 1}`, data.publisher].filter(Boolean);
+	ViewEls.vol_data.meta.textContent = meta.join(' · ');
+
+	const chips = ViewEls.vol_data.chips;
+	chips.innerHTML = '';
+	const chip = (text, cls='') => {
+		const el = document.createElement('span');
+		el.className = `sp-chip ${cls}`;
+		el.textContent = text;
+		chips.appendChild(el);
+	};
+	const with_files = data.issues.filter(i => i.files.length).length;
+	chip(`${with_files} of ${data.issues.length} issues`, with_files === data.issues.length && data.issues.length ? 'ok' : '');
+	chip(data.total_size > 0 ? convertSize(data.total_size, 1) : '0 MB');
+	chip(EDITION_NAMES[data.special_version || ''] || data.special_version);
+
+	ViewEls.vol_data.path.textContent = data.folder;
+	ViewEls.vol_data.path.title = data.folder;
+	ViewEls.vol_data.cv.href = data.site_url || '#';
+	ViewEls.vol_data.cv.classList.toggle('hidden', !data.site_url);
+	ViewEls.vol_data.description.innerHTML = data.description || '<p>No description.</p>';
+
 	const monitor = ViewEls.vol_data.monitor;
 	monitor.dataset.monitored = data.monitored;
-	monitor.onclick = e => toggleMonitored(api_key);
+	monitor.onclick = () => setSeriesMonitored(api_key, monitor.dataset.monitored !== 'true');
 	setVolumeMonitor(data.monitored);
+	ViewEls.vol_edit.monitor_new_issues.checked = Boolean(data.monitor_new_issues);
+}
 
-	// Title
-	ViewEls.vol_data.title.innerText = data.title;
-
-	// Tags
-	const tags = ViewEls.vol_data.tags;
-	if (data.year !== null) {
-		const year = document.createElement('p');
-		year.innerText = data.year;
-		tags.appendChild(year);
-	}
-	const volume_number = document.createElement('p');
-	volume_number.innerText = `Volume ${data.volume_number || 1}`;
-	tags.appendChild(volume_number);
-	if (data.special_version) {
-		const special_version = document.createElement('p');
-		special_version.innerText = data.special_version.replaceAll('-', ' ');
-		tags.appendChild(special_version);
-	}
-	const total_size = document.createElement('p');
-	total_size.innerText = data.total_size > 0 ? convertSize(data.total_size, 1) : '0 MB';
-	tags.appendChild(total_size);
-	if (data.site_url !== "") {
-		const link = document.createElement('a');
-		link.href = data.site_url;
-		link.innerText = 'Comic Vine';
-		tags.appendChild(link);
-	};
-	
-	// Path
-	const path = ViewEls.vol_data.path;
-	path.innerText = data.folder;
-	path.dataset.root_folder = data.root_folder;
-	path.dataset.volume_folder = data.volume_folder;
-
-	// Description
-	ViewEls.vol_data.description.innerHTML = data.description;
-
-
-	// fill issue lists
-	fillTable(data.issues, api_key);
-	updateIssueSummary();
-	fillIssueMatchTable(data.issues);
-
-	mapButtons(volume_id);
-
-	hide([ViewEls.views.loading], [ViewEls.views.main]);
-
-	const table = document.querySelector('#files-window tbody');
-	table.innerHTML = '';
-	data.general_files.forEach(gf => {
-		const entry = ViewEls.pre_build.general_files_entry.cloneNode(true);
-
-        const short_f = gf.filepath.slice(
-			gf.filepath.indexOf(data.volume_folder)
-			+ data.volume_folder.length
-			+ 1
-		);
-		const file_name = entry.querySelector('.gf-filepath');
-		file_name.innerText = short_f;
-		file_name.title = gf.filepath;
-
-        entry.querySelector('.gf-type').innerText = gf.file_type;
-        entry.querySelector('.gf-size').innerText = convertSize(gf.size, 1);
-        entry.querySelector('.gf-delete button').onclick = e =>
-            sendAPI("DELETE", `/files/${gf.id}`, api_key)
-            .then(response => entry.remove());
-
-        table.appendChild(entry);
-	});
-};
-
-//
-// Actions
-//
-function toggleMonitored(api_key) {
-	const monitored = ViewEls.vol_data.monitor.dataset.monitored !== 'true';
-	sendAPI('PUT', `/volumes/${volume_id}`, api_key, {}, {
-		monitored: monitored
-	})
-	.then(response => {
+function setSeriesMonitored(api_key, monitored) {
+	return sendAPI('PUT', `/volumes/${volume_id}`, api_key, {}, {monitored})
+	.then(() => {
 		ViewEls.vol_data.monitor.dataset.monitored = monitored;
+		if (seriesData) seriesData.monitored = monitored;
 		setVolumeMonitor(monitored);
 	});
-};
+}
 
 //
-// Tasks
+// Loading
 //
-function refreshVolume(api_key) {
-	const button_info = task_to_button[`refresh_and_scan#${volume_id}`];
-	const icon = button_info.button.querySelector('img');
-	icon.src = button_info.loading_icon;
-	icon.classList.add('spinning');
-
-	sendAPI('POST', '/system/tasks', api_key, {}, {
-		cmd: 'refresh_and_scan',
-		volume_id: volume_id
+let currentApiKey = null;
+function loadSeries(api_key) {
+	return fetchAPI(`/volumes/${volume_id}`, api_key)
+	.then(json => {
+		seriesData = json.result;
+		fillHeader(seriesData, api_key);
+		fillTable(seriesData.issues, api_key);
+		fillDetails(api_key);
+		fillOtherFiles(api_key);
+		loadPreviews(api_key);
+		loadMatches(api_key);
+		if (selectedIssueId !== null) showIssue(selectedIssueId, api_key, false);
+		mapButtons(volume_id);
+		hide([ViewEls.views.loading], [ViewEls.views.main]);
 	});
-};
+}
 
-function autosearchVolume(api_key) {
-	const button_info = task_to_button[`auto_search#${volume_id}`];
-	const icon = button_info.button.querySelector('img');
-	icon.src = button_info.loading_icon;
-	icon.classList.add('spinning');
+// Rename, convert and refresh run as background tasks. Reload once none of
+// this series' tasks are left, so the page shows the result.
+let taskWatch = null;
+function reloadWhenTasksFinish(api_key, onDone=null) {
+	clearTimeout(taskWatch);
+	const started = Date.now();
+	const check = () => fetchAPI('/system/tasks', api_key).then(json => {
+		const busy = json.result.some(t => t.volume_id === volume_id);
+		if (busy && Date.now() - started < 10 * 60 * 1000) {
+			taskWatch = setTimeout(check, 1000);
+			return;
+		}
+		loadSeries(api_key).then(() => onDone && onDone());
+	}).catch(() => { taskWatch = setTimeout(check, 3000); });
+	taskWatch = setTimeout(check, 600);
+}
 
-	sendAPI('POST', '/system/tasks', api_key, {}, {
-		cmd: 'auto_search',
-		volume_id: volume_id
-	});
-};
-
-function autosearchIssue(issue_id, api_key) {
-	const button_info = task_to_button[`auto_search_issue#${volume_id}#${issue_id}`];
-	const icon = button_info.button.querySelector('img');
-	icon.src = button_info.loading_icon;
-	icon.classList.add('spinning');
-
-	sendAPI('POST', '/system/tasks', api_key, {}, {
-		cmd: 'auto_search_issue',
-		volume_id: volume_id,
-		issue_id: issue_id
-	});
-};
+function runTask(api_key, data, onDone=null) {
+	return sendAPI('POST', '/system/tasks', api_key, {}, {volume_id, ...data})
+	.then(() => reloadWhenTasksFinish(api_key, onDone));
+}
 
 //
-// Manual search
+// Panel
+//
+let selectedIssueId = null;
+function openPanel(tab) {
+	const series = tab === 'series';
+	ViewEls.panel.tab_series.setAttribute('aria-selected', String(series));
+	ViewEls.panel.tab_issue.setAttribute('aria-selected', String(!series));
+	ViewEls.panel.series.classList.toggle('hidden', !series);
+	ViewEls.panel.issue.classList.toggle('hidden', series);
+	ViewEls.views.main.classList.add('panel-open');
+}
+
+function closePanel() {
+	ViewEls.views.main.classList.remove('panel-open');
+}
+
+//
+// Details form
+//
+let rootFoldersLoaded = false;
+function detailsOriginal() {
+	if (!seriesData) return null;
+	return {
+		edition: seriesData.special_version_locked ? (seriesData.special_version || '') : 'auto',
+		root_folder: String(seriesData.root_folder),
+		folder: seriesData.volume_folder
+	};
+}
+
+function updateDetailsDirty() {
+	const e = ViewEls.vol_edit, o = detailsOriginal();
+	const dirty = Boolean(o) && (e.special_version.value !== o.edition
+		|| e.root_folder.value !== o.root_folder || e.volume_folder.value !== o.folder);
+	e.save.disabled = !dirty;
+	e.undo.disabled = !dirty;
+}
+
+function resetDetails() {
+	const e = ViewEls.vol_edit, o = detailsOriginal();
+	if (!o) return;
+	e.special_version.value = o.edition;
+	if (rootFoldersLoaded) e.root_folder.value = o.root_folder;
+	e.volume_folder.value = o.folder;
+	updateDetailsDirty();
+}
+
+function fillDetails(api_key) {
+	const auto = ViewEls.vol_edit.special_version.querySelector('option[value="auto"]');
+	auto.textContent = seriesData.special_version_locked
+		? 'Detect automatically'
+		: `Detect automatically (${EDITION_NAMES[seriesData.special_version || ''] || seriesData.special_version})`;
+	const ready = rootFoldersLoaded ? Promise.resolve() : fetchAPI('/rootfolder', api_key).then(json => {
+		const select = ViewEls.vol_edit.root_folder;
+		select.innerHTML = '';
+		json.result.forEach(rf => {
+			const option = document.createElement('option');
+			option.value = rf.id;
+			option.textContent = rf.folder;
+			select.appendChild(option);
+		});
+		rootFoldersLoaded = true;
+	});
+	ready.then(resetDetails);
+}
+
+function saveDetails(api_key) {
+	const e = ViewEls.vol_edit, o = detailsOriginal();
+	if (!o || e.save.disabled) return;
+	const data = {};
+	if (e.root_folder.value !== o.root_folder) data.root_folder = parseInt(e.root_folder.value);
+	if (e.volume_folder.value !== o.folder) data.volume_folder = e.volume_folder.value;
+	if (e.special_version.value !== o.edition) {
+		data.special_version_locked = e.special_version.value !== 'auto';
+		if (data.special_version_locked) data.special_version = e.special_version.value || null;
+	}
+	e.save.disabled = e.undo.disabled = true;
+	setStatus(e.status, 'Saving…');
+	sendAPI('PUT', `/volumes/${volume_id}`, api_key, {}, data)
+	.then(() => loadSeries(api_key))
+	.then(() => setStatus(e.status, 'Saved.'))
+	.catch(async error => {
+		setStatus(e.status, `Couldn't save: ${await errorText(error)}`, true);
+		updateDetailsDirty();
+	});
+}
+
+//
+// Rename and convert previews
+//
+function renderChanges(list, mapping, limit=80) {
+	list.innerHTML = '';
+	for (const [before, after] of Object.entries(mapping).slice(0, limit)) {
+		const item = document.createElement('li');
+		const label = document.createElement('label');
+		const box = document.createElement('input');
+		box.type = 'checkbox';
+		box.checked = true;
+		box.dataset.filepath = before;
+		const text = document.createElement('span');
+		const from = document.createElement('span');
+		from.className = 'from';
+		from.textContent = shortPath(before);
+		const to = document.createElement('span');
+		to.className = 'to';
+		to.textContent = shortPath(after);
+		text.append(from, to);
+		label.append(box, text);
+		item.appendChild(label);
+		list.appendChild(item);
+	}
+}
+
+function checkedPaths(list) {
+	return [...list.querySelectorAll('input[type="checkbox"]:checked')].map(b => b.dataset.filepath);
+}
+
+function setPreview(kind, mapping) {
+	const count = Object.keys(mapping).length;
+	const list = document.querySelector(`#${kind}-list`);
+	const summary = document.querySelector(`#${kind}-summary`);
+	const button = kind === 'rename' ? ViewEls.tool_bar.rename : ViewEls.tool_bar.convert;
+	renderChanges(list, mapping);
+	button.classList.toggle('hidden', count === 0);
+	summary.classList.toggle('warn', count > 0);
+	if (kind === 'rename') {
+		summary.textContent = count === 0 ? 'All files follow your naming.'
+			: `${count} ${count === 1 ? 'file doesn\'t' : 'files don\'t'} follow your naming yet.`;
+		button.querySelector('span').textContent = count === 1 ? 'Rename 1 file' : `Rename ${count} files`;
+	} else {
+		summary.textContent = count === 0 ? 'All files are in your preferred format.'
+			: `${count} ${count === 1 ? 'file' : 'files'} can be converted to your preferred format.`;
+		button.querySelector('span').textContent = count === 1 ? 'Convert 1 file' : `Convert ${count} files`;
+	}
+}
+
+let previewsRequest = 0;
+function loadPreviews(api_key) {
+	const request = ++previewsRequest;
+	document.querySelector('#rename-summary').textContent = 'Checking file names…';
+	document.querySelector('#convert-summary').textContent = 'Checking formats…';
+	fetchAPI(`/volumes/${volume_id}/rename`, api_key)
+	.then(json => { if (request === previewsRequest) setPreview('rename', json.result); })
+	.catch(() => { document.querySelector('#rename-summary').textContent = ''; });
+	fetchAPI(`/volumes/${volume_id}/convert`, api_key)
+	.then(json => { if (request === previewsRequest) setPreview('convert', json.result); })
+	.catch(() => { document.querySelector('#convert-summary').textContent = ''; });
+	loadConvertPreference(api_key);
+}
+
+function loadConvertPreference(api_key) {
+	const el = document.querySelector('#convert-preference');
+	if (el.textContent !== '') return;
+	fetchAPI('/settings', api_key).then(json => {
+		const formats = json.result.format_preference;
+		el.textContent = formats.length
+			? `Preferred formats, in order: ${formats.join(', ')}.`
+			: 'No preferred format is set, so nothing is converted. Set one in Media management settings.';
+	});
+}
+
+function runRenameOrConvert(api_key, kind) {
+	const list = document.querySelector(`#${kind}-list`);
+	const paths = checkedPaths(list);
+	if (!paths.length) return;
+	const button = kind === 'rename' ? ViewEls.tool_bar.rename : ViewEls.tool_bar.convert;
+	button.disabled = true;
+	document.querySelector(`#${kind}-summary`).textContent = kind === 'rename' ? 'Renaming…' : 'Converting…';
+	runTask(api_key, {
+		cmd: kind === 'rename' ? 'mass_rename' : 'mass_convert',
+		filepath_filter: paths
+	}, () => { button.disabled = false; });
+}
+
+//
+// File matching (was "Manage issues")
+//
+let matchOriginal = [];
+let matchChanges = new Map();
+
+function matchValue(mapping) {
+	if (mapping.general_file) return 'general';
+	if (!mapping.forced_match || !mapping.issue_ids.length) return mapping.issue_ids.length ? `auto:${mapping.issue_ids.join(',')}` : 'auto';
+	return `issue:${mapping.issue_ids.join(',')}`;
+}
+
+function matchLabel(mapping) {
+	if (mapping.general_file) return 'Other file';
+	if (!mapping.issue_ids.length) return 'Not matched';
+	const first = issueLabel(mapping.issue_ids[0]);
+	const last = issueLabel(mapping.issue_ids[mapping.issue_ids.length - 1]);
+	return mapping.issue_ids.length > 1 ? `${first} – ${last}` : first;
+}
+
+function matchOptions(select, mapping) {
+	const add = (value, text) => {
+		const option = document.createElement('option');
+		option.value = value;
+		option.textContent = text;
+		select.appendChild(option);
+	};
+	const current = matchValue(mapping);
+	add(current.startsWith('auto') ? current : 'auto',
+		mapping.forced_match || !mapping.issue_ids.length
+			? 'Match automatically'
+			: `Automatic (${matchLabel(mapping)})`);
+	if (current.startsWith('issue:') && mapping.issue_ids.length > 1)
+		add(current, `${matchLabel(mapping)} (set by you)`);
+	add('general', 'Other file (cover, extras)');
+	for (const issue of seriesIssues())
+		add(`issue:${issue.id}`, `#${issue.issue_number}${issue.title ? ' · ' + issue.title : ''}`);
+	select.value = current;
+}
+
+function changeFromValue(filepath, value) {
+	if (value.startsWith('auto'))
+		return {filepath, issue_ids: [], general_file: false, forced_match: false};
+	if (value === 'general')
+		return {filepath, issue_ids: [], general_file: true, forced_match: true};
+	return {filepath, issue_ids: value.slice(6).split(',').map(Number), general_file: false, forced_match: true};
+}
+
+function updateMatchButtons() {
+	const changed = matchChanges.size > 0;
+	document.querySelector('#match-save').classList.toggle('hidden', !changed);
+	document.querySelector('#match-undo').classList.toggle('hidden', !changed);
+	document.querySelector('#match-save').textContent = matchChanges.size === 1
+		? 'Save 1 change' : `Save ${matchChanges.size} changes`;
+}
+
+function renderMatches() {
+	const list = document.querySelector('#match-list');
+	list.innerHTML = '';
+	matchChanges.clear();
+	updateMatchButtons();
+	if (!matchOriginal.length) {
+		const empty = document.createElement('li');
+		empty.className = 'sp-note';
+		empty.textContent = 'No files in this folder yet.';
+		list.appendChild(empty);
+		return;
+	}
+	matchOriginal.forEach(mapping => {
+		const item = document.createElement('li');
+		item.className = 'sp-file';
+		const name = document.createElement('span');
+		name.className = 'sp-file-name';
+		name.textContent = shortPath(mapping.filepath);
+		name.title = mapping.filepath;
+		const select = document.createElement('select');
+		select.setAttribute('aria-label', `Issue for ${fileName(mapping.filepath)}`);
+		matchOptions(select, mapping);
+		const original = select.value;
+		select.onchange = () => {
+			if (select.value === original) matchChanges.delete(mapping.filepath);
+			else matchChanges.set(mapping.filepath, changeFromValue(mapping.filepath, select.value));
+			item.classList.toggle('changed', select.value !== original);
+			updateMatchButtons();
+		};
+		item.append(name, select);
+		list.appendChild(item);
+	});
+}
+
+function loadMatches(api_key) {
+	return fetchAPI(`/volumes/${volume_id}/manualmatch`, api_key).then(json => {
+		matchOriginal = json.result;
+		renderMatches();
+	});
+}
+
+function saveMatches(api_key) {
+	if (!matchChanges.size) return;
+	const status = document.querySelector('#match-status');
+	setStatus(status, 'Saving…');
+	sendAPI('PUT', `/volumes/${volume_id}/manualmatch`, api_key, {}, [...matchChanges.values()])
+	.then(() => loadSeries(api_key))
+	.then(() => setStatus(status, 'Matches saved.'))
+	.catch(async error => setStatus(status, `Couldn't save: ${await errorText(error)}`, true));
+}
+
+//
+// Other (general) files
+//
+function fileRow(file, label, api_key, onDeleted) {
+	const item = document.createElement('li');
+	item.className = 'sp-file';
+	const name = document.createElement('span');
+	name.className = 'sp-file-name';
+	name.textContent = shortPath(file.filepath);
+	name.title = file.filepath;
+	const meta = document.createElement('span');
+	meta.className = 'sp-file-meta';
+	meta.textContent = [label, convertSize(file.size, 1)].filter(Boolean).join(' · ');
+	const remove = document.createElement('button');
+	remove.type = 'button';
+	remove.className = 'sp-link sp-delete-file';
+	remove.textContent = 'Delete';
+	remove.onclick = () => {
+		if (remove.dataset.confirm !== '1') {
+			remove.dataset.confirm = '1';
+			remove.textContent = 'Delete file?';
+			setTimeout(() => { remove.dataset.confirm = ''; remove.textContent = 'Delete'; }, 4000);
+			return;
+		}
+		sendAPI('DELETE', `/files/${file.id}`, api_key)
+		.then(() => { item.remove(); onDeleted && onDeleted(); });
+	};
+	item.append(name, meta, remove);
+	return item;
+}
+
+function fillOtherFiles(api_key) {
+	const list = document.querySelector('#other-files');
+	list.innerHTML = '';
+	seriesData.general_files.forEach(gf =>
+		list.appendChild(fileRow(gf, gf.file_type, api_key, () => loadSeries(api_key))));
+	document.querySelector('#other-empty').classList.toggle('hidden', seriesData.general_files.length > 0);
+}
+
+//
+// Issue details
+//
+function selectIssue(issue_id, api_key) {
+	selectedIssueId = issue_id;
+	ViewEls.issues_list.querySelectorAll('.issue-entry').forEach(row =>
+		row.classList.toggle('selected', parseInt(row.dataset.id) === issue_id));
+	showIssue(issue_id, api_key, true);
+}
+
+let issueRequest = 0;
+function showIssue(issue_id, api_key, focusPanel) {
+	const issue = seriesIssues().find(i => i.id === issue_id);
+	if (!issue) return;
+	const request = ++issueRequest;
+	ViewEls.panel.tab_issue.textContent = `Issue #${issue.issue_number}`;
+	ViewEls.panel.tab_issue.classList.remove('hidden');
+	document.querySelector('#issue-info-title').textContent = issue.title
+		? `#${issue.issue_number} · ${issue.title}` : `Issue #${issue.issue_number}`;
+	document.querySelector('#issue-info-meta').textContent =
+		[issue.date ? `Released ${issue.date}` : '', issue.files.length ? 'Has file' : 'Missing'].filter(Boolean).join(' · ');
+	const desc = document.querySelector('#issue-info-desc');
+	desc.innerHTML = issue.description || '';
+	desc.classList.toggle('hidden', !issue.description);
+
+	const files = document.querySelector('#issue-files-list');
+	files.innerHTML = '';
+	issue.files.forEach(f => files.appendChild(fileRow(f, '', api_key, () => loadSeries(api_key))));
+	document.querySelector('#issue-files-empty').classList.toggle('hidden', issue.files.length > 0);
+
+	const tidy = document.querySelector('#issue-tidy-list');
+	const summary = document.querySelector('#issue-tidy-summary');
+	const rename = document.querySelector('#issue-rename');
+	const convert = document.querySelector('#issue-convert');
+	tidy.innerHTML = '';
+	rename.classList.add('hidden');
+	convert.classList.add('hidden');
+	setStatus(document.querySelector('#issue-status-line'), '');
+	if (!issue.files.length) {
+		summary.textContent = 'Nothing to rename or convert until this issue has a file.';
+	} else {
+		summary.textContent = 'Checking…';
+		Promise.all([
+			fetchAPI(`/issues/${issue_id}/rename`, api_key),
+			fetchAPI(`/issues/${issue_id}/convert`, api_key)
+		]).then(([renames, converts]) => {
+			if (request !== issueRequest) return;
+			const r = Object.keys(renames.result).length, c = Object.keys(converts.result).length;
+			const notes = [];
+			notes.push(r ? 'The file name doesn\'t follow your naming.' : 'The file name follows your naming.');
+			if (c) notes.push('It can be converted to your preferred format.');
+			summary.textContent = notes.join(' ');
+			summary.classList.toggle('warn', Boolean(r || c));
+			renderChanges(tidy, {...renames.result});
+			rename.classList.toggle('hidden', !r);
+			convert.classList.toggle('hidden', !c);
+			rename.onclick = () => runIssueTask(api_key, issue_id, 'mass_rename_issue', Object.keys(renames.result));
+			convert.onclick = () => runIssueTask(api_key, issue_id, 'mass_convert_issue', Object.keys(converts.result));
+		}).catch(() => { summary.textContent = ''; });
+	}
+
+	document.querySelector('#issue-autosearch').onclick = () => {
+		setStatus(document.querySelector('#issue-status-line'), 'Searching…');
+		runTask(api_key, {cmd: 'auto_search_issue', issue_id},
+			() => setStatus(document.querySelector('#issue-status-line'), 'Search finished. Anything found is in the download queue.'));
+	};
+	document.querySelector('#issue-manualsearch').onclick = () => showManualSearch(api_key, issue_id);
+	if (focusPanel) openPanel('issue');
+}
+
+function runIssueTask(api_key, issue_id, cmd, paths) {
+	const status = document.querySelector('#issue-status-line');
+	setStatus(status, cmd === 'mass_rename_issue' ? 'Renaming…' : 'Converting…');
+	runTask(api_key, {cmd, issue_id, filepath_filter: paths},
+		() => setStatus(status, 'Done.'));
+}
+
+//
+// Remove
+//
+function deleteVolume(api_key) {
+	const delete_folder = document.querySelector('#delete-folder-input').checked;
+	const status = document.querySelector('#delete-status');
+	if (!window.confirm(`Remove ${seriesData.title} from your library?${delete_folder
+		? ' Its folder and files will also be permanently deleted.' : ' The files stay on disk.'}`))
+		return;
+	setStatus(status, 'Removing…');
+	sendAPI('DELETE', `/volumes/${volume_id}`, api_key, {delete_folder})
+	.then(() => { window.location.href = `${url_base}/`; })
+	.catch(async e => {
+		const j = await apiError(e);
+		const reason = j.error === 'TaskForVolumeRunning'
+			? 'A task is running for this series. Try again when it finishes.'
+			: j.error === 'VolumeDownloadedFor'
+			? 'A download for this series is in the queue.'
+			: await errorText(e);
+		setStatus(status, `Couldn't remove: ${reason}`, true);
+	});
+}
+
+//
+// Manual search (still a window, downloads only)
 //
 function showManualSearch(api_key, issue_id=null) {
-	// Display searching message
 	const message = document.querySelector('#searching-message');
 	const table = document.querySelector('#search-result-table');
 	const tbody = table.querySelector('tbody');
-
 	hide([table], [message]);
-
-	// Show window
 	showWindow('manual-search-window');
-
-	// Start search
 	tbody.innerHTML = '';
-	const url = issue_id
-			? `/issues/${issue_id}/manualsearch`
-			: `/volumes/${volume_id}/manualsearch`;
+	const url = issue_id ? `/issues/${issue_id}/manualsearch` : `/volumes/${volume_id}/manualsearch`;
 
 	fetchAPI(url, api_key)
 	.then(json => {
@@ -363,53 +738,30 @@ function showManualSearch(api_key, issue_id=null) {
 			tbody.appendChild(entry);
 
 			const match = entry.querySelector('.match-column');
-			if (result.match)
-				setImage(
-					match,
-					images.check,
-					'Search result matches'
-				);
-			else
-				setImage(
-					match,
-					images.cancel,
-					result.match_issue
-				);
+			if (result.match) setImage(match, images.check, 'Search result matches');
+			else setImage(match, images.cancel, result.match_issue);
 
 			const title = entry.querySelector('a');
 			title.href = result.link;
 			title.innerText = result.display_title;
-
 			entry.querySelector('.source-column').innerText = result.indexer_title;
-			
 			entry.querySelector('.size-column').innerText = convertSize(result.size, 1);
 
 			const download_button = entry.querySelector('.search-action-column :nth-child(1)');
 			download_button.classList.add('icon-text-color');
-			download_button.onclick =
-				e => addManualSearch(result.link, result.indexer_id, false, download_button, api_key, issue_id);
+			download_button.onclick = () => addManualSearch(result.link, result.indexer_id, false, download_button, api_key, issue_id);
 
 			const force_download_button = entry.querySelector('.search-action-column :nth-child(2)');
 			force_download_button.classList.add('icon-text-color');
-			force_download_button.onclick =
-				e => addManualSearch(result.link, result.indexer_id, true, force_download_button, api_key, issue_id);
+			force_download_button.onclick = () => addManualSearch(result.link, result.indexer_id, true, force_download_button, api_key, issue_id);
 
-			const blocklist_button = entry.querySelector('.search-action-column :nth-child(3)')
+			const blocklist_button = entry.querySelector('.search-action-column :nth-child(3)');
 			if (result.match_issue === null || !result.match_issue.includes('blocklist'))
-				// Show blocklist button
-				blocklist_button.onclick =
-					e => blockManualSearch(
-                        result.link, result.display_title,
-                        volume_id, issue_id,
-						blocklist_button,
-						match,
-						api_key
-					);
+				blocklist_button.onclick = () => blockManualSearch(
+					result.link, result.display_title, volume_id, issue_id, blocklist_button, match, api_key);
 			else
-				// No blocklist button
-				blocklist_button.remove()
+				blocklist_button.remove();
 		});
-
 		hide([message], [table]);
 	});
 };
@@ -420,10 +772,7 @@ function addManualSearch(link, indexer_id, force, button, api_key, issue_id=null
 	const img = button.querySelector('img');
 	img.src = `${url_base}/static/img/loading.svg`;
 	img.classList.add('spinning');
-
-	const url = issue_id
-		? `/issues/${issue_id}/download`
-		: `/volumes/${volume_id}/download`;
+	const url = issue_id ? `/issues/${issue_id}/download` : `/volumes/${volume_id}/download`;
 
 	sendAPI('POST', url, api_key, {}, {link: link, indexer_id: indexer_id, force_match: force})
 	.then(() => {
@@ -441,630 +790,93 @@ function addManualSearch(link, indexer_id, force, button, api_key, issue_id=null
 	});
 };
 
-function blockManualSearch(
-    web_link, web_title,
-    volume_id, issue_id,
-    button, match,
-    api_key
-) {
+function blockManualSearch(web_link, web_title, volume_id, issue_id, button, match, api_key) {
 	sendAPI('POST', '/blocklist', api_key, {}, {
-        web_link: web_link,
-        web_title: web_title,
-        volume_id: volume_id,
-        issue_id: issue_id,
-		reason_id: 4
+		web_link, web_title, volume_id, issue_id, reason_id: 4
 	})
-	.then(response => {
-        console.log(button, match);
+	.then(() => {
 		button.querySelector('img').src = `${url_base}/static/img/check.svg`;
-        setImage(
-            match,
-            'cancel.svg',
-            'Link is blocklisted'
-        );
+		setImage(match, 'cancel.svg', 'Link is blocklisted');
 	});
-};
-
-//
-// Renaming
-//
-function showRename(api_key, issue_id=null) {
-	document.querySelector('#selectall-input').checked = true;
-
-	const rename_button = document.querySelector('#submit-rename');
-	let url;
-	if (issue_id === null) {
-		// Preview volume rename
-		url = `/volumes/${volume_id}/rename`;
-		rename_button.dataset.issue_id = '';
-	} else {
-		// Preview issue rename
-		url = `/issues/${issue_id}/rename`;
-		rename_button.dataset.issue_id = issue_id;
-	};
-	fetchAPI(url, api_key)
-	.then(json => {
-		const empty_message = document.querySelector('#rename-window .empty-rename-message'),
-			table_container = document.querySelector('#rename-window .rename-preview'),
-			table = table_container.querySelector('tbody');
-		table.innerHTML = '';
-
-		if (!Object.keys(json.result).length) {
-			hide([table_container, rename_button], [empty_message]);
-		} else {
-			hide([empty_message], [table_container, rename_button]);
-			Object.entries(json.result).forEach(mapping => {
-				const before_row = ViewEls.pre_build.rename_before.cloneNode(true);
-				table.appendChild(before_row);
-				const after_row = ViewEls.pre_build.rename_after.cloneNode(true);
-				table.appendChild(after_row);
-
-				before_row.querySelector('td:last-child').innerText = mapping[0];
-				after_row.querySelector('td:last-child').innerText = mapping[1];
-			});
-		};
-		showWindow('rename-window');
-	});
-};
-
-function toggleAllRenames() {
-	const checked = document.querySelector('#selectall-input').checked;
-	document.querySelectorAll(
-		'#rename-window tbody input[type="checkbox"]'
-	).forEach(e => e.checked = checked);
-};
-
-function renameVolume(api_key, issue_id=null) {
-	const checkboxes = [...document.querySelectorAll(
-		'#rename-window tbody input[type="checkbox"]'
-	)];
-
-	if (checkboxes.every(e => !e.checked)) {
-		closeWindow();
-		return;
-	};
-
-	const data = {
-		cmd: 'mass_rename',
-		volume_id: volume_id,
-		filepath_filter:
-			checkboxes
-				.filter(e => e.checked)
-				.map(e => e
-					.parentNode
-					.parentNode
-					.querySelector('td:last-child')
-					.innerText
-				)
-	};
-	if (issue_id !== null) {
-		data.cmd = 'mass_rename_issue';
-		data.issue_id = issue_id;
-	};
-
-	sendAPI('POST', '/system/tasks', api_key, {}, data)
-	.then(response => closeWindow());
-};
-
-//
-// Converting
-//
-function loadConvertPreference(api_key) {
-	const el = document.querySelector('#convert-preference');
-	if (el.innerHTML !== '')
-		return;
-
-	fetchAPI('/settings', api_key)
-	.then(json => {
-		const pref = [
-			'source',
-			...json.result.format_preference,
-			'no conversion'
-		].join(' - ');
-		el.innerHTML = pref;
-		el.ariaLabel = `The format preference is the following: ${pref}`
-	});
-};
-
-function showConvert(api_key, issue_id=null) {
-	document.querySelector('#selectall-convert-input').checked = true;
-	loadConvertPreference(api_key);
-
-	const convert_button = document.querySelector('#submit-convert');
-	let url;
-	if (issue_id === null) {
-		// Preview issue conversion
-		url = `/volumes/${volume_id}/convert`;
-		convert_button.dataset.issue_id = '';
-	} else {
-		// Preview issue conversion
-		url = `/issues/${issue_id}/convert`;
-		convert_button.dataset.issue_id = issue_id;
-	};
-
-	fetchAPI(url, api_key)
-	.then(json => {
-		const empty_rename = document.querySelector('#convert-window .empty-rename-message'),
-			table_container = document.querySelector('#convert-window table');
-		const table = table_container.querySelector('tbody');
-		table.innerHTML = '';
-
-		if (!Object.keys(json.result).length) {
-			hide([table_container, convert_button], [empty_rename]);
-
-		} else {
-			hide([empty_rename], [table_container, convert_button]);
-			Object.entries(json.result).forEach(mapping => {
-				const before_row = ViewEls.pre_build.rename_before.cloneNode(true);
-				table.appendChild(before_row);
-				const after_row = ViewEls.pre_build.rename_after.cloneNode(true);
-				table.appendChild(after_row);
-
-				before_row.querySelector('td:last-child').innerText = mapping[0];
-				after_row.querySelector('td:last-child').innerText = mapping[1];
-			});
-		};
-		showWindow('convert-window');
-	});
-};
-
-function toggleAllConverts() {
-	const checked = document.querySelector('#selectall-convert-input').checked;
-	document.querySelectorAll(
-		'#convert-window tbody input[type="checkbox"]'
-	).forEach(e => e.checked = checked);
-};
-
-function convertVolume(api_key, issue_id=null) {
-	const checkboxes = [...document.querySelectorAll(
-		'#convert-window tbody input[type="checkbox"]'
-	)];
-
-	if (checkboxes.every(e => !e.checked)) {
-		closeWindow();
-		return;
-	};
-
-	const data = {
-		cmd: 'mass_convert',
-		volume_id: volume_id,
-		filepath_filter:
-			checkboxes
-				.filter(e => e.checked)
-				.map(e => e
-					.parentNode
-					.parentNode
-					.querySelector('td:last-child')
-					.innerText
-				)
-	};
-	if (issue_id !== null) {
-		data.cmd = 'mass_convert_issue';
-		data.issue_id = issue_id;
-	};
-
-	sendAPI('POST', '/system/tasks', api_key, {}, data)
-	.then(response => closeWindow());
-};
-
-//
-// Manage Issues
-//
-const manageIdToFilepath = {};
-let managed_issues = [];
-let managed_issues_changes = {};
-
-function _issuesCoveredByMapping(mapping, no_match_is_tbd=false) {
-	let mapping_value = '';
-	if (mapping.general_file)
-		mapping_value += 'General File';
-
-	else if (mapping.issue_ids.length >= 1)
-		mapping_value += document.querySelector(
-			`#issue-match-table tr[data-issue_id="${mapping.issue_ids[0]}"] td:nth-child(2)`
-		).innerText;
-
-	if (mapping.issue_ids.length > 1)
-		mapping_value += ' - ' + document.querySelector(
-			`#issue-match-table tr[data-issue_id="${mapping.issue_ids[mapping.issue_ids.length - 1]}"] td:nth-child(2)`
-		).innerText;
-
-	if (no_match_is_tbd && !mapping_value)
-		mapping_value += 'TBD';
-
-	if (mapping.forced_match)
-		mapping_value += ' (Forced)';
-
-	return mapping_value;
-}
-
-function showManageIssues(api_key) {
-	managed_issues_changes = {};
-	managed_issues = [];
-	document.querySelector('#selectall-manage-input').checked = false;
-	const table = document.querySelector('#manage-issues-table tbody'),
-		volume_folder = ViewEls.vol_data.path.dataset.volume_folder;
-	table.querySelectorAll('tr:not(:first-child)').forEach(e => e.remove());
-
-	fetchAPI(`/volumes/${volume_id}/manualmatch`, api_key)
-	.then(json => {
-		json.result.forEach((mapping, idx) => {
-			const entry = ViewEls.pre_build.manage.cloneNode(true);
-			entry.dataset.manage_id = idx;
-			manageIdToFilepath[idx] = mapping.filepath;
-
-            const short_f = mapping.filepath.slice(
-                mapping.filepath.indexOf(volume_folder)
-                + volume_folder.length
-                + 1
-            );
-			entry.querySelector('td:nth-child(2)').innerText = short_f;
-			entry.querySelector('td:nth-child(2)').title = mapping.filepath;
-
-			entry.querySelector('td:nth-child(3)').innerText = _issuesCoveredByMapping(mapping);
-
-			table.appendChild(entry);
-		});
-	});
-
-	showWindow('manage-window');
-};
-
-function toggleAllManages() {
-	const checked = document.querySelector('#selectall-manage-input').checked;
-	document.querySelectorAll(
-		'#manage-window tbody input[type="checkbox"]'
-	).forEach(e => e.checked = checked);
-};
-
-function submitManagedIssues(api_key) {
-	sendAPI('PUT', `/volumes/${volume_id}/manualmatch`, api_key, {},
-		Object.values(managed_issues_changes)
-	)
-	.then(response => window.location.reload());
-};
-
-function fillIssueMatchTable(issues) {
-	const table = document.querySelector('#issue-match-table tbody');
-	issues.forEach(issue => {
-		const entry = ViewEls.pre_build.match.cloneNode(true);
-
-		entry.dataset.issue_id = issue.id;
-		entry.querySelector('input').onchange = e => handleIssueMatchCheckboxes(e);
-		entry.querySelector('td:nth-child(2)').innerText = issue.issue_number;
-		entry.querySelector('td:nth-child(3)').innerText = issue.title;
-		entry.querySelector('td:nth-child(4)').innerText = issue.date;
-
-		table.appendChild(entry);
-	});
-};
-
-function showMatchIssue() {
-	managed_issues = [...document.querySelectorAll(
-		'#manage-issues-table tbody tr:has(input[type="checkbox"]:checked)'
-	)].map(el => parseInt(el.dataset.manage_id));
-
-	if (!managed_issues.length)
-		return;
-
-	setIssueMatchCheckboxes(false);
-	showWindow('match-window');
-};
-
-function setIssueMatchCheckboxes(checked) {
-	document.querySelector('#selectall-match-input').checked = checked;
-	document.querySelectorAll(
-		'#match-window tbody > tr:nth-child(n + 4) input[type="checkbox"]'
-	).forEach(e => e.checked = checked);
-}
-
-function handleIssueMatchCheckboxes(e) {
-	const checkbox = e.target;
-
-	if (checkbox !== document.activeElement)
-		// Checkbox is not being altered by user
-		return;
-
-	const row = checkbox.parentElement.parentElement,
-		autoMatch = document.querySelector('#auto-match-entry input'),
-		generalFileMatch = document.querySelector('#general-file-match-entry input');
-
-	if (checkbox.id === "selectall-match-input") {
-		// Select All toggled
-		setIssueMatchCheckboxes(checkbox.checked);
-		autoMatch.checked = false;
-		generalFileMatch.checked = false;
-	}
-	else if (row.dataset.issue_id === "") {
-		// Auto match
-		setIssueMatchCheckboxes(false);
-		generalFileMatch.checked = false;
-	}
-	else if (row.dataset.issue_id === "-1") {
-		// General match
-		setIssueMatchCheckboxes(false);
-		autoMatch.checked = false;
-	}
-	else {
-		// Issue match
-		autoMatch.checked = false;
-		generalFileMatch.checked = false;
-	}
-};
-
-function processIssueMatch() {
-	const selectedIssues = [...document.querySelectorAll(
-		'#issue-match-table tbody > tr:has(input[type="checkbox"]:checked)'
-	)].map(row => row.dataset.issue_id)
-
-	if (!selectedIssues.length)
-		return;
-	
-	managed_issues.forEach(manageId => {
-		let data;
-		if (selectedIssues[0] == "") {
-			// Auto match
-			data = {
-				filepath: manageIdToFilepath[manageId],
-				issue_ids: [],
-				general_file: false,
-				forced_match: false
-			};
-		}
-		else if (selectedIssues[0] == "-1") {
-			// General file
-			data = {
-				filepath: manageIdToFilepath[manageId],
-				issue_ids: [],
-				general_file: true,
-				forced_match: true
-			};
-		} 
-		else {
-			// Issue match
-			data = {
-				filepath: manageIdToFilepath[manageId],
-				issue_ids: selectedIssues.map(i => parseInt(i)),
-				general_file: false,
-				forced_match: true
-			};
-		};
-
-		managed_issues_changes[manageId] = data;
-		document.querySelector(
-			`#manage-issues-table tbody > tr[data-manage_id="${manageId}"] td:last-child`
-		).innerText = _issuesCoveredByMapping(data, no_match_is_tbd=true);
-	});
-	document.querySelector('#selectall-manage-input').checked = false;
-	showWindow('manage-window');
-};
-
-//
-// Editing
-//
-function showEdit(api_key) {
-	const volume_root_folder = parseInt(ViewEls.vol_data.path.dataset.root_folder),
-	volume_folder = ViewEls.vol_data.path.dataset.volume_folder;
-	
-	fetchAPI('/rootfolder', api_key)
-	.then(json => {
-		ViewEls.vol_edit.root_folder.innerHTML = '';
-		json.result.forEach(root_folder => {
-			const entry = document.createElement('option');
-			entry.value = root_folder.id;
-			entry.innerText = root_folder.folder;
-			if (root_folder.id === volume_root_folder) {
-				entry.setAttribute('selected', 'true');
-			};
-			ViewEls.vol_edit.root_folder.appendChild(entry);
-		});
-		showWindow('edit-window');
-	});
-	ViewEls.vol_edit.monitor.value = ViewEls.vol_data.monitor.dataset.monitored;
-	ViewEls.vol_edit.monitoring_scheme.value = '';
-	ViewEls.vol_edit.volume_folder.value = volume_folder;
-};
-
-function editVolume() {
-	showLoadWindow('edit-window');
-
-	const data = {
-		'monitored': ViewEls.vol_edit.monitor.value === 'true',
-		'monitor_new_issues': ViewEls.vol_edit.monitor_new_issues.value === 'true',
-		'root_folder': parseInt(ViewEls.vol_edit.root_folder.value),
-		'volume_folder': ViewEls.vol_edit.volume_folder.value
-	};
-	
-	if (ViewEls.vol_edit.monitoring_scheme.value !== '')
-		data['monitoring_scheme'] = ViewEls.vol_edit.monitoring_scheme.value;
-
-	const so = document.querySelector('#specialoverride-input').value;
-
-	data['special_version_locked'] = so !== 'auto';
-	if (so !== 'auto')
-		data['special_version'] = so || null;
-
-	usingApiKey()
-	.then(api_key => {
-		sendAPI('PUT', `/volumes/${volume_id}`, api_key, {}, data)
-		.then(response => window.location.reload());
-	});
-};
-
-//
-// Deleting
-//
-function deleteVolume() {
-	const downloading_error = document.querySelector('#volume-downloading-error'),
-		tasking_error = document.querySelector('#volume-tasking-error'),
-		delete_folder = document.querySelector('#delete-folder-input').value;
-		
-	hide([downloading_error, tasking_error]);
-	usingApiKey()
-	.then(api_key => {
-		sendAPI('DELETE', `/volumes/${volume_id}`, api_key, {delete_folder: delete_folder})
-		.then(response => {
-			window.location.href = `${url_base}/`;
-		})
-		.catch(e => e.json().then(j => {
-			if (j.error === "TaskForVolumeRunning")
-				hide([downloading_error], [tasking_error]);
-			else if (j.error === "VolumeDownloadedFor")
-				hide([tasking_error], [downloading_error]);
-			else
-				console.log(j);			
-		}));
-	});
-};
-
-//
-// Issue info
-//
-function showIssueInfo(issue_id, api_key) {
-	document.querySelector('#issue-rename-selector').dataset.issue_id = issue_id;
-	fetchAPI(`/issues/${issue_id}`, api_key)
-	.then(json => {
-		document.querySelector('#issue-info-title').innerText =
-			`${json.result.title} - #${json.result.issue_number} - ${json.result.date}`;
-		document.querySelector('#issue-info-desc').innerHTML = json.result.description;
-		const files_table = document.querySelector('#issue-files-list');
-		files_table.innerHTML = '';
-		json.result.files.forEach(f => {
-            const entry = ViewEls.pre_build.files_entry.cloneNode(true);
-
-            const vf = ViewEls.vol_data.path.dataset.volume_folder;
-            const short_f = f.filepath.slice(
-                f.filepath.indexOf(vf)
-                + vf.length
-                + 1
-            );
-            entry.querySelector('.f-filepath').innerText = short_f;
-            entry.querySelector('.f-filepath').title = f.filepath;
-            
-            entry.querySelector('.f-size').innerText = convertSize(f.size, 1);
-            entry.querySelector('.f-delete button').onclick = e =>
-                sendAPI("DELETE", `/files/${f.id}`, api_key)
-                .then(response => entry.remove());
-
-            files_table.appendChild(entry);
-		});
-		showWindow('issue-info-window');
-	});
-};
-
-function showInfoWindow(window) {
-	hide(
-		[...document.querySelectorAll(
-			`#issue-info-window > div:nth-child(2) > div:not(#issue-info-selectors)`
-		)],
-		[document.querySelector(`#${window}`)]
-	);
 };
 
 // code run on load
 
-const issue_action_media = window.matchMedia('(min-width: 701px)');
-issue_action_media.addEventListener('change', syncIssueActionLayout);
-
 usingApiKey()
 .then(api_key => {
-	fetchAPI(`/volumes/${volume_id}`, api_key)
-	.then(json => fillPage(json.result, api_key))
-	.catch(e => {
-		if (e.status === 404)
-			window.location.href = `${url_base}/`
-		else
-			console.log(e);
+	currentApiKey = api_key;
+	loadSeries(api_key).catch(e => {
+		if (e.status === 404) window.location.href = `${url_base}/`;
+		else console.log(e);
 	});
 
-	ViewEls.tool_bar.refresh.onclick = e => refreshVolume(api_key);
-	ViewEls.tool_bar.auto_search.onclick = e => autosearchVolume(api_key);
-	ViewEls.tool_bar.manual_search.onclick = e => showManualSearch(api_key);
-	ViewEls.tool_bar.rename.onclick = e => showRename(api_key);
-	ViewEls.tool_bar.convert.onclick = e => showConvert(api_key);
-	ViewEls.tool_bar.manage.onclick = e => showManageIssues(api_key);
-	ViewEls.tool_bar.edit.onclick = e => showEdit(api_key);
+	ViewEls.tool_bar.refresh.onclick = () => runTask(api_key, {cmd: 'refresh_and_scan'});
+	ViewEls.tool_bar.auto_search.onclick = () => runTask(api_key, {cmd: 'auto_search'});
+	ViewEls.tool_bar.manual_search.onclick = () => showManualSearch(api_key);
+	ViewEls.tool_bar.rename.onclick = () => runRenameOrConvert(api_key, 'rename');
+	ViewEls.tool_bar.convert.onclick = () => runRenameOrConvert(api_key, 'convert');
 
-	document.querySelector('#submit-rename').onclick =
-	e => renameVolume(api_key, parseInt(e.target.dataset.issue_id) || null);
+	const edit = ViewEls.vol_edit;
+	edit.form.addEventListener('submit', e => {
+		e.preventDefault();
+		saveDetails(api_key);
+	});
+	edit.undo.onclick = resetDetails;
+	[edit.special_version, edit.root_folder, edit.volume_folder].forEach(el => {
+		el.addEventListener('input', updateDetailsDirty);
+		el.addEventListener('change', updateDetailsDirty);
+	});
+	edit.monitor.onchange = () => setSeriesMonitored(api_key, edit.monitor.checked);
+	edit.monitor_new_issues.onchange = () =>
+		sendAPI('PUT', `/volumes/${volume_id}`, api_key, {}, {monitor_new_issues: edit.monitor_new_issues.checked});
+	document.querySelector('#apply-scheme').onclick = () =>
+		sendAPI('PUT', `/volumes/${volume_id}`, api_key, {}, {monitoring_scheme: edit.monitoring_scheme.value})
+		.then(() => loadSeries(api_key));
 
-	document.querySelector('#submit-convert').onclick =
-	e => convertVolume(api_key, parseInt(e.target.dataset.issue_id) || null);
+	document.querySelector('#match-save').onclick = () => saveMatches(api_key);
+	document.querySelector('#match-undo').onclick = renderMatches;
+	document.querySelector('#submit-delete').onclick = () => deleteVolume(api_key);
 
-	document.querySelector('#issue-rename-selector').onclick =
-	e => showRename(api_key, parseInt(e.target.dataset.issue_id));
-
-	document.querySelector('#submit-manage-issues').onclick =
-	e => submitManagedIssues(api_key);
-
-	socket_ready.then(socket => socket.on(
-		'downloaded_status',
-		data => {
-			if (data.volume_id !== volume_id)
-				return;
-			data.downloaded_issues.forEach(
-				issue_id => new IssueEntry(issue_id, api_key).setDownloaded(true)
-			);
-			data.not_downloaded_issues.forEach(
-				issue_id => new IssueEntry(issue_id, api_key).setDownloaded(false)
-			);
+	ViewEls.issues_list.addEventListener('click', event => {
+		const row = event.target.closest('.issue-entry');
+		if (row && !event.target.closest('button')) selectIssue(parseInt(row.dataset.id), api_key);
+	});
+	ViewEls.issues_list.addEventListener('keydown', event => {
+		const row = event.target.closest('.issue-entry');
+		if (!row) return;
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			selectIssue(parseInt(row.dataset.id), api_key);
+		} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			event.preventDefault();
+			let next = row;
+			do next = event.key === 'ArrowDown' ? next.nextElementSibling : next.previousElementSibling;
+			while (next && next.classList.contains('hidden'));
+			if (next) {
+				next.focus();
+				selectIssue(parseInt(next.dataset.id), api_key);
+			}
 		}
-	));
+	});
+
+	socket_ready.then(socket => socket.on('downloaded_status', data => {
+		if (data.volume_id !== volume_id) return;
+		data.downloaded_issues.forEach(id => new IssueEntry(id, api_key).setDownloaded(true));
+		data.not_downloaded_issues.forEach(id => new IssueEntry(id, api_key).setDownloaded(false));
+	}));
 });
 
-ViewEls.tool_bar.files.onclick = e => showWindow('files-window');
-ViewEls.tool_bar.delete.onclick = e => showWindow('delete-window');
-
-document.querySelector('#issue-info-selector').onclick = e => showInfoWindow('issue-info');
-document.querySelector('#issue-files-selector').onclick = e => showInfoWindow('issue-files');
-document.querySelector('#selectall-input').onchange = e => toggleAllRenames();
-document.querySelector('#selectall-convert-input').onchange = e => toggleAllConverts();
-document.querySelector('#selectall-manage-input').onchange = e => toggleAllManages();
-document.querySelector('#show-issue-match').onclick = e => showMatchIssue();
-document.querySelector('#selectall-match-input').onchange = e => handleIssueMatchCheckboxes(e);
-document.querySelector('#auto-match-entry input').onchange = e => handleIssueMatchCheckboxes(e);
-document.querySelector('#general-file-match-entry input').onchange = e => handleIssueMatchCheckboxes(e);
-document.querySelector('#cancel-match-issues').onclick = e => showWindow('manage-window');
-document.querySelector('#submit-match-issues').onclick = e => processIssueMatch();
-
-document.querySelector('#edit-form').action = 'javascript:editVolume();';
-document.querySelector('#delete-form').action = 'javascript:deleteVolume();';
-
-// Close the disclosure before opening a dialog so its summary remains the focus return target.
-ViewEls.issues_list.addEventListener('click', event => {
-	if (issue_action_media.matches) return;
-	const menu = event.target.closest('.issue-actions');
-	if (menu && event.target.closest('button')) {
-		menu.open = false;
-		menu.querySelector('summary').focus();
-	}
-}, true);
-ViewEls.issues_list.addEventListener('keydown', event => {
-	if (issue_action_media.matches) return;
-	const menu = event.target.closest('.issue-actions[open]');
-	if (menu && event.key === 'Escape') {
-		event.preventDefault();
-		event.stopPropagation();
-		menu.open = false;
-		menu.querySelector('summary').focus();
-	}
+ViewEls.panel.tab_series.onclick = () => openPanel('series');
+ViewEls.panel.tab_issue.onclick = () => openPanel('issue');
+ViewEls.panel.close.onclick = closePanel;
+ViewEls.tool_bar.editor.onclick = () => openPanel('series');
+document.querySelectorAll('.sp-filter button').forEach(button => button.onclick = () => {
+	issueFilter = button.dataset.filter;
+	applyIssueFilter();
 });
-ViewEls.issues_list.addEventListener('toggle', event => {
-	const menu = event.target;
-	if (issue_action_media.matches || !menu.matches('.issue-actions') || !menu.open) return;
-	ViewEls.issues_list.querySelectorAll('.issue-actions[open]').forEach(other => {
-		if (other !== menu) other.open = false;
-	});
-	const popup = menu.querySelector('.issue-actions-menu');
-	popup.classList.remove('opens-up');
-	const rect = popup.getBoundingClientRect();
-	const pane = ViewEls.views.main.getBoundingClientRect();
-	if (rect.bottom > pane.bottom && menu.getBoundingClientRect().top - pane.top > rect.height)
-		popup.classList.add('opens-up');
-}, true);
-document.addEventListener('click', event => {
-	if (issue_action_media.matches) return;
-	ViewEls.issues_list.querySelectorAll('.issue-actions[open]').forEach(menu => {
-		if (!menu.contains(event.target)) menu.open = false;
-	});
+document.addEventListener('keydown', event => {
+	if (event.key === 'Escape' && ViewEls.views.main.classList.contains('panel-open')
+	&& !document.querySelector('.window[show-window]')
+	&& !event.target.closest?.('input, select, textarea'))
+		closePanel();
 });
