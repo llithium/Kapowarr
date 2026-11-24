@@ -28,22 +28,22 @@
 
 	<form id="settings-form">
 		<div class="settings-container">
-			<h2>File Naming</h2>
+			<h2>File naming</h2>
 			<table class="fold-table">
 				<tbody>
 					<tr>
-						<th><label for="renaming-input">Rename Downloaded Files</label></th>
+						<th><label for="renaming-input">Rename downloaded files</label></th>
 						<td><input type="checkbox" id="renaming-input"></td>
 					</tr>
 					<tr>
-						<th><label for="replace-chars-input">Replace Illegal Characters</label></th>
+						<th><label for="replace-chars-input">Replace illegal characters</label></th>
 						<td>
 							<input type="checkbox" id="replace-chars-input">
 							<p>Instead of removing illegal characters from the filename, replace them smartly with a dash. Depending on the place, spaces might be put before, after or around the dash.</p>
 						</td>
 					</tr>
 					<tr>
-						<th><label for="volume-folder-naming-input">Volume Folder Naming</label></th>
+						<th><label for="volume-folder-naming-input">Volume folder naming</label></th>
 						<td>
 							<input type="text" id="volume-folder-naming-input" required spellcheck="false">
 							<p>The naming format for the volume folder.</p>
@@ -51,7 +51,7 @@
 						</td>
 					</tr>
 					<tr>
-						<th><label for="file-naming-input">File Naming</label></th>
+						<th><label for="file-naming-input">File naming</label></th>
 						<td>
 							<input type="text" id="file-naming-input" required spellcheck="false">
 							<p>The naming format for the file itself.</p>
@@ -59,7 +59,7 @@
 						</td>
 					</tr>
 					<tr>
-						<th><label for="file-naming-empty-input">File Naming For <br>Issues Without Title</label></th>
+						<th><label for="file-naming-empty-input">File naming for issues without title</label></th>
 						<td>
 							<input type="text" id="file-naming-empty-input" required spellcheck="false">
 							<p>The naming format for the file itself if there is no issue title.</p>
@@ -67,7 +67,7 @@
 						</td>
 					</tr>
 					<tr>
-						<th><label for="file-naming-sv-input">File Naming For <br>Special Versions</label></th>
+						<th><label for="file-naming-sv-input">File naming for special versions</label></th>
 						<td>
 							<input type="text" id="file-naming-sv-input" required spellcheck="false">
 							<p>The naming format for the file itself (if it's a special version, like a one shot, tpb or hard cover).</p>
@@ -75,7 +75,7 @@
 						</td>
 					</tr>
 					<tr>
-						<th><label for="file-naming-vai-input">File Naming For <br>"Volume As Issue"</label></th>
+						<th><label for="file-naming-vai-input">File naming for "Volume As Issue"</label></th>
 						<td>
 							<input type="text" id="file-naming-vai-input" required spellcheck="false">
 							<p>The naming format for the file itself (if it's a Volume As Issue, so an issue named "Volume N").</p>
@@ -83,14 +83,14 @@
 						</td>
 					</tr>
 					<tr>
-						<th><label for="long-sv-input">Use Long Special Version Labels</label></th>
+						<th><label for="long-sv-input">Use long special version labels</label></th>
 						<td>
 							<input type="checkbox" id="long-sv-input">
 							<p>Whether or not to use, for example, 'One-Shot' instead of 'OS'. The term 'TPB' will always stay 'TPB'.</p>
 						</td>
 					</tr>
 					<tr>
-						<th><label for="issue-padding-input">Issue Padding</label></th>
+						<th><label for="issue-padding-input">Issue padding</label></th>
 						<td>
 							<select id="issue-padding-input">
 								<option value="4">000x</option>
@@ -101,7 +101,7 @@
 						</td>
 					</tr>
 					<tr>
-						<th><label for="volume-padding-input">Volume Padding</label></th>
+						<th><label for="volume-padding-input">Volume padding</label></th>
 						<td>
 							<select id="volume-padding-input">
 								<option value="3">00x</option>
@@ -116,14 +116,14 @@
 			<table class="fold-table">
 				<tbody>
 					<tr>
-						<th><label for="create-vf-input">Create Empty <br>Volume Folders</label></th>
+						<th><label for="create-vf-input">Create empty volume folders</label></th>
 						<td>
 							<input type="checkbox" id="create-vf-input">
 							<p>Create missing volume folders during file scan.</p>
 						</td>
 					</tr>
 					<tr>
-						<th><label for="delete-empty-folders-input">Delete Empty Folders</label></th>
+						<th><label for="delete-empty-folders-input">Delete empty folders</label></th>
 						<td>
 							<input type="checkbox" id="delete-empty-folders-input">
 							<p>Delete empty folders in the volume folder during file scan. If "Create Empty Volume Folders" is disabled and the volume folder is empty, it'll also be deleted.</p>
@@ -131,18 +131,18 @@
 					</tr>
 				</tbody>
 			</table>
-			<h2>File Management</h2>
+			<h2>File management</h2>
 			<table class="fold-table">
 				<tbody>
 					<tr>
-						<th><label for="unmonitor-deleted-input">Unmonitor Deleted Issues</label></th>
+						<th><label for="unmonitor-deleted-input">Unmonitor deleted issues</label></th>
 						<td>
 							<input type="checkbox" id="unmonitor-deleted-input">
 							<p>Issues deleted from disk are automatically unmonitored.</p>
 						</td>
 					</tr>
 					<tr>
-						<th><label for="change-file-date-input">Change File Date</label></th>
+						<th><label for="change-file-date-input">Change file date</label></th>
 						<td>
 							<select id="change-file-date-input">
 								<option value="">Don't Change</option>
@@ -153,7 +153,7 @@
 						</td>
 					</tr>
 					<tr>
-						<th><label for="chmod-folder-input">Chmod Folder</label></th>
+						<th><label for="chmod-folder-input">Chmod folder</label></th>
 						<td>
 							<input type="text" id="chmod-folder-input" spellcheck="false">
 							<p>Permissions applied to the folders and files (without execute bits). Give value in octal (e.g. '755'), or leave empty to disable. Save the settings before using the button below. Only works on Unix systems.</p>
@@ -161,7 +161,7 @@
 						</td>
 					</tr>
 					<tr>
-						<th><label for="chown-group-input">Chown Group</label></th>
+						<th><label for="chown-group-input">Chown group</label></th>
 						<td>
 							<input type="text" id="chown-group-input" spellcheck="false">
 							<p>Ownership group applied to the folders and files. Give group name or ID (e.g. 'media' or '1001'), or leave empty to disable. Save the settings before using the button below. Only works on Unix systems.</p>
@@ -175,14 +175,14 @@
 			<table class="fold-table">
 				<tbody>
 					<tr>
-						<th><label for="convert-input">Convert/Extract <br>Downloaded Files</label></th>
+						<th><label for="convert-input">Convert or extract downloaded files</label></th>
 						<td>
 							<input type="checkbox" id="convert-input">
 							<p>After a file is downloaded, automatically convert it (if a format preference is set) and/or extract its contents (if it's an archive and the setting below is enabled).</p>
 						</td>
 					</tr>
 					<tr>
-						<th><label for="extract-input">Extract archives <br>containing issues</label></th>
+						<th><label for="extract-input">Extract archives containing issues</label></th>
 						<td>
 							<input type="checkbox" id="extract-input">
 							<p>If an archive file has (most often multiple) complete issues inside, then extract the files inside and convert those issue files following the format preference.</p>
@@ -190,7 +190,7 @@
 					</tr>
 				</tbody>
 			</table>
-			<label for="add-convert-input">Format Preference</label>
+			<label for="add-convert-input">Format preference</label>
 			<p>The list below specifies the desired format, in order of preference.</p>
 			<table id="convert-table" class="short-table icon-text-color">
 				<tbody>
@@ -202,14 +202,14 @@
 					</tr>
 				</tbody>
 			</table>
-			<h2>Root Folders</h2>
+			<h2>Root folders</h2>
 			<div id="root-folder-container">
 				<table id="root-folder-table" class="icon-text-color">
 					<thead>
 						<tr>
 							<th>Path</th>
-							<th class="number-column">Free Space</th>
-							<th class="number-column">Total Space</th>
+							<th class="number-column">Free space</th>
+							<th class="number-column">Total space</th>
 							<th class="action-column">Action</th>
 						</tr>
 					</thead>
@@ -228,7 +228,7 @@
 					</tbody>
 				</table>
 			</div>
-			<button type="button" id="toggle-root-folder">Add Root Folder</button>
+			<button type="button" id="toggle-root-folder">Add root folder</button>
 		</div>
 	</form>
 </main>

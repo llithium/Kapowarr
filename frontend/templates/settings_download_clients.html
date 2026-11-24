@@ -238,20 +238,20 @@
 		<form id="add-mapping-form">
 			<table class="fold-table">
 				<tr>
-					<th><label for="add-mapping-client-input">Remote Download Client</label></th>
+					<th><label for="add-mapping-client-input">Remote download client</label></th>
 					<td>
 						<select id="add-mapping-client-input" required></select>
 					</td>
 				</tr>
 				<tr>
-					<th><label for="add-mapping-remote-input">Remote Path</label></th>
+					<th><label for="add-mapping-remote-input">Remote path</label></th>
 					<td>
 						<input type="text" id="add-mapping-remote-input" required>
 						<p>Root path to the directory that the remote download client accesses</p>
 					</td>
 				</tr>
 				<tr>
-					<th><label for="add-mapping-local-input">Local Path</label></th>
+					<th><label for="add-mapping-local-input">Local path</label></th>
 					<td>
 						<input type="text" id="add-mapping-local-input" required>
 						<p>Path that Kapowarr should use to access the remote path locally</p>
@@ -272,20 +272,20 @@
 		<form id="edit-mapping-form">
 			<table class="fold-table">
 				<tr>
-					<th><label for="edit-mapping-client-input">Remote Download Client</label></th>
+					<th><label for="edit-mapping-client-input">Remote download client</label></th>
 					<td>
 						<select id="edit-mapping-client-input" required></select>
 					</td>
 				</tr>
 				<tr>
-					<th><label for="edit-mapping-remote-input">Remote Path</label></th>
+					<th><label for="edit-mapping-remote-input">Remote path</label></th>
 					<td>
 						<input type="text" id="edit-mapping-remote-input" required>
 						<p>Root path to the directory that the remote download client accesses</p>
 					</td>
 				</tr>
 				<tr>
-					<th><label for="edit-mapping-local-input">Local Path</label></th>
+					<th><label for="edit-mapping-local-input">Local path</label></th>
 					<td>
 						<input type="text" id="edit-mapping-local-input" required>
 						<p>Path that Kapowarr should use to access the remote path locally</p>
@@ -319,7 +319,7 @@
         </select>
     </label>
 	<div class="settings-container">
-		<h2>Built-in Clients</h2>
+		<h2>Built-in clients</h2>
 		<div id="builtin-client-list" class="client-list">
 			<button id="mega-client" data-tag="mega">Mega</button>
 			<button id="mediafire-client" data-tag="mediafire">MediaFire</button>
@@ -327,13 +327,13 @@
 			<button id="pixeldrain-client" data-tag="pixeldrain">Pixeldrain</button>
 			<button id="getcomics-client" data-tag="getcomics">GetComics</button>
 		</div>
-		<h2>Torrent Clients</h2>
+		<h2>Torrent clients</h2>
 		<div id="torrent-client-list" class="client-list">
 			<button id="add-torrent-client" class="add-button icon-text-color" title="Add torrent client">
 				<img src="{{url_base}}/static/img/cancel.svg" alt="">
 			</button>
 		</div>
-		<h2>Remote Path Mappings</h2>
+		<h2>Remote path mappings</h2>
 		<p id="remote-mapping-error" class="error hidden" role="alert"></p>
 		<button id="add-remote-mapping" class="icon-dark-color" title="Add remote path mapping">
 			<img src="{{url_base}}/static/img/cancel.svg" alt="">
@@ -343,15 +343,15 @@
 				<thead>
 					<tr>
 						<th>Client</th>
-						<th>Remote Path</th>
-						<th>Local Path</th>
+						<th>Remote path</th>
+						<th>Local path</th>
 						<th class="action-column">Action</th>
 					</tr>
 				</thead>
 				<tbody id="remote-mapping-list"></tbody>
 				<tbody>
 					<tr id="no-mappings-row">
-						<td colspan="4">No Remote Mappings</td>
+						<td colspan="4">No remote path mappings yet</td>
 					</tr>
 				</tbody>
 			</table>
