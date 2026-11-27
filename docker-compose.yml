@@ -1,7 +1,8 @@
 services:
   kapowarr:
     container_name: kapowarr
-    image: ghcr.io/llithium/kapowarr:latest
+    # The fork no longer publishes an image; build it from this checkout.
+    build: .
     environment:
       - PUID=0
       - PGID=0
