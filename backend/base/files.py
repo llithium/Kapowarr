@@ -934,7 +934,85 @@ def delete_file_folder(path: str) -> None:
     return
 
 
-def delete_empty_parent_folders(top_folder: str, root_folder: str) -> None:
+def is_leftover_clutter(name: str, is_dir: bool) -> bool:
+    """Whether a folder entry is clutter that apps leave next to comics and
+    that shouldn't keep an otherwise empty folder alive. This covers the
+    hidden `.Panels` folder (and `*.panels` bundles) that Panels.app writes
+    thumbnails and reading data into, and OS metadata files such as
+    `.DS_Store`, AppleDouble `._*` files, `Thumbs.db` and `desktop.ini`.
+
+    Args:
+        name (str): The name of the entry (not the full path).
+        is_dir (bool): Whether the entry is a folder.
+
+    Returns:
+        bool: Whether the entry is clutter.
+    """
+    folded = name.casefold()
+    if folded.endswith('.panels'):
+        return True
+
+    if is_dir:
+        return False
+
+    return (
+        folded in ('.ds_store', 'thumbs.db', 'desktop.ini')
+        or name.startswith('._')
+    )
+
+
+def delete_leftover_clutter(base_folder: str) -> None:
+    """Delete clutter (see `is_leftover_clutter()`) from a folder and its
+    subfolders, but only from folders that don't directly contain any other
+    files anymore. That way sidecars of comics that are still present are
+    left alone.
+
+    Args:
+        base_folder (str): The folder to clean up.
+    """
+    if not isdir(base_folder):
+        return
+
+    LOGGER.debug(f'Deleting leftover clutter from {base_folder}')
+
+    def _clean(folder: str) -> None:
+        clutter: List[str] = []
+        has_other_files = False
+
+        try:
+            entries = list(scandir(folder))
+        except OSError:
+            return
+
+        for f in entries:
+            is_dir = f.is_dir(follow_symlinks=False)
+            if is_leftover_clutter(f.name, is_dir):
+                clutter.append(f.path)
+
+            elif is_dir:
+                _clean(f.path)
+
+            else:
+                has_other_files = True
+
+        if has_other_files:
+            return
+
+        for c in clutter:
+            LOGGER.debug(f'Deleting leftover clutter: {c}')
+            delete_file_folder(c)
+
+        return
+
+    _clean(base_folder)
+    return
+
+
+def delete_empty_parent_folders(
+    top_folder: str,
+    root_folder: str,
+    ignore_clutter: bool = False
+) -> None:
     """Delete parent folders that are empty until we reach a folder with content
     or the root folder. Take notice of the difference between this function and
     `delete_empty_child_folders()`.
@@ -959,6 +1037,10 @@ def delete_empty_parent_folders(top_folder: str, root_folder: str) -> None:
     Args:
         top_folder (str): The folder to start deleting from.
         root_folder (str): The root folder to stop at in case we reach it.
+        ignore_clutter (bool, optional): Consider folders that only contain
+            clutter (see `is_leftover_clutter()`) as empty. The clutter is
+            deleted together with the folder.
+            Defaults to False.
     """
     if top_folder == root_folder:
         return
@@ -982,7 +1064,17 @@ def delete_empty_parent_folders(top_folder: str, root_folder: str) -> None:
             if samefile(parent_folder, root_folder):
                 break
 
-            if listdir(parent_folder) not in ([], [child_folder]):
+            content = [
+                f for f in listdir(parent_folder)
+                if not (
+                    ignore_clutter
+                    and f != child_folder
+                    and is_leftover_clutter(
+                        f, isdir(join(parent_folder, f))
+                    )
+                )
+            ]
+            if content not in ([], [child_folder]):
                 # Folder has content and that content isn't just the empty child
                 break
 
