@@ -19,12 +19,12 @@ concurrency:
 
 jobs:
   test:
-    # Commits created by ad-hoc GitHub Actions patch workflows can cause
-    # recursion-suppressed pull_request runs with zero jobs and a misleading
-    # failure notification. Skip those bot-generated PR updates. The permanent
-    # upstream sync workflow is intentionally allowed through so its PRs still
-    # receive the full test matrix.
-    if: ${{ github.actor != 'github-actions[bot]' || github.head_ref == 'upstream-sync' }}
+    # Pull-request events from GitHub Actions bot commits can produce
+    # recursion-suppressed runs with zero jobs and a misleading failure
+    # notification, so skip those. Other events (including the
+    # workflow_dispatch the upstream sync workflow sends for its PR branch)
+    # always run.
+    if: ${{ github.event_name != 'pull_request' || github.actor != 'github-actions[bot]' }}
     # Keep Python 3.8/3.9 on an image with compatible setup-python builds.
     runs-on: ubuntu-22.04
     timeout-minutes: 15

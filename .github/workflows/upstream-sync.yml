@@ -6,6 +6,7 @@ on:
     - cron: '17 12 * * 1'
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -42,23 +43,8 @@ jobs:
             echo "needed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Merge upstream into sync branch
-        if: steps.changes.outputs.needed == 'true'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B "$SYNC_BRANCH" origin/main
-
-          if ! git merge --no-edit upstream/main; then
-            echo "Upstream changes conflict with this fork. Resolve the conflicts manually before syncing."
-            git status --short
-            exit 1
-          fi
-
-          git push --force-with-lease origin "$SYNC_BRANCH"
-
-      - name: Open or update upstream sync pull request
+      - name: Find open sync pull request
+        id: pr
         if: steps.changes.outputs.needed == 'true'
         shell: bash
         run: |
@@ -68,21 +54,60 @@ jobs:
             --state open \
             --json number \
             --jq '.[0].number // empty')"
+          echo "number=$existing_pr" >> "$GITHUB_OUTPUT"
 
-          body=$(cat <<'EOF'
+      - name: Merge upstream into sync branch
+        if: steps.changes.outputs.needed == 'true'
+        shell: bash
+        env:
+          EXISTING_PR: ${{ steps.pr.outputs.number }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ -n "$EXISTING_PR" ]; then
+            # Keep any manual fixes already pushed to the open sync PR.
+            git checkout -B "$SYNC_BRANCH" "origin/$SYNC_BRANCH"
+            merge_refs="origin/main upstream/main"
+          else
+            git checkout -B "$SYNC_BRANCH" origin/main
+            merge_refs="upstream/main"
+          fi
+
+          for ref in $merge_refs; do
+            if ! git merge --no-edit "$ref"; then
+              echo "Merging $ref into $SYNC_BRANCH conflicts. Resolve the conflicts manually on that branch."
+              git status --short
+              exit 1
+            fi
+          done
+
+          if [ -n "$EXISTING_PR" ]; then
+            git push origin "$SYNC_BRANCH"
+          else
+            git push --force origin "$SYNC_BRANCH"
+          fi
+
+      - name: Open or update upstream sync pull request
+        if: steps.changes.outputs.needed == 'true'
+        shell: bash
+        env:
+          EXISTING_PR: ${{ steps.pr.outputs.number }}
+        run: |
+          body=$(cat <<'BODY'
           Automated sync from `Casvt/Kapowarr:main` into this fork.
 
-          This PR intentionally does not auto-merge. Review the upstream changes and let the normal pull-request test matrix complete before merging.
+          This PR intentionally does not auto-merge. Review the upstream changes and wait for the Tests run on this branch to finish before merging.
 
-          If the sync workflow reports a merge conflict, resolve that conflict on this branch manually.
-          EOF
+          If the sync workflow reports a merge conflict, resolve that conflict on this branch manually. Later syncs merge into this branch and keep your fixes while this PR is open.
+          BODY
           )
 
-          if [ -n "$existing_pr" ]; then
-            gh pr edit "$existing_pr" \
+          if [ -n "$EXISTING_PR" ]; then
+            gh pr edit "$EXISTING_PR" \
               --title "Sync upstream Casvt/Kapowarr" \
               --body "$body"
-            echo "Updated existing PR #$existing_pr"
+            echo "Updated existing PR #$EXISTING_PR"
           else
             gh pr create \
               --base main \
@@ -90,3 +115,10 @@ jobs:
               --title "Sync upstream Casvt/Kapowarr" \
               --body "$body"
           fi
+
+      # Pushes and PRs made with GITHUB_TOKEN do not trigger other workflows,
+      # so the sync PR would otherwise get no checks. workflow_dispatch is the
+      # exception, and its run reports on the branch's head commit.
+      - name: Run tests on sync branch
+        if: steps.changes.outputs.needed == 'true'
+        run: gh workflow run tests.yml --ref "$SYNC_BRANCH"
