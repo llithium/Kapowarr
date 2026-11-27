@@ -10,7 +10,7 @@ from asyncio import run
 from datetime import datetime, timedelta
 from functools import lru_cache
 from io import BytesIO
-from os.path import dirname, exists, isdir, relpath
+from os.path import dirname, exists, isdir, relpath, samefile
 from re import IGNORECASE, compile
 from time import time
 from typing import Any, Dict, List, Mapping, Set, Tuple, Union
@@ -30,7 +30,8 @@ from backend.base.definitions import (BaseEnum, Constants, FileData,
 from backend.base.files import (change_basefolder, create_folder,
                                 delete_empty_child_folders,
                                 delete_empty_parent_folders,
-                                delete_file_folder, folder_is_inside_folder,
+                                delete_file_folder, delete_leftover_clutter,
+                                folder_is_inside_folder,
                                 move_folder_contents, rename_file)
 from backend.base.helpers import (PortablePool, extract_year_from_date,
                                   first_of_subarrays, to_number_cv_id)
@@ -843,13 +844,20 @@ class Volume:
 
         volume_data = self.get_data()
         if delete_folder and exists(volume_data.folder):
+            root_folder = RootFolders()[volume_data.root_folder]
             for f in self.get_all_files():
                 delete_file_folder(f["filepath"])
 
+            # Apps like Panels leave a hidden .Panels folder (and the OS
+            # leaves files like .DS_Store) behind, which would otherwise
+            # keep the volume folder from being removed.
+            if not samefile(volume_data.folder, root_folder):
+                delete_leftover_clutter(volume_data.folder)
             delete_empty_child_folders(volume_data.folder)
             delete_empty_parent_folders(
                 volume_data.folder,
-                RootFolders()[volume_data.root_folder]
+                root_folder,
+                ignore_clutter=True
             )
 
         # Delete file entries
