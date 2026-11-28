@@ -588,6 +588,10 @@ main.series-page .sp-actions button {
 	gap: 7px;
 }
 
+main.series-page .sp-actions .sp-open-folder {
+	margin-left: auto;
+}
+
 main.series-page .sp-inline {
 	display: flex;
 	gap: 8px;

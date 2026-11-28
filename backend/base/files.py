@@ -13,10 +13,13 @@ from os.path import (abspath, basename, commonpath, dirname, exists, isdir,
                      isfile, join, relpath, samefile, sep, splitext)
 from re import compile
 from shutil import chown, copyfile, copystat, copytree, move, rmtree
+from subprocess import DEVNULL, Popen, TimeoutExpired
+from threading import Thread
 from typing import Dict, Iterable, List, Sequence, Union
 from unicodedata import normalize
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from backend.base.custom_exceptions import FolderNotFound, FolderNotOpenable
 from backend.base.definitions import (CharConstants, Constants,
                                       FileConstants, OSType)
 from backend.base.helpers import (check_filter, force_prefix,
@@ -1172,5 +1175,67 @@ def delete_empty_child_folders(
     for f in resulting_folders:
         LOGGER.debug(f"Deleting folder and children: {f}")
         delete_file_folder(f)
+
+    return
+
+
+# region Opening
+def open_folder_in_file_manager(folder: str) -> None:
+    """Show a folder in the file manager of the computer that runs Kapowarr
+    (Finder on macOS, Explorer on Windows, the desktop's default file manager
+    on Linux).
+
+    Only call this with a folder Kapowarr already knows about (e.g. the folder
+    of a volume in the library), never with a path straight from a request.
+
+    Args:
+        folder (str): The folder to show.
+
+    Raises:
+        FolderNotFound: The folder doesn't exist (anymore).
+        FolderNotOpenable: No file manager could be started for it.
+    """
+    if not isdir(folder):
+        raise FolderNotFound(folder)
+
+    os_type = get_os_type()
+    LOGGER.info(f"Opening folder in file manager: {folder}")
+
+    if os_type == OSType.WINDOWS:
+        from os import startfile # type: ignore
+        try:
+            startfile(folder)
+        except OSError as e:
+            raise FolderNotOpenable(folder, str(e))
+        return
+
+    command = (
+        ['open', folder]
+        if os_type == OSType.MACOS else
+        ['xdg-open', folder]
+    )
+
+    try:
+        process = Popen(
+            command,
+            stdin=DEVNULL,
+            stdout=DEVNULL,
+            stderr=DEVNULL,
+            start_new_session=True
+        )
+    except OSError as e:
+        # E.g. xdg-open isn't installed (a headless server or container)
+        raise FolderNotOpenable(folder, str(e))
+
+    try:
+        returncode = process.wait(timeout=5)
+    except TimeoutExpired:
+        # Some openers stay running alongside the file manager. Assume it
+        # worked and reap the process in the background once it exits.
+        Thread(target=process.wait, daemon=True).start()
+        return
+
+    if returncode != 0:
+        raise FolderNotOpenable(folder, f'{command[0]} exited with {returncode}')
 
     return

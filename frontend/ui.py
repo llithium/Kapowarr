@@ -6,6 +6,8 @@ from typing import Any
 
 from flask import Blueprint, redirect, render_template, send_file
 
+from backend.base.definitions import OSType
+from backend.base.helpers import get_os_type
 from backend.internals.server import Server
 from backend.internals.settings import Settings
 
@@ -18,6 +20,15 @@ def _organizer_mode() -> bool:
         return bool(Settings().sv.organizer_mode)
     except Exception:
         return False
+
+
+def _file_manager_name() -> str:
+    os_type = get_os_type()
+    if os_type == OSType.MACOS:
+        return 'Finder'
+    if os_type == OSType.WINDOWS:
+        return 'Explorer'
+    return 'file manager'
 
 
 def render(filename: str, **kwargs: Any) -> str:
@@ -81,7 +92,7 @@ def ui_library_import():
 
 @ui.route('/volumes/<id>', methods=methods)
 def ui_view_volume(id):
-    return render('view_volume.html')
+    return render('view_volume.html', file_manager=_file_manager_name())
 
 
 @ui.route('/activity/queue', methods=methods)

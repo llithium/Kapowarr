@@ -164,6 +164,7 @@
 						<div class="sp-actions">
 							<button type="submit" id="sp-save" class="primary-action" disabled>Save</button>
 							<button type="button" id="sp-undo" class="secondary-action" disabled>Undo</button>
+							<button type="button" id="sp-open-folder" class="secondary-action sp-open-folder" title="Open this volume's folder in {{ file_manager|default('file manager') }}"><img src="{{url_base}}/static/img/folder_open.svg" alt=""><span>Open in {{ file_manager|default('file manager') }}</span></button>
 						</div>
 						<p id="sp-form-status" class="sp-status" role="status"></p>
 					</form>

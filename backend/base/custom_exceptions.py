@@ -111,6 +111,33 @@ class FolderNotFound(KapowarrException):
         }
 
 
+class FolderNotOpenable(KapowarrException):
+    "The folder exists, but no file manager could be started to show it"
+
+    def __init__(self, folder: str, reason: str = '') -> None:
+        self.folder = folder
+        self.reason = reason
+        LOGGER.warning(
+            f"Couldn't open the folder in a file manager: {folder}"
+            + (f" ({reason})" if reason else "")
+        )
+        return
+
+    @property
+    def api_response(self) -> ApiResponse:
+        return {
+            "code": 500,
+            "error": self.__class__.__name__,
+            "result": {
+                "folder": self.folder,
+                "description": (
+                    "Couldn't open a file manager on the computer that "
+                    "runs Kapowarr."
+                )
+            }
+        }
+
+
 class FileNotFound(KapowarrException):
     "File with given filepath or ID not found"
 
