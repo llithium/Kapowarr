@@ -32,6 +32,7 @@ const ViewEls = {
 		special_version: document.querySelector('#specialoverride-input'),
 		save: document.querySelector('#sp-save'),
 		undo: document.querySelector('#sp-undo'),
+		open_folder: document.querySelector('#sp-open-folder'),
 		status: document.querySelector('#sp-form-status')
 	},
 	tool_bar: {
@@ -384,6 +385,21 @@ function saveDetails(api_key) {
 		setStatus(e.status, `Couldn't save: ${await errorText(error)}`, true);
 		updateDetailsDirty();
 	});
+}
+
+function openFolder(api_key) {
+	const e = ViewEls.vol_edit;
+	e.open_folder.disabled = true;
+	setStatus(e.status, '');
+	sendAPI('POST', `/volumes/${volume_id}/openfolder`, api_key)
+	.catch(async error => {
+		const json = await apiError(error);
+		if (json.error === 'FolderNotFound')
+			setStatus(e.status, "This folder isn't on disk yet. Kapowarr creates it when files are added.", true);
+		else
+			setStatus(e.status, `Couldn't open the folder: ${json.result?.description || json.error || 'Something went wrong.'}`, true);
+	})
+	.finally(() => e.open_folder.disabled = false);
 }
 
 //
@@ -822,6 +838,7 @@ usingApiKey()
 		saveDetails(api_key);
 	});
 	edit.undo.onclick = resetDetails;
+	edit.open_folder.onclick = () => openFolder(api_key);
 	[edit.special_version, edit.root_folder, edit.volume_folder].forEach(el => {
 		el.addEventListener('input', updateDetailsDirty);
 		el.addEventListener('change', updateDetailsDirty);

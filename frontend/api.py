@@ -21,6 +21,7 @@ from backend.base.definitions import (BlocklistReason, BlocklistReasonID,
                                       LibraryFilter, LibrarySorting,
                                       MonitorScheme, SpecialVersion, StartType,
                                       StatusType, VolumeData)
+from backend.base.files import open_folder_in_file_manager
 from backend.base.helpers import hash_credential
 from backend.base.logging import LOGGER, get_log_file_contents
 from backend.features.download_queue import (DownloadHandler,
@@ -1137,6 +1138,17 @@ def api_volume_cover(id: int):
         cover,
         mimetype='image/jpeg'
     ), 200
+
+
+@api.route('/volumes/<int:id>/openfolder', methods=['POST'])
+@error_handler
+@auth
+def api_volume_open_folder(id: int):
+    # Only the stored folder of a known volume is opened, never a path that
+    # comes from the request.
+    folder = Library.get_volume(id).get_data().folder
+    open_folder_in_file_manager(folder)
+    return return_api({'folder': folder})
 
 
 @api.route('/issues/<int:id>', methods=['GET', 'PUT'])
