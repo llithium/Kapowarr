@@ -442,6 +442,8 @@ class LibrarySorting(BaseEnum):
     PUBLISHER = "publisher, title, year, volume_number"
     WANTED = ("issues_downloaded_monitored >= issue_count_monitored, "
               "title, year, volume_number")
+    MISSING = ("issues_downloaded >= issue_count, "
+               "title, year, volume_number")
     RECENTLY_RELEASED = ("(SELECT MAX(date) FROM vol_issues) DESC, "
                          "title, year, volume_number")
 
@@ -453,6 +455,11 @@ class LibraryFilter(BaseEnum):
     """
 
     WANTED = "WHERE issues_downloaded_monitored < issue_count_monitored"
+    "Monitored issues without a file"
+    MISSING = "WHERE issues_downloaded < issue_count"
+    "Any issue without a file, monitored or not"
+    NO_FILES = "WHERE issues_downloaded = 0"
+    "Series without a single file"
     MONITORED = "WHERE monitored = 1"
 
 

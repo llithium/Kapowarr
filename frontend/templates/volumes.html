@@ -104,8 +104,10 @@
 				<div class="tool-bar">
 					<select id="filter-button" aria-label="Apply a filter">
 						<option value="">All comics</option>
-						<option value="wanted">Missing issues</option>
-						{% if not organizer_mode %}<option value="monitored">Monitored</option>{% endif %}
+						<option value="missing">Missing issues</option>
+						<option value="no_files">No files</option>
+						{% if not organizer_mode %}<option value="wanted">Wanted (monitored)</option>
+						<option value="monitored">Monitored</option>{% endif %}
 					</select>
 					<select id="view-button" aria-label="Change the view">
 						<option value="posters">Covers</option>
@@ -118,7 +120,7 @@
 						<option value="recently_added">Sort: Newest added</option>
 						<option value="recently_released">Sort: Newest released</option>
 						<option value="publisher">Sort: Publisher</option>
-						<option value="wanted">Sort: Missing issues</option>
+						<option value="missing">Sort: Missing issues</option>
 					</select>
 				</div>
 			</section>
