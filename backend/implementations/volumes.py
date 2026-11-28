@@ -1381,14 +1381,32 @@ def refresh_and_scan(
             the websocket.
             Defaults to False.
 
-        allow_skipping (bool, optional): Skip volumes that have been updated in
-            the last 24 hours or that have the same amount of issues as what
-            the metadata source reports.
+        allow_skipping (bool, optional): Skip refreshing the metadata of
+            volumes that have been updated in the last 24 hours or that have
+            the same amount of issues as what the metadata source reports.
+            Files are always scanned for every volume asked for, also when
+            fetching the metadata fails.
             Defaults to True.
 
     Raises:
         InvalidKeyValue: The API key of the metadata source is invalid.
     """
+    try:
+        _refresh_metadata(volume_id, allow_skipping)
+    finally:
+        # Always scan, even when Comic Vine couldn't be reached or nothing
+        # needed new metadata, so the database keeps matching what is on disk.
+        _scan_volume_files(volume_id, update_websocket)
+
+    return
+
+
+def _refresh_metadata(
+    volume_id: Union[int, None],
+    allow_skipping: bool
+) -> None:
+    """Pull metadata from Comic Vine for one volume, or for all volumes that
+    are due for it. See `refresh_and_scan()`."""
     current_time = datetime.now()
     one_day_ago = current_time - ONE_DAY
     thirty_days_ago = current_time - THIRTY_DAYS
@@ -1592,37 +1610,47 @@ def refresh_and_scan(
 
     commit()
 
-    # Scan for files
+    return
+
+
+def _scan_volume_files(
+    volume_id: Union[int, None],
+    update_websocket: bool
+) -> None:
+    """Scan the files of one volume, or of every volume in the library.
+    See `refresh_and_scan()`."""
     if volume_id:
         scan_files(volume_id, update_websocket=update_websocket)
+        return
 
-    else:
-        v_ids = [
-            (v[0], [], False, update_websocket)
-            for v in cv_to_id_fetch.values()
-        ]
-        total_count = len(v_ids)
+    v_ids = [
+        (v_id, [], False, update_websocket)
+        for v_id in first_of_subarrays(get_db().execute(
+            "SELECT id FROM volumes;"
+        ))
+    ]
+    total_count = len(v_ids)
 
-        if not total_count:
-            return
+    if not total_count:
+        return
 
-        with PortablePool(max_processes=min(
-            Constants.DB_MAX_CONCURRENT_CONNECTIONS,
-            total_count
-        )) as pool:
-            if update_websocket:
-                ws = WebSocket()
-                for idx, _ in enumerate(
-                    pool.istarmap_unordered(scan_files, v_ids)
-                ):
-                    ws.emit(TaskStatusEvent(
-                        f'Scanned files for volume {idx + 1}/{total_count}'
-                    ))
+    with PortablePool(max_processes=min(
+        Constants.DB_MAX_CONCURRENT_CONNECTIONS,
+        total_count
+    )) as pool:
+        if update_websocket:
+            ws = WebSocket()
+            for idx, _ in enumerate(
+                pool.istarmap_unordered(scan_files, v_ids)
+            ):
+                ws.emit(TaskStatusEvent(
+                    f'Scanned files for volume {idx + 1}/{total_count}'
+                ))
 
-            else:
-                pool.starmap(scan_files, v_ids)
+        else:
+            pool.starmap(scan_files, v_ids)
 
-        FilesDB.delete_unmatched_files()
+    FilesDB.delete_unmatched_files()
 
     return
 

@@ -60,11 +60,26 @@ def scan_files(
     volume = Volume(volume_id)
     volume_data = volume.get_data()
 
-    if not isdir(volume_data.folder):
+    volume_folder_exists = isdir(volume_data.folder)
+    if not volume_folder_exists:
+        root_folder = RootFolders()[volume_data.root_folder]
+        if not isdir(root_folder):
+            # The whole root folder is unreachable (unmounted drive, offline
+            # network share, cloud folder not available yet). Don't treat
+            # that as every file having been deleted.
+            LOGGER.warning(
+                'Root folder %s is not reachable; skipping scan of volume %d',
+                root_folder, volume_id
+            )
+            return
+
         if settings.create_empty_volume_folders:
             create_folder(volume_data.folder)
-        else:
-            return
+            volume_folder_exists = True
+
+        # Otherwise keep going with no files on disk, so that file records
+        # pointing into the (now missing) volume folder get removed instead
+        # of lingering in the database.
 
     volume_issues = volume.get_issues(_skip_files=True)
     volume_issues.sort(key=lambda i: i.calculated_issue_number)
@@ -108,13 +123,17 @@ def scan_files(
 
     new_issue_bindings: Set[Tuple[int, int]] = set()
     new_general_bindings: Dict[int, str] = {}
-    folder_contents = (
-        filter_scannable_paths(volume_data.folder, filepath_filter)
-        if filepath_filter else list_files(
+    if not volume_folder_exists:
+        folder_contents: List[str] = []
+    elif filepath_filter:
+        folder_contents = filter_scannable_paths(
+            volume_data.folder, filepath_filter
+        )
+    else:
+        folder_contents = list_files(
             folder=volume_data.folder,
             ext=FileConstants.SCANNABLE_EXTENSIONS
         )
-    )
     for file in folder_contents:
         if file in manually_matched_files:
             # File already manually matched to issue(s)
@@ -329,7 +348,7 @@ def scan_files(
                 downloaded_issues=newly_downloaded_issues
             ))
 
-    if settings.delete_empty_folders:
+    if settings.delete_empty_folders and volume_folder_exists:
         delete_empty_child_folders(volume_data.folder, skip_hidden_folders=True)
         if (
             not list_files(volume_data.folder)
