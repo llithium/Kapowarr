@@ -37,7 +37,7 @@ class PerformancePaths(unittest.TestCase):
     def test_search_preserves_matching_sorting_filters_and_shared_file_totals(self):
         with patch('backend.implementations.volumes.get_db', return_value=self.cursor):
             for sort in LibrarySorting:
-                for filter in (None, LibraryFilter.MONITORED, LibraryFilter.WANTED):
+                for filter in (None, *LibraryFilter):
                     for query in ('batman', 'batman robin', 'the', 'absent'):
                         expected = [v for v in Library.get_public_volumes(sort, filter)
                                     if match_title(v['title'], query, allow_contains=True)]
@@ -47,6 +47,24 @@ class PerformancePaths(unittest.TestCase):
             self.db.set_trace_callback(statements.append)
             self.assertEqual(Library.search('absent'), [])
             self.assertEqual(len(statements), 1)
+
+    def test_missing_and_no_files_filters_ignore_monitoring(self):
+        # Volume 1 has 2 of 5 issues with files, but none of them monitored.
+        # Volume 2 has one issue and no files. Volume 3 has no issues.
+        self.db.execute('UPDATE issues SET monitored = 0;')
+        self.db.execute(
+            'INSERT INTO issues(id, volume_id, comicvine_id, issue_number, '
+            'calculated_issue_number, monitored) VALUES (6, 2, 6, "1", 1, 0)'
+        )
+        with patch('backend.implementations.volumes.get_db', return_value=self.cursor):
+            def ids(filter, sort=LibrarySorting.TITLE):
+                return [v['id'] for v in Library.get_public_volumes(sort, filter)]
+
+            self.assertEqual(ids(LibraryFilter.WANTED), [])
+            self.assertEqual(ids(LibraryFilter.MISSING), [2, 1])
+            self.assertEqual(ids(LibraryFilter.NO_FILES), [3, 2])
+            # Volumes with missing issues sort first
+            self.assertEqual(ids(None, LibrarySorting.MISSING), [2, 1, 3])
 
     def test_targeted_paths_ignore_hidden_missing_outside_and_duplicate_files(self):
         with tempfile.TemporaryDirectory() as temp:

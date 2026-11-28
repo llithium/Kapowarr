@@ -843,9 +843,20 @@ function isTyping(target) {
 // code run on load
 
 const lib_options = getLocalStorage('lib_sorting', 'lib_view', 'lib_filter');
+// "Missing issues" used to mean monitored issues only ("wanted")
+if (lib_options.lib_sorting === 'wanted')
+	lib_options.lib_sorting = 'missing';
+if (lib_options.lib_filter === 'wanted'
+&& !library_els.view_options.filter.querySelector('option[value="wanted"]'))
+	lib_options.lib_filter = 'missing';
 library_els.view_options.sort.value = lib_options.lib_sorting;
 library_els.view_options.view.value = lib_options.lib_view;
 library_els.view_options.filter.value = lib_options.lib_filter;
+// Fall back to the defaults when a saved option no longer exists
+if (library_els.view_options.sort.selectedIndex === -1)
+	library_els.view_options.sort.value = 'title';
+if (library_els.view_options.filter.selectedIndex === -1)
+	library_els.view_options.filter.value = '';
 
 usingApiKey()
 .then(api_key => {
